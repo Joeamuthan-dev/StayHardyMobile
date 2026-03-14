@@ -18,9 +18,9 @@ const ProtectedRoute = () => {
   
   if (loading) {
     return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#020617' }}>
-        <div style={{ color: '#10b981', fontWeight: 900, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
-          Syncing...
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#020617', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ color: '#10b981', fontWeight: 900, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+          StayHard — Grinding…
         </div>
       </div>
     );
