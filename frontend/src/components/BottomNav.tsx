@@ -121,5 +121,6 @@ const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean }> = ({ 
       )}
     </>
   );
+};
 
   export default BottomNav;
