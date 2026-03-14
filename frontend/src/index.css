@@ -1335,7 +1335,7 @@ html, body {
   width: 100%;
   max-width: 500px;
   margin: 0 auto;
-  padding-bottom: 8rem;
+  padding: 0 1.25rem 8rem 1.25rem; /* Added horizontal padding for mobile */
   overflow-x: hidden;
   box-sizing: border-box;
 }
