@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Stats from './pages/Stats';
 import Settings from './pages/Settings';
 import Planner from './pages/Planner';
+import Goals from './pages/Goals';
 import ForgotPin from './pages/ForgotPin';
 import ResetPin from './pages/ResetPin';
 import Tips from './pages/Tips';
@@ -48,6 +49,7 @@ const App: React.FC = () => {
           <Route path="/stats" element={<Stats />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/planner" element={<Planner />} />
+          <Route path="/goals" element={<Goals />} />
           <Route path="/tips" element={<Tips />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/feedback-list" element={<FeedbackList />} />

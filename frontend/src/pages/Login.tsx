@@ -262,6 +262,7 @@ const Login: React.FC = () => {
     }
   };
 
+
   return (
     <div className={`login-page-root ${isPulled ? 'is-pulled' : ''}`} style={{ background: '#000000', alignItems: 'center', transition: 'all 0.5s ease' }}>
       {/* ── Initial Minimal View (Branding & Tagline) ── */}
@@ -339,7 +340,7 @@ const Login: React.FC = () => {
               <div className="pull-rope-inner"></div>
               {!isPulled && !isAnimating && (
                 <div className="pull-rope-guideline" style={{ top: '120%', whiteSpace: 'nowrap' }}>
-                  Pull Down
+                  Tap the rope. Lock in
                 </div>
               )}
             </div>

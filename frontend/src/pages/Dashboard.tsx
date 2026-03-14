@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import {
   DndContext,
@@ -135,9 +136,9 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onD
         </div>
       </div>
 
-      <div style={{ cursor: 'pointer', marginBottom: '1rem' }} onClick={(e) => { e.stopPropagation(); onEdit(task); }}>
+      <div style={{ cursor: 'pointer', marginBottom: '0.5rem' }} onClick={(e) => { e.stopPropagation(); onEdit(task); }}>
         {task.image_url && (
-          <div style={{ width: '100%', height: '180px', borderRadius: '1rem', overflow: 'hidden', marginBottom: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ width: '100%', height: '120px', borderRadius: '0.75rem', overflow: 'hidden', marginBottom: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
             <img src={task.image_url} alt={task.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
         )}
@@ -215,21 +216,26 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onT
   );
 };
 
-const EmptyDashboard: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
+const EmptyDashboard: React.FC<{ onAdd: () => void, type: 'welcome' | 'completed' }> = ({ onAdd, type }) => {
+  const isCompleted = type === 'completed';
+  
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem', minHeight: '60vh' }}>
       <div style={{ position: 'relative', marginBottom: '2.5rem' }}>
-        <div className="float-animation" style={{ width: '120px', height: '120px', borderRadius: '40px', background: 'rgba(16, 185, 129, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '4.5rem', color: '#10b981', opacity: 0.8 }}>rocket_launch</span>
-        </div>
-        <div style={{ position: 'absolute', top: -5, right: -5, width: '36px', height: '36px', borderRadius: '12px', background: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)', animation: 'pulse 2s infinite' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#064e3b', fontWeight: 900 }}>add</span>
+        <div className="float-animation" style={{ width: '120px', height: '120px', borderRadius: '40px', background: isCompleted ? 'rgba(16, 185, 129, 0.05)' : 'rgba(59, 130, 246, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${isCompleted ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)'}` }}>
+          <span className="material-symbols-outlined" style={{ fontSize: '4.5rem', color: isCompleted ? '#10b981' : '#3b82f6', opacity: 0.8 }}>
+            {isCompleted ? 'task_alt' : 'rocket_launch'}
+          </span>
         </div>
       </div>
 
-      <h2 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)', margin: '0 0 1rem 0', letterSpacing: '-0.02em' }}>The Road Is Clear.</h2>
-      <p style={{ color: '#64748b', fontSize: '1.05rem', lineHeight: 1.6, maxWidth: '300px', margin: '0 0 2.5rem 0', fontWeight: 600 }}>
-        "You don't have to be great to start, but you have to start to be great." No tasks yet. Ready to grind? #StayHard
+      <h2 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)', margin: '0 0 1rem 0', letterSpacing: '-0.02em' }}>
+        {isCompleted ? "All tasks completed. Great job." : "Welcome to StayHardy."}
+      </h2>
+      <p style={{ color: '#64748b', fontSize: '1.05rem', lineHeight: 1.6, maxWidth: '400px', margin: '0 0 2.5rem 0', fontWeight: 600 }}>
+        {isCompleted 
+          ? "You cleared your focus list. Stay hungry. Stay hardy. Ready to set your next milestone?"
+          : "Start your productivity journey. Create your first task and track your productivity ill take care of that"}
       </p>
 
       <button
@@ -237,7 +243,7 @@ const EmptyDashboard: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
         className="glow-btn-primary"
         style={{ padding: '0 2.5rem', height: '4rem', borderRadius: '1.5rem', fontSize: '1rem', fontWeight: 900 }}
       >
-        Create Your First Task
+        <span>{isCompleted ? "Add Task" : "Create Your First Task"}</span>
       </button>
     </div>
   );
@@ -252,6 +258,7 @@ const Dashboard: React.FC = () => {
   const [category, setCategory] = useState('Business');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
@@ -264,6 +271,7 @@ const Dashboard: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const { user } = useAuth();
+
 
   const getDynamicQuote = useCallback((currentTasks: Task[]) => {
     const today = new Date().setHours(0, 0, 0, 0);
@@ -644,18 +652,28 @@ const Dashboard: React.FC = () => {
       }
     }
 
-    if (newPriority && newPriority !== activeTask.priority) {
+    if (overId === 'Done' || newPriority && newPriority !== activeTask.priority) {
+      const isDoneDrop = overId === 'Done';
+      
       // Optimistic update
-      setTasks(prev => prev.map(t => t.id === activeId ? { ...t, priority: newPriority! } : t));
+      setTasks(prev => prev.map(t => t.id === activeId ? { 
+        ...t, 
+        priority: isDoneDrop ? t.priority : newPriority!,
+        status: isDoneDrop ? 'completed' : 'pending' as any
+      } : t));
 
       try {
+        const updates: any = {};
+        if (isDoneDrop) updates.status = 'completed';
+        else updates.priority = newPriority;
+
         const { error: updateError } = await supabase
           .from('tasks')
-          .update({ priority: newPriority })
+          .update(updates)
           .eq('id', activeId);
         if (updateError) throw updateError;
       } catch (err) {
-        console.error('Priority update error:', err);
+        console.error('Task update error:', err);
         fetchTasks();
       }
     } else if (activeId !== overId) {
@@ -725,6 +743,7 @@ const Dashboard: React.FC = () => {
             onClick={toggleSidebar}
             className="notification-btn desktop-only-btn"
             title={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar (Focus Mode)"}
+            data-tooltip={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar"}
             style={{
               ...(isSidebarHidden ? { background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' } : {}),
               opacity: 0.5
@@ -732,6 +751,18 @@ const Dashboard: React.FC = () => {
           >
             <span className="material-symbols-outlined">
               {isSidebarHidden ? 'side_navigation' : 'fullscreen'}
+            </span>
+          </button>
+
+          <button
+            onClick={() => navigate('/goals')}
+            className="notification-btn"
+            title="My Goals"
+            data-tooltip="My Goals"
+            style={{ opacity: 0.8 }}
+          >
+            <span className="material-symbols-outlined">
+              track_changes
             </span>
           </button>
           
@@ -772,17 +803,20 @@ const Dashboard: React.FC = () => {
         paddingBottom: '2rem',
         alignItems: 'flex-start'
       }}>
-        {tasks.filter(t => t.status === 'pending').length === 0 ? (
-          <div style={{ width: '100%' }}><EmptyDashboard onAdd={() => openModal()} /></div>
+        {tasks.length === 0 ? (
+          <div style={{ width: '100%' }}><EmptyDashboard onAdd={() => openModal()} type="welcome" /></div>
+        ) : tasks.filter(t => t.status === 'pending').length === 0 ? (
+          <div style={{ width: '100%' }}><EmptyDashboard onAdd={() => openModal()} type="completed" /></div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <div className="priority-grid-container" style={{ width: '100%', gap: '1.5rem' }}>
+            <div className="priority-grid-container" style={{ width: '100%', gap: '1.25rem' }}>
               {(['High', 'Medium', 'Low'] as const).map(prio => {
                 const filteredTasks = tasks.filter(t => t.priority === prio && t.status === 'pending');
+                
                 if (filteredTasks.length === 0) return null;
 
                 return (
-                  <div key={prio} className="priority-column-wrapper">
+                  <div key={prio} className="priority-column-wrapper" data-priority={prio}>
                     <DroppableColumn
                       id={prio}
                       title={`${prio} Priority`}
@@ -799,7 +833,7 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      <BottomNav onAddClick={() => openModal()} isHidden={isSidebarHidden} />
+      <BottomNav onAddClick={() => openModal()} isHidden={isSidebarHidden} hasTasks={tasks.length > 0} />
 
       {showModal && (
         <div className="premium-modal-overlay" onClick={closeModal}>
@@ -867,15 +901,47 @@ const Dashboard: React.FC = () => {
               <div className="input-group">
                 <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.75rem', display: 'block' }}>{t('categories')}</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {categories.map(cat => (
-                    <button key={cat} type="button" className={`tag-btn ${category === cat ? 'active' : ''}`} onClick={() => { setCategory(cat); setIsAddingCategory(false); }} style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', fontWeight: 'bold', borderRadius: '0.75rem' }}>{cat}</button>
-                  ))}
+                  {categories.map(cat => {
+                    const isActive = category === cat;
+                    const catColors: any = {
+                      Personal: { bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.3)', text: '#fbbf24' },
+                      Content: { bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.3)', text: '#60a5fa' },
+                      Health: { bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.3)', text: '#f87171' },
+                      Business: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981' }
+                    };
+                    const colors = catColors[cat] || { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.3)', text: '#94a3b8' };
+
+                    return (
+                      <button 
+                        key={cat} 
+                        type="button" 
+                        onClick={() => { setCategory(cat); setIsAddingCategory(false); }} 
+                        style={{ 
+                          padding: '0.6rem 1.25rem', 
+                          fontSize: '0.75rem', 
+                          fontWeight: 900, 
+                          borderRadius: '1rem',
+                          border: '2px solid',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          background: isActive ? colors.bg : 'rgba(255,255,255,0.02)',
+                          borderColor: isActive ? colors.text : 'transparent',
+                          color: isActive ? colors.text : '#64748b',
+                          opacity: isActive ? 1 : 0.6,
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
                   {!isAddingCategory ? (
-                    <button type="button" onClick={() => setIsAddingCategory(true)} className="tag-btn" style={{ background: '#10b981', color: '#064e3b', fontWeight: 'black', padding: '0.5rem 1rem', borderRadius: '0.75rem' }}>+ {t('add')}</button>
+                    <button type="button" onClick={() => setIsAddingCategory(true)} className="tag-btn" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontWeight: 900, padding: '0.6rem 1.25rem', borderRadius: '1rem', fontSize: '0.75rem', border: 'none', cursor: 'pointer' }}>+ {t('add')}</button>
                   ) : (
                     <div style={{ display: 'flex', gap: '0.5rem', width: '100%', marginTop: '0.5rem' }}>
-                      <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Group name..." style={{ background: 'var(--card-bg)', border: '1px solid #10b981', borderRadius: '0.75rem', padding: '0.5rem 1rem', color: 'var(--text-main)', flex: 1 }} autoFocus />
-                      <button type="button" onClick={() => { if (newCategoryName.trim()) { setCustomCategories(prev => [...prev, newCategoryName.trim()]); setCategory(newCategoryName.trim()); setNewCategoryName(''); setIsAddingCategory(false); } }} className="tag-btn active" style={{ padding: '0.5rem 1rem' }}>{t('add')}</button>
+                      <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Category..." style={{ background: 'var(--card-bg)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '1rem', padding: '0.75rem 1.25rem', color: 'var(--text-main)', flex: 1, fontWeight: 'bold' }} autoFocus />
+                      <button type="button" onClick={() => { if (newCategoryName.trim()) { setCustomCategories(prev => [...prev, newCategoryName.trim()]); setCategory(newCategoryName.trim()); setNewCategoryName(''); setIsAddingCategory(false); } }} className="tag-btn active" style={{ padding: '0.75rem 1.5rem', borderRadius: '1rem', background: '#10b981', color: '#064e3b', fontWeight: 900 }}>{t('add')}</button>
                     </div>
                   )}
                 </div>
@@ -884,17 +950,40 @@ const Dashboard: React.FC = () => {
               <div className="input-group">
                 <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.75rem', display: 'block' }}>{t('priority')}</label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-                  {(['High', 'Medium', 'Low'] as const).map(value => (
-                    <button
-                      key={value} type="button" onClick={() => setPriority(value)}
-                      style={{
-                        padding: '0.75rem 0.5rem', borderRadius: '1rem', fontWeight: 900, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.05em', border: '2px solid transparent', background: 'rgba(255,255,255,0.03)',
-                        color: priority === value ? '#10b981' : '#64748b', cursor: 'pointer', opacity: priority === value ? 1 : 0.4, borderColor: priority === value ? '#10b981' : 'transparent'
-                      }}
-                    >
-                      {value}
-                    </button>
-                  ))}
+                  {(['High', 'Medium', 'Low'] as const).map(value => {
+                    const isActive = priority === value;
+                    const prioColors: any = {
+                      High: { text: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
+                      Medium: { text: '#fbbf24', bg: 'rgba(245, 158, 11, 0.1)' },
+                      Low: { text: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
+                    };
+                    const colors = prioColors[value];
+                    
+                    return (
+                      <button
+                        key={value} 
+                        type="button" 
+                        onClick={() => setPriority(value)}
+                        style={{
+                          padding: '0.85rem 0.5rem', 
+                          borderRadius: '1.25rem', 
+                          fontWeight: 900, 
+                          fontSize: '0.65rem', 
+                          textTransform: 'uppercase', 
+                          letterSpacing: '0.1em', 
+                          border: '2px solid',
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          background: isActive ? colors.bg : 'rgba(255,255,255,0.02)',
+                          borderColor: isActive ? colors.text : 'transparent',
+                          color: isActive ? colors.text : '#64748b', 
+                          cursor: 'pointer', 
+                          opacity: isActive ? 1 : 0.5
+                        }}
+                      >
+                        {value}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -932,6 +1021,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

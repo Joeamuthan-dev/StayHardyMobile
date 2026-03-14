@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
 import BottomNav from '../components/BottomNav';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Task {
   id: string;
@@ -10,6 +11,7 @@ interface Task {
   createdAt: string;
   updatedAt?: string;
 }
+
 
 const CategoryProgressBars: React.FC<{ data: any[] }> = ({ data }) => {
   if (data.length === 0) return null;
@@ -137,6 +139,16 @@ const CategoryProgressBars: React.FC<{ data: any[] }> = ({ data }) => {
           0% { background-position: 0% 0%; }
           100% { background-position: -200% 0%; }
         }
+        .stats-top-split {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1.5rem;
+        }
+        @media (max-width: 768px) {
+          .stats-top-split {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
     </div>
   );
@@ -189,16 +201,122 @@ const PerformanceGauge: React.FC<{ score: number; label: string }> = ({ score, l
   );
 };
 
+const ActivityTrendChart: React.FC<{ data: any[]; days: number; setDays: (d: number) => void }> = ({ data, days, setDays }) => {
+  return (
+    <div className="glass-card" style={{ padding: '2rem 1.5rem', minHeight: '320px', display: 'flex', flexDirection: 'column' }}>
+       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+         <div style={{ textAlign: 'left' }}>
+           <span style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em' }}>User Activity Trend</span>
+           <h4 style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--text-main)', margin: '4px 0 0' }}>Tasks Insight</h4>
+         </div>
+         <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '4px' }}>
+           <button 
+             onClick={() => setDays(7)}
+             style={{ 
+               padding: '6px 12px', 
+               borderRadius: '8px', 
+               border: 'none', 
+               fontSize: '10px', 
+               fontWeight: 900, 
+               cursor: 'pointer',
+               background: days === 7 ? 'var(--primary)' : 'transparent',
+               color: days === 7 ? '#064e3b' : '#64748b',
+               transition: 'all 0.3s'
+             }}
+           >7D</button>
+           <button 
+             onClick={() => setDays(30)}
+             style={{ 
+               padding: '6px 12px', 
+               borderRadius: '8px', 
+               border: 'none', 
+               fontSize: '10px', 
+               fontWeight: 900, 
+               cursor: 'pointer',
+               background: days === 30 ? 'var(--primary)' : 'transparent',
+               color: days === 30 ? '#064e3b' : '#64748b',
+               transition: 'all 0.3s'
+             }}
+           >30D</button>
+         </div>
+       </div>
+
+       <div style={{ flex: 1, width: '100%', minHeight: '200px' }}>
+         <ResponsiveContainer width="100%" height="100%">
+           <AreaChart data={data}>
+              <defs>
+                <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <XAxis 
+                dataKey="name" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fill: "#64748b", fontSize: 10, fontWeight: 700 }} 
+                dy={10} 
+                interval={days === 7 ? 0 : 6} 
+              />
+              <YAxis 
+                hide 
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  background: "rgba(15, 23, 42, 0.9)", 
+                  border: "1px solid var(--glass-border)", 
+                  borderRadius: "12px", 
+                  fontSize: "11px", 
+                  fontWeight: 800, 
+                  color: "white", 
+                  boxShadow: "0 10px 25px rgba(0,0,0,0.5)", 
+                  textTransform: "uppercase" 
+                }} 
+                itemStyle={{ padding: "2px 0" }} 
+                cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 2 }} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="created" 
+                name="Created" 
+                stroke="#fbbf24" 
+                strokeWidth={4} 
+                fillOpacity={1} 
+                fill="url(#colorCreated)" 
+                animationDuration={1500} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="completed" 
+                name="Completed" 
+                stroke="#10b981" 
+                strokeWidth={4} 
+                fillOpacity={1} 
+                fill="url(#colorCompleted)" 
+                animationDuration={2000} 
+              />
+           </AreaChart>
+         </ResponsiveContainer>
+       </div>
+    </div>
+  );
+};
+
 const Stats: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
+  const [trendDays, setTrendDays] = useState(7);
   const { user } = useAuth();
 
-  const getScoreLabels = (score: number, createdCount: number) => {
-    if (score === 0 && createdCount === 0) return { label: 'IDLE', verdict: "No tasks created today. Are we on vacation or just avoiding reality?", icon: 'hotel' };
-    if (score === 0) return { label: 'LAZY', verdict: "0% complete? That's not a score, that's a cry for help. Do something.", icon: 'bed' };
-    if (score < 20) return { label: 'SLACKER', verdict: `${score}%... My grandma moves faster while napping. Pathetic effort.`, icon: 'timer' };
-    if (score < 40) return { label: 'WAKING UP', verdict: `${score}% is better than nothing, but let's not pretend you're working hard.`, icon: 'coffee' };
+  const getScoreLabels = (score: number, totalCount: number) => {
+    if (score === 0 && totalCount === 0) return { label: 'IDLE', verdict: "No tasks found. Start your journey by adding some goals.", icon: 'hotel' };
+    if (score === 0) return { label: 'LAZY', verdict: "0% complete? That's not a score, it's a starting point. Do something.", icon: 'bed' };
+    if (score < 20) return { label: 'SLACKER', verdict: `${score}%... You're just scratching the surface. Pathetic effort.`, icon: 'timer' };
+    if (score < 40) return { label: 'WAKING UP', verdict: `${score}% is better than nothing, but you're still warming up.`, icon: 'coffee' };
     if (score < 60) return { label: 'AVERAGE', verdict: `${score}% performance. You're the human equivalent of unflavored oatmeal.`, icon: 'trending_up' };
     if (score < 80) return { label: 'CONSISTENT', verdict: `${score}%. You're actually being useful. Don't ruin it by taking a 3-hour break.`, icon: 'workspace_premium' };
     if (score < 95) return { label: 'BEAST', verdict: `${score}%! Look at you go. Almost impressive. Keep that ego in check though.`, icon: 'bolt' };
@@ -218,6 +336,7 @@ const Stats: React.FC = () => {
       if (error) console.error('Supabase fetch error:', error);
       else if (data) setTasks(data as Task[]);
     };
+
 
     const fetchCategories = async () => {
       const { data, error } = await supabase
@@ -256,12 +375,45 @@ const Stats: React.FC = () => {
   const allCategories = Array.from(new Set([
     ...defaultCategories,
     ...dbCategories,
-    ...tasks.map(t => t.category)
+    ...tasks.map((t: Task) => t.category)
   ])).filter(c => c && c !== '');
+    
+  const historicalData = useMemo(() => {
+    const data = [];
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    for (let i = trendDays - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      
+      const dayStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const dayStart = d.getTime();
+      const nextDayStart = dayStart + 24 * 60 * 60 * 1000;
+
+      const created = tasks.filter((t: Task) => {
+        const createdDate = new Date(t.createdAt).getTime();
+        return createdDate >= dayStart && createdDate < nextDayStart;
+      }).length;
+
+      const completed = tasks.filter((t: Task) => {
+        if (t.status !== 'completed' || !t.updatedAt) return false;
+        const updatedDate = new Date(t.updatedAt).getTime();
+        return updatedDate >= dayStart && updatedDate < nextDayStart;
+      }).length;
+
+      data.push({
+        name: dayStr,
+        created,
+        completed
+      });
+    }
+    return data;
+  }, [tasks, trendDays]);
 
   const categoryStats = allCategories.map(cat => {
-    const catTasks = tasks.filter(t => (t.category || 'Focus') === cat);
-    const catCompleted = catTasks.filter(t => t.status === 'completed').length;
+    const catTasks = tasks.filter((t: Task) => (t.category || 'Focus') === cat);
+    const catCompleted = catTasks.filter((t: Task) => t.status === 'completed').length;
     return {
       name: cat,
       total: catTasks.length,
@@ -271,22 +423,15 @@ const Stats: React.FC = () => {
   }).filter(stat => stat.total > 0)
     .sort((a, b) => b.total - a.total).slice(0, 10);
 
-  const todayCreated = tasks.filter(t => 
-    new Date(t.createdAt).setHours(0,0,0,0) === new Date().setHours(0,0,0,0)
-  ).length;
+  const totalUserTasks = tasks.length;
+  const completedUserTasks = tasks.filter((t: Task) => t.status === 'completed').length;
 
-  const todayCompleted = tasks.filter(t => 
-    t.status === 'completed' && 
-    t.updatedAt && 
-    new Date(t.updatedAt).setHours(0,0,0,0) === new Date().setHours(0,0,0,0)
-  ).length;
-
-  const dynamicTodayScore = todayCreated > 0 
-    ? Math.min(100, Math.floor((todayCompleted / todayCreated) * 100)) 
+  const dynamicTodayScore = totalUserTasks > 0 
+    ? Math.floor((completedUserTasks / totalUserTasks) * 100) 
     : 0;
 
-  const { label, verdict, icon } = getScoreLabels(dynamicTodayScore, todayCreated);
-  const pending = todayCreated - todayCompleted;
+  const { label, verdict, icon } = getScoreLabels(dynamicTodayScore, totalUserTasks);
+  const pendingCount = totalUserTasks - completedUserTasks;
 
   return (
     <div className="page-shell">
@@ -306,10 +451,15 @@ const Stats: React.FC = () => {
       </header>
 
       <main style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '0 1rem 5rem' }}>
-        {/* Gauge Section */}
-        <div className="glass-card" style={{ padding: '2.5rem 1.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <PerformanceGauge score={dynamicTodayScore} label={label} />
-          
+        {/* Top Split Section */}
+        <div className="stats-top-split">
+          {/* Gauge Section */}
+          <div className="glass-card" style={{ padding: '2.5rem 1.5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <PerformanceGauge score={dynamicTodayScore} label={label} />
+          </div>
+
+          {/* New Trend Chart Section */}
+          <ActivityTrendChart data={historicalData} days={trendDays} setDays={setTrendDays} />
         </div>
 
         {/* Verdict Section */}
@@ -319,7 +469,7 @@ const Stats: React.FC = () => {
              <span style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--text-main)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>The Verdict</span>
           </div>
           <p style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-            "You've finished {todayCompleted} tasks out of {todayCreated}. {verdict}"
+            "You've finished {completedUserTasks} tasks out of {totalUserTasks} total. {verdict}"
           </p>
         </div>
 
@@ -328,14 +478,14 @@ const Stats: React.FC = () => {
           <div className="glass-card" style={{ padding: '1.5rem' }}>
             <span style={{ fontSize: '0.65rem', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '0.5rem' }}>Completed</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)' }}>{todayCompleted}</span>
+              <span style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)' }}>{completedUserTasks}</span>
               <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>↑</span>
             </div>
           </div>
           <div className="glass-card" style={{ padding: '1.5rem' }}>
-            <span style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '0.5rem' }}>Abandoned</span>
+            <span style={{ fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '0.5rem' }}>Pending</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)' }}>{pending < 0 ? 0 : pending}</span>
+              <span style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)' }}>{pendingCount}</span>
               <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 700 }}>↓</span>
             </div>
           </div>

@@ -12,7 +12,13 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<{ id: string; name?: string; email: string; role?: string; avatarUrl?: string } | null>(() => {
+  const [user, setUser] = useState<{ 
+    id: string; 
+    name?: string; 
+    email: string; 
+    role?: string; 
+    avatarUrl?: string;
+  } | null>(() => {
     const saved = localStorage.getItem('user');
     if (!saved) return null;
     
@@ -22,6 +28,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return null;
     }
   });
+
 
   const updateUserMetadata = (metadata: any) => {
     setUser(prev => {
@@ -74,7 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // 3. Try to augment with DB data
         const { data: dbData, error: dbError } = await supabase
           .from('users')
-          .select('name, role, avatar_url')
+          .select('name, role, avatar_url, pin')
           .eq('id', authUser.id)
           .single();
         
@@ -120,7 +127,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, updateUserMetadata }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      logout, 
+      updateUserMetadata
+    }}>
       {children}
     </AuthContext.Provider>
   );

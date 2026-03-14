@@ -23,7 +23,7 @@ const translations: Record<Language, Record<string, string>> = {
     send_tips: 'Send tips to developer',
     sign_out: 'Sign Out',
     home: 'Home',
-    timeline: 'Timeline',
+    timeline: 'AllTasks',
     stats: 'Stats',
     profile: 'Profile',
     daily_goal: 'Daily Goal',
@@ -60,7 +60,13 @@ const translations: Record<Language, Record<string, string>> = {
     update_pin: 'Update PIN',
     pin_mismatch: 'PINs do not match',
     pin_success: 'PIN updated successfully!',
-    enter_4_digits: 'Enter 4 digits'
+    enter_4_digits: 'Enter 4 digits',
+    goals: 'Goals',
+    add_visual: 'Add Visual',
+    description_vision: 'Description & Vision',
+    define_milestone: 'Define Your Goal',
+    what_achieve: 'What do you want to achieve?',
+    path_success: 'Describe your path to success...'
   },
   Tamil: {
     settings: 'அமைப்புகள்',
@@ -74,7 +80,7 @@ const translations: Record<Language, Record<string, string>> = {
     send_tips: 'உருவாக்குபவருக்கு டிப்ஸ் அனுப்பவும்',
     sign_out: 'வெளியேறு',
     home: 'முகப்பு',
-    timeline: 'காலவரிசை',
+    timeline: 'அனைத்து பணிகள்',
     stats: 'புள்ளிவிவரம்',
     profile: 'சுயவிவரம்',
     daily_goal: 'தினசரி இலக்கு',
@@ -111,7 +117,13 @@ const translations: Record<Language, Record<string, string>> = {
     update_pin: 'பின்னைப் புதுப்பிக்கவும்',
     pin_mismatch: 'பின் எண்கள் பொருந்தவில்லை',
     pin_success: 'பின் வெற்றிகரமாக புதுப்பிக்கப்பட்டது!',
-    enter_4_digits: '4 இலக்கங்களை உள்ளிடவும்'
+    enter_4_digits: '4 இலக்கங்களை உள்ளிடவும்',
+    goals: 'இலக்குகள்',
+    add_visual: 'காட்சியைச் சேர்க்கவும்',
+    description_vision: 'விளக்கம் மற்றும் பார்வை',
+    define_milestone: 'உங்கள் இலக்கை வரையறுக்கவும்',
+    what_achieve: 'நீங்கள் எதைச் சாதிக்க விரும்புகிறீர்கள்?',
+    path_success: 'வெற்றிக்கான உங்கள் பாதையை விவரிக்கவும்...'
   }
 };
 

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
-const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean }> = ({ onAddClick, isHidden }) => {
+const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean; hasTasks?: boolean }> = ({ onAddClick, isHidden, hasTasks = true }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
@@ -18,7 +18,6 @@ const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean }> = ({ 
     { path: '/settings', icon: 'person', label: t('profile') },
   ];
 
-  // Admin Hub removed from navigation bars as per request
   // Admin Hub removed from navigation bars as per request
   const filteredNavItems = navItems;
 
@@ -108,7 +107,7 @@ const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean }> = ({ 
             onClick={() => (onAddClick ? onAddClick() : navigate('/dashboard'))}
           >
             <span className="material-symbols-outlined">add_circle</span>
-            Add Task
+            {hasTasks ? "Add Task" : "Create Your First Task"}
           </button>
 
           <div className="sidebar-logout-container">
@@ -123,4 +122,4 @@ const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean }> = ({ 
   );
 };
 
-  export default BottomNav;
+export default BottomNav;
