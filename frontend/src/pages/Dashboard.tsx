@@ -734,30 +734,30 @@ const Dashboard: React.FC = () => {
               {isSidebarHidden ? 'side_navigation' : 'fullscreen'}
             </span>
           </button>
-          <div 
-            onClick={() => window.location.href = '/settings'}
-            style={{ 
-              width: '44px', 
-              height: '44px', 
-              borderRadius: '14px', 
-              background: 'linear-gradient(135deg, #10b981, #059669)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              color: 'white', 
-              fontWeight: 900, 
-              cursor: 'pointer',
-              overflow: 'hidden',
-              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
-              border: '2px solid rgba(255, 255, 255, 0.05)'
-            }}
-          >
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              user?.name?.charAt(0) || 'U'
-            )}
-          </div>
+          
+          {user?.role === 'admin' && (
+            <div 
+              onClick={() => window.location.href = '/admin'}
+              style={{ 
+                width: '44px', 
+                height: '44px', 
+                borderRadius: '14px', 
+                background: '#BBFF00', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                color: '#064e3b', 
+                fontWeight: 900, 
+                cursor: 'pointer',
+                overflow: 'hidden',
+                boxShadow: '0 4px 12px rgba(187, 255, 0, 0.2)',
+                border: '2px solid rgba(255, 255, 255, 0.05)'
+              }}
+              title="Admin Dashboard"
+            >
+              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>shield_person</span>
+            </div>
+          )}
         </div>
       </header>
 

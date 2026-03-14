@@ -18,9 +18,10 @@ const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean }> = ({ 
     { path: '/settings', icon: 'person', label: t('profile') },
   ];
 
-  if (user?.role === 'admin') {
-    navItems.push({ path: '/admin', icon: 'shield_person', label: 'Admin Hub' });
-  }
+  // Admin Hub removed from navigation bars as per request
+  const filteredNavItems = user?.role === 'admin' 
+    ? navItems 
+    : navItems;
 
   return (
     <>
@@ -55,11 +56,10 @@ const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean }> = ({ 
                 key={item.path}
                 className={`sidebar-nav-item ${isActive(item.path) ? 'active' : ''}`}
                 onClick={() => navigate(item.path)}
-                style={isActive(item.path) ? { color: user?.role === 'admin' ? 'var(--admin-color)' : 'var(--primary-light)' } : {}}
+                style={isActive(item.path) ? { color: 'var(--primary-light)' } : {}}
               >
                 <span className="material-symbols-outlined" style={{ 
-                  fontVariationSettings: isActive(item.path) ? "'FILL' 1" : "",
-                  color: isActive(item.path) && user?.role === 'admin' ? 'var(--admin-color)' : ''
+                  fontVariationSettings: isActive(item.path) ? "'FILL' 1" : ""
                 }}>{item.icon}</span>
                 <span>{item.label}</span>
               </button>
