@@ -160,7 +160,7 @@ const CategoryProgressBars: React.FC<{ data: any[] }> = ({ data }) => {
         }
         .stats-top-split {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 3fr 7fr;
           gap: 1.5rem;
         }
         @media (max-width: 768px) {
@@ -222,7 +222,7 @@ const PerformanceGauge: React.FC<{ score: number; label: string }> = ({ score, l
 
 const ActivityTrendChart: React.FC<{ data: any[]; days: number; setDays: (d: number) => void }> = ({ data, days, setDays }) => {
   return (
-    <div className="glass-card" style={{ padding: '2rem 1.5rem', minHeight: '320px', display: 'flex', flexDirection: 'column' }}>
+    <div className="glass-card" style={{ padding: '2rem 1.5rem', height: '320px', display: 'flex', flexDirection: 'column' }}>
        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
          <div style={{ textAlign: 'left' }}>
            <span style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em' }}>User Activity Trend</span>
@@ -260,7 +260,7 @@ const ActivityTrendChart: React.FC<{ data: any[]; days: number; setDays: (d: num
          </div>
        </div>
 
-       <div style={{ flex: 1, width: '100%', minHeight: '200px' }}>
+       <div style={{ width: '100%', height: '220px' }}>
          <ResponsiveContainer width="100%" height="100%">
            <AreaChart data={data}>
               <defs>
