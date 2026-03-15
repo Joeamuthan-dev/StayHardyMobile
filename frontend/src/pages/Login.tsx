@@ -447,22 +447,48 @@ const Login: React.FC = () => {
           </div>
 
           {isLogin && (
-            <div className="flex items-center gap-2 px-1">
-              <input 
-                type="checkbox" 
-                id="rememberMe"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                style={{ 
-                  accentColor: 'var(--primary)',
-                  width: '0.9rem',
-                  height: '0.9rem',
-                  cursor: 'pointer'
-                }}
-              />
-              <label htmlFor="rememberMe" style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', cursor: 'pointer' }}>Remember Password</label>
+            <div
+              onClick={() => setRememberMe(prev => !prev)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                background: rememberMe ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)',
+                border: `1.5px solid ${rememberMe ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                borderRadius: '1rem',
+                padding: '0.875rem 1.125rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                userSelect: 'none',
+              }}
+            >
+              {/* Custom big checkbox */}
+              <div style={{
+                width: '26px',
+                height: '26px',
+                borderRadius: '7px',
+                border: `2px solid ${rememberMe ? '#10b981' : 'rgba(255,255,255,0.2)'}`,
+                background: rememberMe ? '#10b981' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'all 0.2s',
+              }}>
+                {rememberMe && (
+                  <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: '#022c22', fontVariationSettings: "'FILL' 1" }}>check</span>
+                )}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.88rem', fontWeight: 800, color: rememberMe ? 'var(--text-main)' : '#94a3b8' }}>Save Login</div>
+                <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', marginTop: '2px' }}>Stay signed in on this device</div>
+              </div>
+              <span className="material-symbols-outlined" style={{ fontSize: '1.1rem', color: rememberMe ? '#10b981' : '#334155' }}>
+                {rememberMe ? 'lock' : 'lock_open'}
+              </span>
             </div>
           )}
+
 
           <button 
             type="submit" 
