@@ -331,7 +331,7 @@ const Calendar: React.FC = () => {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 800, fontSize: '0.88rem', color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
-                    <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700, marginTop: '2px' }}>
+                    <div style={{ fontSize: '0.68rem', color: '#ef4444', fontWeight: 700, marginTop: '2px' }}>
                       {new Date(r.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                     </div>
                   </div>
@@ -362,7 +362,7 @@ const Calendar: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-main)' }}>New Reminder</h2>
-                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#10b981', fontWeight: 800 }}>
+                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#ef4444', fontWeight: 800 }}>
                   {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </p>
               </div>
@@ -435,7 +435,7 @@ const Calendar: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-main)' }}>Reminders</h2>
-                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#10b981', fontWeight: 800 }}>
+                <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: '#ef4444', fontWeight: 800 }}>
                   {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                 </p>
               </div>
