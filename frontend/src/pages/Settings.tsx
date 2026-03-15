@@ -517,7 +517,7 @@ Today, Stay Hardy brings tasks, goals, and routines together in one place to hel
                     Joe Amuthan
                     <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: '#0077b5' }}>open_in_new</span>
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Just Tech-obsessed Engineer</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Building What I Wish Existed</div>
                 </div>
               </a>
             </div>
