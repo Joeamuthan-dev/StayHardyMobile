@@ -69,8 +69,26 @@ const MobileNav: React.FC = () => {
         </nav>
 
         <div className="drawer-footer">
-          <button onClick={() => logout()} className="sidebar-logout-btn">
-            <span className="material-symbols-outlined">logout</span>
+          <button
+            onClick={() => logout()}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '1rem',
+              padding: '0.875rem 1.25rem',
+              borderRadius: '1rem',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              color: '#ef4444',
+              fontWeight: 800,
+              fontSize: '0.95rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              textAlign: 'left',
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>logout</span>
             <span>Sign Out</span>
           </button>
         </div>
