@@ -277,7 +277,6 @@ const HomeDashboard: React.FC = () => {
         <section className="glass-card" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, textTransform: 'uppercase', color: 'var(--text-main)' }}>Today's Focus</h2>
-            <button onClick={() => navigate('/dashboard')} style={{ background: 'none', border: 'none', color: '#10b981', fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase', cursor: 'pointer' }}>View All Tasks</button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
             <div style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem 0.5rem', borderRadius: '1rem', textAlign: 'center' }}>
