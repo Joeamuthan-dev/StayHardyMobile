@@ -296,7 +296,12 @@ const Calendar: React.FC = () => {
                   className={`cal-cell${isToday ? ' today-cell' : ''}`}
                   onClick={() => handleDayClick(dateStr)}
                 >
-                  <span className="cal-num">{day}</span>
+                  <span
+                    className="cal-num"
+                    style={dayRems.length > 0 && !isToday ? { color: '#ef4444' } : {}}
+                  >
+                    {day}
+                  </span>
                   {dayRems.slice(0, 2).map(r => (
                     <div key={r.id} className="cal-dot-row">
                       <div className="cal-dot" />
