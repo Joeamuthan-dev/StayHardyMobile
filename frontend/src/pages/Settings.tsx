@@ -547,7 +547,7 @@ Today, Stay Hardy brings tasks, goals, and routines together in one place to hel
         </p>
       </main>
 
-      <BottomNav />
+      <BottomNav isHidden={isSidebarHidden} />
 
       {/* Support Modal */}
       {showSupportModal && (

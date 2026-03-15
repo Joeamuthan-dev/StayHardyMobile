@@ -716,7 +716,7 @@ const AdminDashboard: React.FC = () => {
         )}
       </main>
 
-      <BottomNav />
+      <BottomNav isHidden={isSidebarHidden} />
 
       {/* Reset PIN Modal */}
       {resetPinModal.show && (

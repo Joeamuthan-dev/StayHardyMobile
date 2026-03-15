@@ -688,7 +688,7 @@ const Stats: React.FC = () => {
         </section>
       </main>
 
-      <BottomNav />
+      <BottomNav isHidden={isSidebarHidden} />
     </div>
   );
 };

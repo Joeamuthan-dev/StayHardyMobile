@@ -451,7 +451,7 @@ const HomeDashboard: React.FC = () => {
 
 
       </main>
-      <BottomNav />
+      <BottomNav isHidden={isSidebarHidden} />
     </div>
   );
 };
