@@ -187,18 +187,6 @@ const Login: React.FC = () => {
 
         if (signInError) throw signInError;
 
-        // Check user status
-        const { data: userData } = await supabase
-          .from('users')
-          .select('status')
-          .eq('email', email)
-          .single();
-
-        if (userData && userData.status === 'inactive') {
-          await supabase.auth.signOut();
-          throw new Error('Your account is inactive. Please contact admin.');
-        }
-
         if (rememberMe) {
           localStorage.setItem('remembered_email', email);
           localStorage.setItem('remembered_pin', password);

@@ -21,14 +21,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   } | null>(() => {
     const saved = localStorage.getItem('user');
     if (!saved) return null;
-    
-    try {
-      return JSON.parse(saved);
-    } catch (e) {
-      return null;
-    }
+    try { return JSON.parse(saved); } catch { return null; }
   });
-
 
   const updateUserMetadata = (metadata: any) => {
     setUser(prev => {
@@ -38,24 +32,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return updated;
     });
   };
-  const [loading, setLoading] = useState(true);
+
+  // If we already have a cached user, start with loading=false so the app shows immediately on refresh
+  const [loading, setLoading] = useState(() => {
+    const saved = localStorage.getItem('user');
+    return !saved; // only show loading screen when no cached user
+  });
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        // 1. Get the freshest user data from Supabase Auth
         const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !authUser) {
-          console.log('No auth user found, clearing state');
           setUser(null);
           localStorage.removeItem('user');
+          setLoading(false);
           return;
         }
 
         const meta = authUser.user_metadata || {};
-        
-        // Construct fallback URL based on email (new standard)
         const emailFilename = `${authUser.email?.replace(/@/g, '_at_')}.jpg`;
         const { data: { publicUrl: emailBasedUrl } } = supabase.storage
           .from('avatars')
@@ -69,33 +65,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: authUser.email?.toLowerCase().trim() === 'joe@gmail.com' ? 'admin' : 'user'
         };
 
-        // Ensure we add cache buster to the constructed URL
         if (baseData.avatarUrl && !baseData.avatarUrl.includes('?t=')) {
           baseData.avatarUrl = `${baseData.avatarUrl}?t=${Date.now()}`;
         }
 
-        // 2. Set initial state from metadata immediately
         setUser(baseData);
         localStorage.setItem('user', JSON.stringify(baseData));
 
-        // 3. Try to augment with DB data
-        const { data: dbData, error: dbError } = await supabase
-          .from('users')
-          .select('name, role, avatar_url, pin')
-          .eq('id', authUser.id)
-          .single();
-        
-        if (dbData && !dbError) {
-          const finalData = {
-            ...baseData,
-            name: dbData.name || baseData.name,
-            role: dbData.role || baseData.role,
-            avatarUrl: dbData.avatar_url || baseData.avatarUrl
-          };
-          
-          setUser(finalData);
-          localStorage.setItem('user', JSON.stringify(finalData));
-        }
+        // Background DB augment — don't block navigation
+        supabase.from('users').select('name, role, avatar_url').eq('id', authUser.id).single()
+          .then(({ data: dbData, error: dbError }) => {
+            if (dbData && !dbError) {
+              const finalData = {
+                ...baseData,
+                name: dbData.name || baseData.name,
+                role: dbData.role || baseData.role,
+                avatarUrl: dbData.avatar_url || baseData.avatarUrl
+              };
+              setUser(finalData);
+              localStorage.setItem('user', JSON.stringify(finalData));
+            }
+          });
       } catch (err) {
         console.error('Auth Profile Fetch Error:', err);
       } finally {
@@ -103,17 +93,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
-    // Initial check
+    // Run immediately but don't block UI if cache exists
     fetchUserProfile();
 
-    // Listen for changes on auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      console.log('Auth state change event:', event);
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION') {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         fetchUserProfile();
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         localStorage.removeItem('user');
+        setLoading(false);
       }
     });
 
