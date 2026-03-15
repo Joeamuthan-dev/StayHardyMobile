@@ -233,6 +233,24 @@ const HomeDashboard: React.FC = () => {
           <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>
              {getTimeGreeting()}, {user?.name?.split(' ')[0] || 'User'}
           </h1>
+          <p style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.05em', marginTop: '0.3rem', textTransform: 'uppercase' }}>
+            {(() => {
+              const now = new Date();
+              const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+              const month = now.toLocaleDateString('en-US', { month: 'long' });
+              const day = now.getDate();
+              return `Today is ${dayName}, ${month} ${day}`;
+            })()}
+          </p>
+          <p style={{ color: '#10b981', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.03em', marginTop: '0.2rem', opacity: 0.8 }}>
+            {(() => {
+              const now = new Date();
+              const year = now.getFullYear();
+              const endOfYear = new Date(year, 11, 31);
+              const diff = Math.ceil((endOfYear.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              return `${diff} days left in ${year} — make them count.`;
+            })()}
+          </p>
           
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

@@ -21,21 +21,11 @@ const Settings: React.FC = () => {
   const [pinSuccess, setPinSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
-  const [snapshotStats, setSnapshotStats] = useState({ completedTasks: 0, routineStreak: 0, activeGoals: 0 });
+  // const [snapshotStats, setSnapshotStats] = useState({ completedTasks: 0, routineStreak: 0, activeGoals: 0 });
 
   const [showConfirmReset, setShowConfirmReset] = useState<{ show: boolean; type: 'tasks' | 'routines' | 'stats' | 'delete' | '' }>({ show: false, type: '' });
 
-  React.useEffect(() => {
-    if (!user?.id) return;
-    const fetchStats = async () => {
-      const { count: tasksCount } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('userId', user.id).eq('status', 'completed');
-      const { count: goalsCount } = await supabase.from('goals').select('*', { count: 'exact', head: true }).eq('userId', user.id).eq('status', 'pending');
-      const { data: routines } = await supabase.from('routines').select('streak').eq('userId', user.id);
-      const maxStreak = routines ? Math.max(...routines.map(r => r.streak || 0), 0) : 0;
-      setSnapshotStats({ completedTasks: tasksCount || 0, routineStreak: maxStreak, activeGoals: goalsCount || 0 });
-    };
-    fetchStats();
-  }, [user]);
+  // React.useEffect(() => { ... fetchStats removed });
 
 
 
@@ -357,17 +347,6 @@ const Settings: React.FC = () => {
           )}
         </div>
 
-        {/* Section: Productivity Snapshot */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <h3 style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em', marginLeft: '0.5rem', marginBottom: '0.25rem' }}>Productivity Snapshot</h3>
-          <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-              <div style={{ textAlign: 'center' }}><strong style={{ display: 'block', fontSize: '1.5rem', color: '#10b981' }}>{snapshotStats.completedTasks}</strong><span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 800 }}>Completed</span></div>
-              <div style={{ textAlign: 'center' }}><strong style={{ display: 'block', fontSize: '1.5rem', color: '#f59e0b' }}>{snapshotStats.routineStreak}</strong><span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 800 }}>Streak</span></div>
-              <div style={{ textAlign: 'center' }}><strong style={{ display: 'block', fontSize: '1.5rem', color: '#3b82f6' }}>{snapshotStats.activeGoals}</strong><span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 800 }}>Active Goals</span></div>
-            </div>
-            </div>
-          </div>
 
 
         {/* Section: App Preferences */}
