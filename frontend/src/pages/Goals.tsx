@@ -227,7 +227,7 @@ const Goals: React.FC = () => {
 
       <header className="dashboard-header" style={{ marginBottom: '2.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
-          <button onClick={() => navigate('/dashboard')} className="notification-btn" data-tooltip="Back to Dashboard" style={{ width: '40px', height: '40px' }}>
+          <button onClick={() => navigate('/dashboard')} className="notification-btn" data-tooltip="Back to Tasks" style={{ width: '40px', height: '40px' }}>
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>{t('goals')}</h1>

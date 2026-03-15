@@ -211,7 +211,7 @@ const Login: React.FC = () => {
         if (role === 'admin') {
           navigate('/admin');
         } else {
-          navigate('/dashboard');
+          navigate('/home');
         }
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -244,7 +244,7 @@ const Login: React.FC = () => {
 
         // Check if session exists (means email confirmation is OFF)
         if (data.session) {
-          navigate('/dashboard');
+          navigate('/home');
         } else {
           setError('Signup successful! Please check your email to confirm your account and then Log In.');
           setIsLogin(true); // Switch to login view
@@ -275,7 +275,7 @@ const Login: React.FC = () => {
           marginTop: '15vh'
         }}>
           <h1 style={{ fontSize: '3.5rem', fontWeight: 900, color: '#10b981', margin: 0, letterSpacing: '-0.04em' }}>StayHardy</h1>
-          <p style={{ color: 'rgba(16, 185, 129, 0.4)', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.2em', marginTop: '1rem', textTransform: 'uppercase' }}>Tasks with clarity</p>
+          <p style={{ color: 'rgba(16, 185, 129, 0.4)', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.2em', marginTop: '1rem', textTransform: 'uppercase' }}>Consistency Builds Success</p>
         </div>
       )}
 
@@ -350,7 +350,7 @@ const Login: React.FC = () => {
         <div className={`auth-title slide-up-fade ${isPulled ? 'visible' : ''}`} style={{ textAlign: 'center', marginBottom: '1rem', flexShrink: 0 }}>
           <h1 style={{ fontSize: '2rem', fontWeight: 900, letterSpacing: '-0.025em', margin: 0, color: '#10b981' }}>{isLogin ? 'StayHardy' : 'Join Us'}</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
-            Tasks with clarity
+            Consistency Builds Success
           </p>
         </div>
 
