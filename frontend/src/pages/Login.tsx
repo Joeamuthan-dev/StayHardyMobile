@@ -53,6 +53,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [isPulled, setIsPulled] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // New State
   
   const navigate = useNavigate();
   const [rememberMe, setRememberMe] = useState(localStorage.getItem('remembered_email') ? true : false);
@@ -175,6 +176,7 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true); // START SUBMISSION
 
     const supabasePassword = password + "_secure_pin";
 
@@ -215,31 +217,29 @@ const Login: React.FC = () => {
         if (signUpError) throw signUpError;
 
         if (data.user) {
-          // Sync to users table
           const { error: syncError } = await supabase.from('users').upsert({
             id: data.user.id,
             name,
             email,
-            pin: password, // Store PIN for verification/backup as requested
+            pin: password,
             role: email.toLowerCase().trim() === 'joe@gmail.com' ? 'admin' : 'user',
             created_at: new Date().toISOString()
           });
           
-          if (syncError) {
-            console.error('Database sync error:', syncError);
-          }
+          if (syncError) console.error('Database sync error:', syncError);
         }
 
-        // Check if session exists (means email confirmation is OFF)
         if (data.session) {
           navigate('/home');
         } else {
           setError('Signup successful! Please check your email to confirm your account and then Log In.');
           setIsLogin(true); // Switch to login view
+          setIsSubmitting(false); // Enable manual retry on signup wait screen
         }
       }
     } catch (err: any) {
       console.error('Auth Error Details:', err);
+      setIsSubmitting(false); // RESET ON ERROR
       if (err.message === 'Invalid login credentials') {
         setError('Invalid email or PIN. Please try again.');
       } else if (err.message.includes('rate limit')) {
@@ -481,13 +481,55 @@ const Login: React.FC = () => {
           <button 
             type="submit" 
             className="glow-btn-primary" 
-            style={{ marginTop: '0.5rem', height: '3.5rem', borderRadius: '1rem', minHeight: '3.5rem', fontSize: '1rem' }} 
-            disabled={!isPulled}
+            style={{ 
+              marginTop: '0.5rem', 
+              height: '3.5rem', 
+              borderRadius: '1rem', 
+              minHeight: '3.5rem', 
+              fontSize: '1rem',
+              opacity: isSubmitting || !isPulled ? 0.6 : 1,
+              cursor: isSubmitting || !isPulled ? 'not-allowed' : 'pointer'
+            }} 
+            disabled={!isPulled || isSubmitting}
           >
-            <span>{isLogin ? 'Log In' : 'Sign Up'}</span>
-            <span className="material-symbols-outlined">arrow_forward</span>
+            <span>{isSubmitting ? 'Syncing...' : isLogin ? 'Log In' : 'Sign Up'}</span>
+            {!isSubmitting && <span className="material-symbols-outlined">arrow_forward</span>}
           </button>
         </form>
+
+        {/* ── Submission Loading Overlay ── */}
+        {isSubmitting && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(12px)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '1rem',
+            animation: 'fadeIn 0.25s ease-out'
+          }}>
+            <div className="spinner" style={{
+              width: '40px',
+              height: '40px',
+              border: '3px solid rgba(16, 185, 129, 0.1)',
+              borderTopColor: '#10b981',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#10b981', letterSpacing: '-0.02em' }}>
+              StayHard — Grinding…
+            </div>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>Syncing your boards...</p>
+            <style>{`
+              @keyframes spin { to { transform: rotate(360deg); } }
+            `}</style>
+          </div>
+        )}
+
 
         <div className={`auth-links slide-up-fade ${isPulled ? 'visible' : ''}`} style={{ width: '100%', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
           <a 
