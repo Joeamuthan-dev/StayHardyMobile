@@ -68,8 +68,8 @@ const App: React.FC = () => {
 
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
-import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/react'; // For React projects
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react"; // For React projects
 
 const Root: React.FC = () => (
   <AuthProvider>
