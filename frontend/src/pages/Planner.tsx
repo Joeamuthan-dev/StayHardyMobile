@@ -25,7 +25,7 @@ const Planner: React.FC = () => {
     if (!user?.id) return;
 
     const fetchTasks = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('tasks')
         .select('*')
         .eq('userId', user.id)
@@ -35,7 +35,7 @@ const Planner: React.FC = () => {
     };
 
     const fetchGoals = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('goals')
         .select('*')
         .eq('userId', user.id)
@@ -84,29 +84,6 @@ const Planner: React.FC = () => {
 
 
 
-  const toggleTaskStatus = async (task: Task) => {
-    const newStatus = task.status === 'pending' ? 'completed' : 'pending';
-    
-    // Optimistic update
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
-
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ 
-          status: newStatus,
-          updatedAt: new Date().toISOString()
-        })
-        .eq('id', task.id);
-      if (error) throw error;
-    } catch (err) {
-      console.error('Error toggling status:', err);
-      // fetchTasks is not directly available here in the same way, but we could trigger it
-      // Let's assume the subscription handles the rollback if the update fails or just re-fetch
-      const { data } = await supabase.from('tasks').select('*').eq('userId', user?.id).order('createdAt', { ascending: false });
-      if (data) setTasks(data as Task[]);
-    }
-  };
 
 
   const groupItemsByDate = (itemsToGroup: any[]) => {

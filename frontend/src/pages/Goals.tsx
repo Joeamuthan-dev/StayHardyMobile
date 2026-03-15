@@ -50,7 +50,6 @@ const Goals: React.FC = () => {
   const [error, setError] = useState('');
 
   const [showModal, setShowModal] = useState(false);
-  const [showCompleted, setShowCompleted] = useState(false);
 
   const fetchGoals = useCallback(async () => {
     if (!user?.id) return;
@@ -218,16 +217,6 @@ const Goals: React.FC = () => {
     return Math.round(progress);
   };
 
-  const calculateDuration = (createdAt: string, updatedAt?: string) => {
-    if (!updatedAt) return "N/A";
-    const start = new Date(createdAt);
-    const end = new Date(updatedAt);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    const diffTime = end.getTime() - start.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays === 0 ? "Same day" : `${diffDays} days`;
-  };
 
   return (
     <div className={`page-shell ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>

@@ -828,7 +828,7 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      <BottomNav onAddClick={() => openModal()} isHidden={isSidebarHidden} hasTasks={tasks.length > 0} />
+      <BottomNav isHidden={isSidebarHidden} />
 
       {showModal && (
         <div className="premium-modal-overlay" onClick={closeModal}>

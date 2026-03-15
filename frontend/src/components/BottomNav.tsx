@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 
 import MobileNav from './MobileNav';
 
-const BottomNav: React.FC<{ onAddClick?: () => void; isHidden?: boolean; hasTasks?: boolean }> = ({ onAddClick, isHidden, hasTasks = true }) => {
+const BottomNav: React.FC<{ isHidden?: boolean }> = ({ isHidden }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
