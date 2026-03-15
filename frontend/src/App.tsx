@@ -15,6 +15,7 @@ import FeedbackList from './pages/FeedbackList';
 import AdminDashboard from './pages/AdminDashboard';
 import Routine from './pages/Routine';
 import HomeDashboard from './pages/HomeDashboard';
+import Calendar from './pages/Calendar';
 
 const ProtectedRoute = () => {
   const { user, loading } = useAuth();
@@ -54,6 +55,7 @@ const App: React.FC = () => {
           <Route path="/planner" element={<Planner />} />
           <Route path="/goals" element={<Goals />} />
           <Route path="/routine" element={<Routine />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/tips" element={<Tips />} />
           <Route path="/feedback" element={<Feedback />} />
           <Route path="/feedback-list" element={<FeedbackList />} />
