@@ -67,13 +67,14 @@ const App: React.FC = () => {
 };
 
 import { ThemeProvider } from './context/ThemeContext';
-
 import { LanguageProvider } from './context/LanguageContext';
+import { Analytics } from '@vercel/analytics/react'; // For React projects
 
 const Root: React.FC = () => (
   <AuthProvider>
     <ThemeProvider>
       <LanguageProvider>
+        <Analytics />
         <App />
       </LanguageProvider>
     </ThemeProvider>
@@ -81,3 +82,4 @@ const Root: React.FC = () => (
 );
 
 export default Root;
+
