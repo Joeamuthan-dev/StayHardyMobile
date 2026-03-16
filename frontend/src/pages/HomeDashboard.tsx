@@ -157,21 +157,22 @@ const HomeDashboard: React.FC = () => {
 
   const activeGoals = goals.filter(g => g.status === 'pending').slice(0, 3);
 
-
-
-
-
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
   const handleCompleteTask = async (taskId: string) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'completed', updatedAt: new Date().toISOString() } : t));
-    const { error } = await supabase
-      .from('tasks')
-      .update({ status: 'completed', updatedAt: new Date().toISOString() })
-      .eq('id', taskId);
-    if (error) {
-      console.error('Error completing task:', error);
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'pending' } : t));
-    }
+    setCompletingTaskId(taskId);
+    setTimeout(async () => {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'completed', updatedAt: new Date().toISOString() } : t));
+      setCompletingTaskId(null);
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: 'completed', updatedAt: new Date().toISOString(), completed_at: new Date().toISOString() })
+        .eq('id', taskId);
+      if (error) {
+        console.error('Error completing task:', error);
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'pending' } : t));
+      }
+    }, 400);
   };
   
   return (
@@ -505,8 +506,8 @@ const HomeDashboard: React.FC = () => {
           <div className="inner-tasks-grid" style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.6rem' }}>
             {topPendingTasks.length > 0 ? topPendingTasks.map(t => (
               <div key={t.id} className="inner-task-row" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem 0.85rem', borderRadius: '0.85rem', border: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }} onClick={() => handleCompleteTask(t.id)}>
-                <div onClick={(e) => { e.stopPropagation(); handleCompleteTask(t.id); }} style={{ width: '1.2rem', height: '1.2rem', borderRadius: '50%', border: '2.2px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '0.75rem', color: '#10b981', fontVariationSettings: "'wght' 700" }}>check</span>
+                <div onClick={(e) => { e.stopPropagation(); handleCompleteTask(t.id); }} style={{ width: '1.2rem', height: '1.2rem', borderRadius: '50%', border: '2.2px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, background: completingTaskId === t.id ? '#10b981' : 'transparent', transition: 'background 0.2s ease' }}>
+                  {completingTaskId === t.id && <span className="material-symbols-outlined" style={{ fontSize: '0.75rem', color: '#000', fontVariationSettings: "'wght' 800" }}>check</span>}
                 </div>
                 <div style={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
                 <span style={{ fontSize: '0.6rem', fontWeight: 900, background: t.priority === 'High' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', color: t.priority === 'High' ? '#ef4444' : '#f59e0b', padding: '0.15rem 0.5rem', borderRadius: '0.5rem' }}>{t.priority}</span>
