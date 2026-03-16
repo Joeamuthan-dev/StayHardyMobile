@@ -131,12 +131,9 @@ const MobileNav: React.FC = () => {
           left: -280px;
           width: 280px;
           height: 100vh;
-          background: linear-gradient(
-            135deg, 
-            rgba(30, 41, 59, 0.8) 0%, 
-            rgba(15, 23, 42, 0.9) 100%
-          );
+          background: #000000;
           backdrop-filter: blur(25px) saturate(180%);
+
           -webkit-backdrop-filter: blur(25px) saturate(180%);
           border-right: 1px solid rgba(255, 255, 255, 0.1);
           z-index: 1200;
