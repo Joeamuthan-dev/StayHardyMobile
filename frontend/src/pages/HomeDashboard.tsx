@@ -161,18 +161,18 @@ const HomeDashboard: React.FC = () => {
 
   const handleCompleteTask = async (taskId: string) => {
     setCompletingTaskId(taskId);
-    setTimeout(async () => {
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'completed', updatedAt: new Date().toISOString() } : t));
-      setCompletingTaskId(null);
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: 'completed', updatedAt: new Date().toISOString() })
-        .eq('id', taskId);
-      if (error) {
-        console.error('Error completing task:', error);
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'pending' } : t));
-      }
-    }, 400);
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'completed', updatedAt: new Date().toISOString() } : t));
+    
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status: 'completed', updatedAt: new Date().toISOString() })
+      .eq('id', taskId);
+
+    if (error) {
+      console.error('Error completing task:', error);
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'pending' } : t));
+    }
+    setCompletingTaskId(null);
   };
   
   return (
