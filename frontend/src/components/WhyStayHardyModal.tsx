@@ -91,10 +91,36 @@ const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, 
              </button>
           )}
 
-          <div className="closing-actions">
-            <button onClick={() => { onClose(); window.location.href='/feedback'; }}>Give Feedback</button>
-            <span className="dot"></span>
-            <button onClick={() => setShowSupport(true)}>Support the project</button>
+          <div className="why-closing">
+            <span>Enjoying the app?</span>
+            <div className="closing-actions">
+              <button onClick={() => { onClose(); window.location.href='/feedback'; }}>Give Feedback</button>
+              <span className="dot"></span>
+              <button onClick={() => setShowSupport(true)}>Support the project</button>
+            </div>
+          </div>
+
+          <div className="developer-info-section">
+            <h4 className="developer-label">About the Developer</h4>
+            <a 
+              href="https://www.linkedin.com/in/joeamuthan?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="developer-card-link"
+            >
+              <img 
+                src="https://tiavhmbpplerffdjmodw.supabase.co/storage/v1/object/public/avatars/admin.PNG" 
+                alt="Joe Amuthan" 
+                className="developer-avatar"
+              />
+              <div className="developer-details">
+                <div className="developer-name">
+                  Joe Amuthan
+                  <span className="material-symbols-outlined">open_in_new</span>
+                </div>
+                <div className="developer-motto">Building What I Wish Existed</div>
+              </div>
+            </a>
           </div>
         </footer>
       </div>
@@ -272,6 +298,19 @@ const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, 
           filter: brightness(1.1);
         }
         
+        .why-closing {
+          margin-bottom: 2rem;
+        }
+        .why-closing span {
+          display: block;
+          color: #64748b;
+          font-size: 0.8rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          margin-bottom: 0.75rem;
+          letter-spacing: 0.05em;
+        }
+        
         .closing-actions {
           display: flex;
           align-items: center;
@@ -296,6 +335,54 @@ const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, 
           height: 4px;
           background: #334155;
           border-radius: 50%;
+        }
+        .developer-info-section {
+          margin-top: 2rem;
+          padding-top: 2rem;
+          border-top: 1px solid rgba(255, 255, 255, 0.05);
+          text-align: left;
+        }
+        .developer-label {
+          font-size: 10px;
+          fontWeight: 900;
+          color: #64748b;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin-bottom: 1rem;
+        }
+        .developer-card-link {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          text-decoration: none;
+          transition: transform 0.2s;
+        }
+        .developer-card-link:hover {
+          transform: translateX(5px);
+        }
+        .developer-avatar {
+          width: 48px;
+          height: 48px;
+          border-radius: 16px;
+          border: 2px solid #10b981;
+          object-fit: cover;
+        }
+        .developer-name {
+          font-weight: 800;
+          font-size: 1rem;
+          color: white;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .developer-name .material-symbols-outlined {
+          font-size: 1rem;
+          color: #10b981;
+        }
+        .developer-motto {
+          font-size: 0.75rem;
+          color: #94a3b8;
+          font-weight: 600;
         }
 
         @media (max-width: 600px) {

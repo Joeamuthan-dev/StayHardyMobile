@@ -458,7 +458,7 @@ const Settings: React.FC = () => {
         </button>
 
         {/* Section: About This App */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+        <div className="desktop-only" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
           <h3 style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em', marginLeft: '0.5rem', marginBottom: '0.25rem' }}>About This App</h3>
           
           <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)' }}>
@@ -602,6 +602,13 @@ Today, Stay Hardy brings tasks, goals, and routines together in one place to hel
           </div>
         </div>
       )}
+      <style>{`
+        @media (max-width: 768px) {
+          .desktop-only {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

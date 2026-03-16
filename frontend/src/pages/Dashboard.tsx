@@ -120,10 +120,8 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onE
             className={`task-card-title ${task.status === 'completed' ? 'strike-through' : ''}`} 
             style={{ 
               margin: 0,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              flex: 1
+              flex: 1,
+              minWidth: 0
             }}
           >
             {task.title}
@@ -1195,21 +1193,37 @@ const Dashboard: React.FC = () => {
           color: rgba(0, 0, 0, 0.4) !important;
         }
 
-        /* Desktop Modal Centering for Task Detail popup */
-        @media (min-width: 768px) {
-          .task-detail-sheet {
-            position: fixed !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            bottom: auto !important;
-            border-radius: 1.5rem !important;
-            max-width: 480px !important;
-            width: 90% !important;
-            animation: sheetZoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-          }
-          .task-detail-sheet .sheet-handle {
-            display: none !important;
+        /* Task Detail Modal Centering for both Desktop & Mobile as per request */
+        .task-detail-sheet {
+          position: fixed !important;
+          top: 50% !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) !important;
+          bottom: auto !important;
+          border-radius: 2rem !important;
+          max-width: 480px !important;
+          width: calc(100% - 2rem) !important;
+          animation: sheetZoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+          padding: 2rem !important;
+        }
+        .task-detail-sheet .sheet-handle {
+          display: none !important;
+        }
+
+        .task-card-title {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          line-height: 1.4;
+          font-size: 0.95rem;
+          font-weight: 700;
+          color: white;
+        }
+
+        @media (max-width: 768px) {
+          .task-card-title {
+            -webkit-line-clamp: 2; /* Ensure 2 lines max on mobile */
           }
         }
 
