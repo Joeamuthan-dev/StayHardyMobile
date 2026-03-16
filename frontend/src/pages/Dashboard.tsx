@@ -41,9 +41,9 @@ interface Task {
 interface SortableTaskItemProps {
   task: Task;
   onToggle: (task: Task) => void;
-  onDelete: (id: string) => void;
   onEdit: (task: Task) => void;
 }
+
 
 const getCategoryColor = (category: string) => {
   const cat = (category || 'General').toLowerCase();
@@ -73,7 +73,7 @@ const getCategoryColor = (category: string) => {
   };
 };
 
-const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onDelete, onEdit }) => {
+const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onEdit }) => {
   const {
     attributes,
     listeners,
@@ -82,6 +82,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onD
     transition,
     isDragging
   } = useSortable({ id: task.id });
+
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -96,11 +97,16 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onD
       style={{
         ...style,
         borderLeft: `4px solid ${task.priority === 'High' ? '#ef4444' : task.priority === 'Medium' ? '#f59e0b' : '#10b981'}`,
-        // We'll use a CSS class for background to allow theme overrides
+        cursor: 'pointer' // explicitly indicate clickability
       }}
       {...attributes}
       {...listeners}
       className={`glass-card task-card group ${task.status === 'completed' ? 'completed' : ''}`}
+      onClick={(e) => {
+        // Only trigger if not clicking checkbox or dragging
+        if ((e.target as HTMLElement).closest('.checkbox-custom')) return;
+        onEdit(task); // We'll modify onEdit to act as view/edit details on click
+      }}
     >
       <div className="task-card-header" style={{ marginBottom: '0.5rem', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
@@ -123,24 +129,9 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onD
             {task.title}
           </h4>
         </div>
-
-        <div style={{ display: 'flex', gap: '0.25rem' }}>
-          <button
-            style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: '0.2rem' }}
-            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>edit</span>
-          </button>
-          <button
-            style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.2rem' }}
-            onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>delete</span>
-          </button>
-        </div>
       </div>
 
-      <div style={{ cursor: 'pointer', marginBottom: '0.5rem' }} onClick={(e) => { e.stopPropagation(); onEdit(task); }}>
+      <div style={{ marginBottom: '0.5rem' }}>
         {task.image_url && (
           <div style={{ width: '100%', height: '120px', borderRadius: '0.75rem', overflow: 'hidden', marginBottom: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
             <img src={task.image_url} alt={task.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -150,6 +141,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onD
           <p className="task-card-note" style={{ margin: 0, color: 'var(--text-secondary)' }}>{task.description}</p>
         )}
       </div>
+
 
       <div style={{ marginTop: 'auto' }}>
         <span
@@ -172,11 +164,11 @@ interface DroppableColumnProps {
   title: string;
   tasks: Task[];
   onToggle: (task: Task) => void;
-  onDelete: (id: string) => void;
   onEdit: (task: Task) => void;
 }
 
-const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onToggle, onDelete, onEdit }) => {
+const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onToggle, onEdit }) => {
+
 
   const { setNodeRef, isOver } = useDroppable({ id });
 
@@ -216,10 +208,10 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onT
               key={task.id}
               task={task}
               onToggle={onToggle}
-              onDelete={onDelete}
               onEdit={onEdit}
             />
           ))}
+ stream.
         </div>
       </SortableContext>
 
@@ -273,6 +265,7 @@ const Dashboard: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
+  const [detailTask, setDetailTask] = useState<Task | null>(null); // New details state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Business');
@@ -831,9 +824,10 @@ const Dashboard: React.FC = () => {
                       title={`${prio} Priority`}
                       tasks={filteredTasks.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))}
                       onToggle={toggleTaskStatus}
-                      onDelete={deleteTask}
-                      onEdit={openModal}
+                      onEdit={(task) => setDetailTask(task)}
                     />
+
+
 
 
                   </div>
@@ -1029,6 +1023,124 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {detailTask && (
+        <div className="premium-modal-overlay" onClick={() => setDetailTask(null)}>
+          <div className="bottom-sheet" onClick={e => e.stopPropagation()} style={{ padding: '2rem' }}>
+            <div className="sheet-handle"></div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, lineHeight: 1.2 }}>
+                  {detailTask.title}
+                </h2>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', alignItems: 'center' }}>
+                  <span
+                    style={{
+                      background: getCategoryColor(detailTask.category).bg,
+                      color: getCategoryColor(detailTask.category).text,
+                      border: `1px solid ${getCategoryColor(detailTask.category).border}`,
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '0.75rem',
+                      fontSize: '0.7rem',
+                      fontWeight: 900,
+                      textTransform: 'uppercase'
+                    }}
+                  >
+                    {detailTask.category || 'General'}
+                  </span>
+                  <span
+                    style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      color: detailTask.priority === 'High' ? '#ef4444' : detailTask.priority === 'Medium' ? '#f59e0b' : '#10b981',
+                      border: `1px solid ${detailTask.priority === 'High' ? 'rgba(239,68,68,0.2)' : detailTask.priority === 'Medium' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}`,
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '0.75rem',
+                      fontSize: '0.7rem',
+                      fontWeight: 900,
+                      textTransform: 'uppercase'
+                    }}
+                  >
+                    {detailTask.priority} Priority
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setDetailTask(null)} 
+                className="notification-btn"
+                style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '50%' }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {detailTask.image_url && (
+              <div style={{ width: '100%', maxHeight: '240px', borderRadius: '1.25rem', overflow: 'hidden', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <img src={detailTask.image_url} alt={detailTask.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            )}
+
+            {detailTask.description && (
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1.25rem', borderRadius: '1.25rem', marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.03)' }}>
+                <p style={{ margin: 0, color: 'var(--text-main)', fontSize: '0.95rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                  {detailTask.description}
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: 'auto' }}>
+              <button
+                onClick={() => {
+                  const t = detailTask;
+                  setDetailTask(null);
+                  openModal(t); // Chain triggers Edit form modal
+                }}
+                className="glow-btn-primary"
+                style={{ 
+                  height: '3.5rem', 
+                  borderRadius: '1.25rem', 
+                  background: 'rgba(255,255,255,0.05)', 
+                  color: 'var(--text-main)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  fontSize: '0.9rem',
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  gap: '0.5rem'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>edit</span>
+                <span>Edit</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (window.confirm("Delete this task?")) {
+                    deleteTask(detailTask.id);
+                    setDetailTask(null);
+                  }
+                }}
+                className="glow-btn-primary"
+                style={{ 
+                  height: '3.5rem', 
+                  borderRadius: '1.25rem', 
+                  background: 'rgba(239, 68, 68, 0.1)', 
+                  color: '#ef4444',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  fontSize: '0.9rem',
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  gap: '0.5rem'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>delete</span>
+                <span>Delete</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}
