@@ -1414,16 +1414,30 @@ html, body {
 @media (min-width: 768px) {
   .priority-board {
     flex-direction: row;
-    overflow-x: auto;
+    overflow-x: hidden; /* Prevent horizontal scrollbars */
   }
   .priority-grid-container {
     flex-direction: row;
+    flex: 1;
+    width: 100%;
   }
   .priority-column-wrapper {
     flex: 1;
-    min-width: 300px; /* Allow them to scale inside sidebar widths */
+    min-width: 0; /* Clear min-width to avoid horizontal scrolling */
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    padding-right: 0.5rem;
+  }
+  .priority-column-wrapper:last-child {
+    border-right: none;
   }
 }
+
+/* ── Utilize full screen when sidebar is hidden ── */
+.sidebar-hidden .task-grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+  display: grid !important;
+}
+
 
 /* ══════════════════════════════════════════════
    LOGIN PAGE — Responsive
