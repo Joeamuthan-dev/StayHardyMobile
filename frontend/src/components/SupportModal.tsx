@@ -83,7 +83,8 @@ const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         <p style={{ fontSize: '0.9rem', color: '#94a3b8', lineHeight: 1.7, fontWeight: 500 }}>
-          If you like this app, your support would mean a lot. You can contribute even ₹1 to help improve features and performance. Show your support if you enjoy using this application. Also, feel free to send your feedback to help us make the app better.
+          If you enjoy using this app, your support would mean a lot. You can contribute any amount—even ₹1—to help improve features and overall performance.
+          Your support encourages continued development, and your feedback is always welcome to help us make the app better.
         </p>
 
         <button 
