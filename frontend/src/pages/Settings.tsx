@@ -457,44 +457,6 @@ const Settings: React.FC = () => {
           <span style={{ fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.8rem' }}>{isLoggingOut ? 'Logging out...' : 'Logout Session'}</span>
         </button>
 
-        {/* Section: About This App */}
-        <div className="desktop-only" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-          <h3 style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em', marginLeft: '0.5rem', marginBottom: '0.25rem' }}>About This App</h3>
-          
-          <div className="glass-card" style={{ padding: '1.5rem', border: '1px solid var(--glass-border)', color: 'var(--text-main)' }}>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-              Stay Hardy started as a personal project to help me stay consistent with my goals, tasks, and daily routines.
-I wanted a simple system to track progress, build discipline, and stay productive without distractions.
-Today, Stay Hardy brings tasks, goals, and routines together in one place to help users stay focused and measure their real productivity.
-            </p>
-            
-            <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <h4 style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1rem' }}>About the Developer</h4>
-              
-              <a 
-                href="https://www.linkedin.com/in/joeamuthan?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{ display: 'flex', alignItems: 'center', gap: '1rem', textDecoration: 'none', transition: 'transform 0.2s' }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateX(5px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateX(0)'}
-              >
-                <img 
-                  src="https://tiavhmbpplerffdjmodw.supabase.co/storage/v1/object/public/avatars/admin.PNG" 
-                  alt="Joe Amuthan" 
-                  style={{ width: '48px', height: '48px', borderRadius: '16px', border: '2px solid var(--primary)', objectFit: 'cover' }}
-                />
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    Joe Amuthan
-                    <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: '#0077b5' }}>open_in_new</span>
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Building What I Wish Existed</div>
-                </div>
-              </a>
-            </div>
-          </div>
-        </div>
 
         <p style={{ textAlign: 'center', fontSize: '0.7rem', color: '#475569', marginTop: '2rem' }}>
           StayHardy v1.2.0 • Build 2026.03.13
