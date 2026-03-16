@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
+
 import BottomNav from '../components/BottomNav';
 import { supabase } from '../supabase';
 
@@ -10,8 +10,9 @@ const Settings: React.FC = () => {
   const [isSidebarHidden, setIsSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const toggleSidebar = () => { setIsSidebarHidden(prev => { const next = !prev; localStorage.setItem('sidebarHidden', next.toString()); return next; }); };
   const { user, logout, updateUserMetadata } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+
+
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [newPin, setNewPin] = useState(['', '', '', '']);
@@ -349,36 +350,9 @@ const Settings: React.FC = () => {
 
 
 
-        {/* Section: App Preferences */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <h3 style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em', marginLeft: '0.5rem', marginBottom: '0.25rem' }}>App Preferences</h3>
-          
-          <div className="glass-card" style={{ padding: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <span className="material-symbols-outlined" style={{ color: theme === 'dark' ? '#BBFF00' : '#10b981' }}>
-                  {theme === 'dark' ? 'dark_mode' : 'light_mode'}
-                </span>
-                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>Theme Mode</span>
-              </div>
-              <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '12px', gap: '4px' }}>
-                <button 
-                  onClick={() => theme === 'light' && toggleTheme()}
-                  style={{ background: theme === 'dark' ? (theme === 'dark' ? '#BBFF00' : '#10b981') : 'transparent', color: theme === 'dark' ? '#064e3b' : '#64748b', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s' }}
-                >Dark</button>
-                <button 
-                  onClick={() => theme === 'dark' && toggleTheme()}
-                  style={{ background: theme === 'light' ? '#10b981' : 'transparent', color: theme === 'light' ? '#064e3b' : '#64748b', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s' }}
-                >Light</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-
         {/* Section: Support & Growth */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
           <h3 style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em', marginLeft: '0.5rem', marginBottom: '0.25rem' }}>Growth & Feedback</h3>
           
           <button 
