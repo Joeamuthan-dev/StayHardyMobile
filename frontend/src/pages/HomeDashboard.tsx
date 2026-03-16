@@ -231,6 +231,15 @@ const HomeDashboard: React.FC = () => {
         .focus-tile:hover .tasks-animation {
           animation: clip-swing 0.45s infinite ease-in-out;
         }
+        @keyframes fire-flicker {
+          0%, 100% { transform: scale(1); opacity: 0.9; }
+          30% { transform: scale(1.12) rotate(-2deg); opacity: 1; filter: drop-shadow(0 0 5px #ef4444); }
+          50% { transform: scale(0.95) rotate(1deg); opacity: 0.85; }
+          80% { transform: scale(1.08) rotate(-1deg); opacity: 1; }
+        }
+        .fire-animation {
+          animation: fire-flicker 0.4s infinite ease-in-out;
+        }
 
         /* Border Glow Accents */
         .tasks-tile { border-color: rgba(59, 130, 246, 0.2); }
@@ -551,9 +560,9 @@ const HomeDashboard: React.FC = () => {
                 <div style={{ fontSize: '0.7rem', fontWeight: 900, color: '#10b981', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Upcoming Reminders (3 Days)</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
                   {upcomingReminders.map((r, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.01)' }}>
+                    <div key={i} onClick={() => navigate('/calendar')} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.01)', cursor: 'pointer' }}>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%', fontWeight: 700 }}>{r.title}</span>
-                      <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 800 }}>{r.date.split('-').slice(1).join('/')}</span>
+                      <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 800 }}>{r.date.split('-').slice(1).join('/')}</span>
                     </div>
                   ))}
                 </div>
@@ -593,7 +602,7 @@ const HomeDashboard: React.FC = () => {
 
             <div className="neon-inner-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.01)', padding: '0.85rem 1rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)' }}>
               <div style={{ width: '40px', height: '40px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '1.2rem', fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
+                <span className="material-symbols-outlined fire-animation" style={{ fontSize: '1.2rem', fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
               </div>
               <div>
                 <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>{currentStreak} Day Streak</div>
