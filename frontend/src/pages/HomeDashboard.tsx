@@ -210,6 +210,13 @@ const HomeDashboard: React.FC = () => {
           transform: translateY(-4px) scale(1.02);
           background: #050508 !important;
         }
+        @keyframes run-bobble {
+          0%, 100% { transform: translateY(0) rotate(0); }
+          50% { transform: translateY(-3px) rotate(-8deg); }
+        }
+        .focus-tile:hover .running-animation {
+          animation: run-bobble 0.45s infinite ease-in-out;
+        }
 
         /* Border Glow Accents */
         .tasks-tile { border-color: rgba(59, 130, 246, 0.2); }
@@ -493,7 +500,7 @@ const HomeDashboard: React.FC = () => {
 
             <div className="focus-tile routine-tile" onClick={() => navigate('/routine')}>
               <div className="focus-icon-bg">
-                <span className="material-symbols-outlined">calendar_check</span>
+                <span className="material-symbols-outlined running-animation">directions_run</span>
               </div>
               <div className="focus-content">
                 <div className="focus-value">{completedRoutinesToday}/{activeRoutinesTodayCount}</div>
