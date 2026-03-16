@@ -103,17 +103,27 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onD
       className={`glass-card task-card group ${task.status === 'completed' ? 'completed' : ''}`}
     >
       <div className="task-card-header" style={{ marginBottom: '0.5rem', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
           <div
             className={`checkbox-custom ${task.status === 'completed' ? 'checked' : ''}`}
             onClick={(e) => { e.stopPropagation(); onToggle(task); }}
           >
             {task.status === 'completed' && <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: 'white' }}>check</span>}
           </div>
-          <h4 className={`task-card-title ${task.status === 'completed' ? 'strike-through' : ''}`} style={{ margin: 0 }}>
+          <h4 
+            className={`task-card-title ${task.status === 'completed' ? 'strike-through' : ''}`} 
+            style={{ 
+              margin: 0,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              flex: 1
+            }}
+          >
             {task.title}
           </h4>
         </div>
+
         <div style={{ display: 'flex', gap: '0.25rem' }}>
           <button
             style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: '0.2rem' }}
@@ -164,10 +174,10 @@ interface DroppableColumnProps {
   onToggle: (task: Task) => void;
   onDelete: (id: string) => void;
   onEdit: (task: Task) => void;
-  isSidebarHidden: boolean;
 }
 
-const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onToggle, onDelete, onEdit, isSidebarHidden }) => {
+const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onToggle, onDelete, onEdit }) => {
+
   const { setNodeRef, isOver } = useDroppable({ id });
 
 
@@ -197,7 +207,7 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onT
           className="task-grid" 
           style={{ 
             display: 'grid', 
-            gridTemplateColumns: isSidebarHidden && tasks.length > 1 ? 'repeat(2, 1fr)' : '1fr', 
+            gridTemplateColumns: '1fr', 
             gap: '1rem' 
           }}
         >
@@ -212,6 +222,7 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onT
           ))}
         </div>
       </SortableContext>
+
 
     </div>
   );
@@ -822,8 +833,8 @@ const Dashboard: React.FC = () => {
                       onToggle={toggleTaskStatus}
                       onDelete={deleteTask}
                       onEdit={openModal}
-                      isSidebarHidden={isSidebarHidden} // Add this
                     />
+
 
                   </div>
                 );
