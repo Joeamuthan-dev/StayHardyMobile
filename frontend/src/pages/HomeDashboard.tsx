@@ -413,6 +413,16 @@ const HomeDashboard: React.FC = () => {
         @media (max-width: 650px) {
           .upcoming-goals-grid { grid-template-columns: 1fr !important; }
         }
+
+        @media (min-width: 769px) {
+          .desktop-split-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            align-items: stretch;
+          }
+          .desktop-split-grid .neon-box { margin-bottom: 0 !important; }
+        }
       `}</style>
       <div className="aurora-bg">
         <div className="aurora-gradient-1"></div>
@@ -531,6 +541,9 @@ const HomeDashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Desktop Split Grid wrapper starting node down to Goal Snap closes inclusive triggers flawlessly forwards */}
+        <div className="desktop-split-grid">
+
         {/* 2. Today Routine Neon Box */}
         <div className="neon-box">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -615,6 +628,8 @@ const HomeDashboard: React.FC = () => {
             }))}
           </div>
           {goals.filter(g => g.status === 'pending').length === 0 && <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No active goals. Time to set some!</div>}
+        </div>
+
         </div>
 
 
