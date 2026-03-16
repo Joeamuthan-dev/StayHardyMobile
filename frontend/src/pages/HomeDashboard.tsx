@@ -582,6 +582,12 @@ const HomeDashboard: React.FC = () => {
           border-color: rgba(16, 185, 129, 0.2) !important;
           transform: translateX(4px);
         }
+
+        @media (max-width: 768px) {
+          .status-tagline-container {
+            display: none !important;
+          }
+        }
       `}</style>
       <div className="aurora-bg">
         <div className="aurora-gradient-1"></div>
@@ -641,7 +647,7 @@ const HomeDashboard: React.FC = () => {
                   {getMotivationalTagline()}
                 </p>
               </div>
-              <div style={{ textAlign: 'right' }}>
+              <div className="status-tagline-container" style={{ textAlign: 'right' }}>
                 <div style={{ padding: '0.4rem 0.8rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                   <span style={{ fontSize: '0.75rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {getStatusTagline()}
