@@ -25,15 +25,16 @@ const BottomNav: React.FC<{ isHidden?: boolean }> = ({ isHidden }) => {
   // Desktop sidebar includes Goals and other tabs
   const desktopNavItems = [
     { path: '/home', icon: 'dashboard', label: 'Home' },
+    { path: '/stats', icon: 'insert_chart', label: t('stats') },
     { path: '/dashboard', icon: 'checklist', label: t('home') },
     { path: '/goals', icon: 'star', label: t('goals') },
     { path: '/routine', icon: 'calendar_check', label: t('routine') },
     { path: '/calendar', icon: 'calendar_month', label: 'Calendar' },
-    { path: '/stats', icon: 'insert_chart', label: t('stats') },
     { path: '/planner', icon: 'calendar_month', label: t('timeline') },
     ...(user?.role === 'admin' ? [{ path: '/admin', icon: 'admin_panel_settings', label: 'Admin Hub' }] : []),
     { path: '/settings', icon: 'person', label: t('profile') }
   ];
+
 
   return (
     <>
