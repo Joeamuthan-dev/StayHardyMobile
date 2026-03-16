@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import SupportModal from './SupportModal';
 
 interface WhyStayHardyModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface WhyStayHardyModalProps {
 
 const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, isFirstTime }) => {
   const [shouldRender, setShouldRender] = useState(isOpen);
+  const [showSupport, setShowSupport] = useState(false);
 
   useEffect(() => {
     if (isOpen) setShouldRender(true);
@@ -152,11 +154,13 @@ const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, 
             <div className="closing-actions">
               <button onClick={() => { onClose(); window.location.href='/feedback'; }}>Share feedback</button>
               <span className="dot"></span>
-              <button onClick={() => { onClose(); window.location.href='/settings'; }}>Support the project</button>
+              <button onClick={() => setShowSupport(true)}>Support the project</button>
             </div>
           </div>
         </footer>
       </div>
+
+      <SupportModal isOpen={showSupport} onClose={() => setShowSupport(false)} />
 
       <style>{`
         .why-modal-overlay {
