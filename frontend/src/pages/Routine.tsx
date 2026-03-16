@@ -145,6 +145,22 @@ const Routine: React.FC = () => {
 
   useEffect(() => { fetchRoutinesAndLogs(); }, [fetchRoutinesAndLogs]);
 
+  // Automatic Daily Reset Check at Midnight
+  useEffect(() => {
+    const checkMidnight = () => {
+      const lastCheck = localStorage.getItem('last_routine_reset_date');
+      const today = new Date().toLocaleDateString();
+      if (lastCheck && lastCheck !== today) {
+        console.log('Midnight detected. Resetting daily routines UI.');
+        fetchRoutinesAndLogs();
+      }
+      localStorage.setItem('last_routine_reset_date', today);
+    };
+
+    const interval = setInterval(checkMidnight, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, [fetchRoutinesAndLogs]);
+
   const location = useLocation();
   useEffect(() => {
     const params = new URLSearchParams(location.search);

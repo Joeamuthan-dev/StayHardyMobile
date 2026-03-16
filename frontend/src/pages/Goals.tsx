@@ -71,7 +71,23 @@ const Goals: React.FC = () => {
 
   useEffect(() => {
     fetchGoals();
-  }, [fetchGoals]);
+
+    if (!user?.id) return;
+
+    const goalsChannel = supabase
+      .channel('goals_page_changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'goals', 
+        filter: `userId=eq.${user.id}` 
+      }, () => fetchGoals())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(goalsChannel);
+    };
+  }, [fetchGoals, user?.id]);
 
   const location = useLocation();
   useEffect(() => {

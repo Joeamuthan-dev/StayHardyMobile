@@ -101,6 +101,44 @@ const Planner: React.FC = () => {
   const taskDates = Object.keys(groupedTasks).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
   const goalDates = Object.keys(groupedGoals).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
+  const toggleTaskStatus = async (task: Task) => {
+    const newStatus = 'pending';
+    try {
+      // Optimistic update
+      setTasks(prev => prev.filter(t => t.id !== task.id));
+
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus, updatedAt: new Date().toISOString() })
+        .eq('id', task.id);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Error unticking task:', err);
+      // Re-fetch on error
+      const { data } = await supabase.from('tasks').select('*').eq('userId', user?.id).eq('status', 'completed').order('updatedAt', { ascending: false });
+      if (data) setTasks(data as Task[]);
+    }
+  };
+
+  const toggleGoalStatus = async (goal: any) => {
+    const newStatus = 'pending';
+    try {
+      // Optimistic update
+      setGoals(prev => prev.filter(g => g.id !== goal.id));
+
+      const { error } = await supabase
+        .from('goals')
+        .update({ status: newStatus, updatedAt: new Date().toISOString() })
+        .eq('id', goal.id);
+      if (error) throw error;
+    } catch (err) {
+      console.error('Error unticking goal:', err);
+      // Re-fetch on error
+      const { data } = await supabase.from('goals').select('*').eq('userId', user?.id).eq('status', 'completed').order('updatedAt', { ascending: false });
+      if (data) setGoals(data);
+    }
+  };
+
   const deleteGoal = async (id: string) => {
     try {
       await supabase.from('goals').delete().eq('id', id);
@@ -150,6 +188,13 @@ const Planner: React.FC = () => {
                         <div key={item.id} className="glass-card task-card completed" style={{ background: 'rgba(16, 185, 129, 0.03)', borderColor: 'rgba(16, 185, 129, 0.1)', opacity: 0.8 }}>
                           <div className="task-card-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <div 
+                                className="checkbox-custom checked" 
+                                onClick={(e) => { e.stopPropagation(); toggleTaskStatus(item); }}
+                                style={{ width: '20px', height: '20px', minWidth: '20px' }}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: '0.8rem', color: 'white' }}>check</span>
+                              </div>
                               <span className="task-card-category" style={{ opacity: 0.6 }}>{item.category || 'Focus'}</span>
                             </div>
                             <button style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.2rem', opacity: 0.5 }} onClick={() => deleteTask(item.id)}>
@@ -190,7 +235,21 @@ const Planner: React.FC = () => {
                     <div className="task-grid timeline-grid">
                       {groupedGoals[dateKey].map((item: any) => (
                         <div key={item.id} className="glass-card completed-goal-card" style={{ padding: '1.25rem', borderRadius: '1.5rem', display: 'flex', flexDirection: 'column', background: 'rgba(16, 185, 129, 0.03)', border: '1px solid rgba(16, 185, 129, 0.1)', opacity: 0.8, position: 'relative' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}><span style={{ fontSize: '0.65rem', fontWeight: 900, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Goal</span><button style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.2rem', opacity: 0.5 }} onClick={() => deleteGoal(item.id)}><span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>delete</span></button></div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <div 
+                                className="checkbox-custom checked goal-check" 
+                                onClick={(e) => { e.stopPropagation(); toggleGoalStatus(item); }}
+                                style={{ width: '20px', height: '20px', minWidth: '20px' }}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: '0.8rem', color: 'white' }}>check</span>
+                              </div>
+                              <span style={{ fontSize: '0.65rem', fontWeight: 900, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Goal</span>
+                            </div>
+                            <button style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.2rem', opacity: 0.5 }} onClick={() => deleteGoal(item.id)}>
+                              <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>delete</span>
+                            </button>
+                          </div>
                           <h4 style={{ fontSize: '0.9rem', fontWeight: 900, color: '#94a3b8', margin: '0 0 0.5rem 0', textDecoration: 'line-through' }}>{item.title}</h4>
                           <div style={{ position: 'absolute', right: '1rem', bottom: '1rem', opacity: 0.3 }}><span style={{ fontSize: '2rem' }}>🏆</span></div>
                           <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase' }}><span className="material-symbols-outlined" style={{ fontSize: '0.8rem' }}>emoji_events</span> Unlocked {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Today'}</div>
@@ -206,6 +265,42 @@ const Planner: React.FC = () => {
       </main>
 
 
+      <style>{`
+        .checkbox-custom {
+          width: 22px;
+          height: 22px;
+          border: 2px solid rgba(255,255,255,0.2);
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .checkbox-custom.checked {
+          background: #10b981;
+          border-color: #10b981;
+        }
+        .task-card.completed {
+          opacity: 0.7;
+          transition: all 0.3s;
+        }
+        .task-card.completed:hover {
+          opacity: 1;
+        }
+        .strike-through {
+          text-decoration: line-through;
+        }
+        .timeline-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 1.25rem;
+        }
+        .checkbox-custom.checked.goal-check {
+          background: #f59e0b;
+          border-color: #f59e0b;
+        }
+      `}</style>
       <BottomNav />
     </div>
   );

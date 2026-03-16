@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
 import BottomNav from '../components/BottomNav';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { calculateProductivityScore, getScoreLabels } from '../utils/productivity';
 
 interface Task {
   id: string;
@@ -29,6 +30,8 @@ interface Goal {
   targetDate: string;
   status: 'pending' | 'completed';
   progress: number;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 
@@ -202,52 +205,65 @@ const ActivityTrendChart: React.FC<{ data: any[]; days: number; setDays: (d: num
     <div className="glass-card" style={{ padding: '2rem 1.5rem', height: '320px', display: 'flex', flexDirection: 'column' }}>
        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
          <div style={{ textAlign: 'left' }}>
-           <span style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em' }}>User Activity Trend</span>
-           <h4 style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--text-main)', margin: '4px 0 0' }}>Tasks Insight</h4>
+            <span style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Task & Goal Activity</span>
+            <h4 style={{ fontSize: '0.9rem', fontWeight: 900, color: 'var(--text-main)', margin: '4px 0 0' }}>Insights Trend</h4>
+            <p style={{ fontSize: '0.65rem', color: '#64748b', margin: '2px 0 0', fontWeight: 700 }}>Excludes Routines</p>
          </div>
-         <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '4px' }}>
-           <button 
-             onClick={() => setDays(7)}
-             style={{ 
-               padding: '6px 12px', 
-               borderRadius: '8px', 
-               border: 'none', 
-               fontSize: '10px', 
-               fontWeight: 900, 
-               cursor: 'pointer',
-               background: days === 7 ? 'var(--primary)' : 'transparent',
-               color: days === 7 ? '#064e3b' : '#64748b',
-               transition: 'all 0.3s'
-             }}
-           >7D</button>
-           <button 
-             onClick={() => setDays(30)}
-             style={{ 
-               padding: '6px 12px', 
-               borderRadius: '8px', 
-               border: 'none', 
-               fontSize: '10px', 
-               fontWeight: 900, 
-               cursor: 'pointer',
-               background: days === 30 ? 'var(--primary)' : 'transparent',
-               color: days === 30 ? '#064e3b' : '#64748b',
-               transition: 'all 0.3s'
-             }}
-           >30D</button>
-         </div>
+         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }}></div>
+                <span style={{ fontSize: '9px', fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase' }}>Tasks</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }}></div>
+                <span style={{ fontSize: '9px', fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase' }}>Goals</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '4px' }}>
+              <button 
+                onClick={() => setDays(7)}
+                style={{ 
+                  padding: '6px 12px', 
+                  borderRadius: '8px', 
+                  border: 'none', 
+                  fontSize: '10px', 
+                  fontWeight: 900, 
+                  cursor: 'pointer',
+                  background: days === 7 ? 'var(--primary)' : 'transparent',
+                  color: days === 7 ? '#064e3b' : '#64748b',
+                  transition: 'all 0.3s'
+                }}
+              >7D</button>
+              <button 
+                onClick={() => setDays(30)}
+                style={{ 
+                  padding: '6px 12px', 
+                  borderRadius: '8px', 
+                  border: 'none', 
+                  fontSize: '10px', 
+                  fontWeight: 900, 
+                  cursor: 'pointer',
+                  background: days === 30 ? 'var(--primary)' : 'transparent',
+                  color: days === 30 ? '#064e3b' : '#64748b',
+                  transition: 'all 0.3s'
+                }}
+              >30D</button>
+            </div>
+          </div>
        </div>
 
        <div style={{ width: '100%', height: '220px' }}>
          <ResponsiveContainer width="100%" height="100%">
            <AreaChart data={data}>
               <defs>
-                <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
+                <linearGradient id="colorTasks" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                 </linearGradient>
-                <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                <linearGradient id="colorGoals" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                 </linearGradient>
               </defs>
               <XAxis 
@@ -260,7 +276,6 @@ const ActivityTrendChart: React.FC<{ data: any[]; days: number; setDays: (d: num
               />
               <YAxis 
                 hide 
-                domain={[0, 100]}
               />
               <Tooltip 
                 contentStyle={{ 
@@ -275,16 +290,26 @@ const ActivityTrendChart: React.FC<{ data: any[]; days: number; setDays: (d: num
                 }} 
                 itemStyle={{ padding: "2px 0" }} 
                 cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 2 }} 
-                formatter={(value: any) => [`${value}%`, 'Score']}
+                formatter={(value: any, name: any) => [value, name]}
               />
               <Area 
                 type="monotone" 
-                dataKey="score" 
-                name="Productivity" 
-                stroke="#10b981" 
+                dataKey="tasks" 
+                name="Tasks" 
+                stroke="#3b82f6" 
                 strokeWidth={4} 
                 fillOpacity={1} 
-                fill="url(#colorCompleted)" 
+                fill="url(#colorTasks)" 
+                animationDuration={2000} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="goals" 
+                name="Goals" 
+                stroke="#ef4444" 
+                strokeWidth={4} 
+                fillOpacity={1} 
+                fill="url(#colorGoals)" 
                 animationDuration={2000} 
               />
            </AreaChart>
@@ -304,18 +329,6 @@ const Stats: React.FC = () => {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [trendDays, setTrendDays] = useState(7);
   const { user } = useAuth();
-
-  const getScoreLabels = (score: number, totalCount: number) => {
-    if (score === 0 && totalCount === 0) return { label: 'IDLE', verdict: "No tasks found. Start your journey by adding some goals.", icon: 'hotel' };
-    if (score === 0) return { label: 'LAZY', verdict: "0% complete? That's not a score, it's a starting point. Do something.", icon: 'bed' };
-    if (score < 20) return { label: 'SLACKER', verdict: `${score}%... You're just scratching the surface. Pathetic effort.`, icon: 'timer' };
-    if (score < 40) return { label: 'WAKING UP', verdict: `${score}% is better than nothing, but you're still warming up.`, icon: 'coffee' };
-    if (score < 60) return { label: 'AVERAGE', verdict: `${score}% performance. You're the human equivalent of unflavored oatmeal.`, icon: 'trending_up' };
-    if (score < 80) return { label: 'CONSISTENT', verdict: `${score}%. You're actually being useful. Don't ruin it by taking a 3-hour break.`, icon: 'workspace_premium' };
-    if (score < 95) return { label: 'BEAST', verdict: `${score}%! Look at you go. Almost impressive. Keep that ego in check though.`, icon: 'bolt' };
-    if (score < 100) return { label: 'ELITE', verdict: `${score}% efficiency. You're so close to perfection it actually hurts.`, icon: 'auto_awesome' };
-    return { label: 'THE GOAT', verdict: "100% CLEAN SWEEP. You're either a productivity god or you're lying to yourself. Legend.", icon: 'stars' };
-  };
 
   useEffect(() => {
     if (!user?.id) return;
@@ -411,7 +424,7 @@ const Stats: React.FC = () => {
 
   const localTodayStr = new Date(todayDate.getTime() - (todayDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
   const routinesCompletedToday = routineLogs.filter(l => l.completed_at === localTodayStr).length;
-  const todayRoutineRate = activeRoutinesTodayCount > 0 ? (routinesCompletedToday / activeRoutinesTodayCount) * 100 : 0;
+  const todayRoutineRate = activeRoutinesTodayCount > 0 ? Math.round((routinesCompletedToday / activeRoutinesTodayCount) * 100) : 0;
 
   let currentStreak = 0;
   const uniqueLogDaysSet = new Set(routineLogs.map(l => l.completed_at));
@@ -447,21 +460,16 @@ const Stats: React.FC = () => {
   });
   const weeklyConsistency = expectedRoutinesLast7Days > 0 ? Math.min(100, Math.round((last7DaysLogs.length / expectedRoutinesLast7Days) * 100)) : 0;
 
-  let weightTasks = totalUserTasks > 0 ? 0.5 : 0;
-  let weightRoutines = activeRoutinesTodayCount > 0 ? 0.3 : 0;
-  let weightGoals = totalGoals > 0 ? 0.2 : 0;
-  let totalWeight = weightTasks + weightRoutines + weightGoals;
-
-  const dynamicTodayScore = totalWeight > 0 
-    ? Math.round(((taskCompletionRate * weightTasks) + (todayRoutineRate * weightRoutines) + (avgGoalProgress * weightGoals)) / totalWeight)
-    : 0;
+  const dynamicTodayScore = calculateProductivityScore({
+    tasksProgress: taskCompletionRate,
+    routinesProgress: todayRoutineRate,
+    goalsProgress: avgGoalProgress
+  });
 
   const historicalData = useMemo(() => {
     const data = [];
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-    
-    const goalScore = totalGoals > 0 ? (goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / totalGoals) : 0;
     
     for (let i = trendDays - 1; i >= 0; i--) {
       const d = new Date(now);
@@ -469,29 +477,33 @@ const Stats: React.FC = () => {
       const dayStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const dayStart = d.getTime();
       const nextDayStart = dayStart + 24 * 60 * 60 * 1000;
-      const localDayStr = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-      const checkDayName = daysOfWeek[d.getDay()];
 
-      const totalTasksUpToDay = tasks.filter((t: Task) => new Date(t.createdAt).getTime() < nextDayStart).length;
-      const compTasksUpToDay = tasks.filter((t: Task) => t.status === 'completed' && t.updatedAt && new Date(t.updatedAt).getTime() < nextDayStart).length;
-      const cumulativeTaskRate = totalTasksUpToDay > 0 ? (compTasksUpToDay / totalTasksUpToDay) * 100 : 0;
+      const tasksCreated = tasks.filter(t => {
+        const cDate = new Date(t.createdAt).getTime();
+        return cDate >= dayStart && cDate < nextDayStart;
+      }).length;
 
-      const scheduledThatDay = routines.filter(r => r.days?.includes(checkDayName)).length;
-      const routinesCompletedThatDay = routineLogs.filter(l => l.completed_at === localDayStr).length;
-      const dailyRoutineRate = scheduledThatDay > 0 ? (routinesCompletedThatDay / scheduledThatDay) * 100 : 0;
-      
-      let wTasks = totalTasksUpToDay > 0 ? 0.5 : 0;
-      let wRoutines = scheduledThatDay > 0 ? 0.3 : 0;
-      let wGoals = totalGoals > 0 ? 0.2 : 0;
-      let wTotal = wTasks + wRoutines + wGoals;
+      const tasksCompleted = tasks.filter(t => {
+        if (t.status !== 'completed' || !t.updatedAt) return false;
+        const uDate = new Date(t.updatedAt).getTime();
+        return uDate >= dayStart && uDate < nextDayStart;
+      }).length;
 
-      const combined = wTotal > 0 
-        ? Math.round(((cumulativeTaskRate * wTasks) + (dailyRoutineRate * wRoutines) + (goalScore * wGoals)) / wTotal)
-        : 0;
+      const goalsCreated = goals.filter(g => {
+        const cDate = new Date(g.createdAt).getTime();
+        return cDate >= dayStart && cDate < nextDayStart;
+      }).length;
+
+      const goalsCompleted = goals.filter(g => {
+        if (g.status !== 'completed' || !g.updatedAt) return false;
+        const uDate = new Date(g.updatedAt).getTime();
+        return uDate >= dayStart && uDate < nextDayStart;
+      }).length;
 
       data.push({
         name: dayStr,
-        score: combined
+        tasks: tasksCreated + tasksCompleted,
+        goals: goalsCreated + goalsCompleted
       });
     }
     return data;

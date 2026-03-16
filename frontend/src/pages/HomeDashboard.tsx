@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import BottomNav from '../components/BottomNav';
 import { useNavigate, Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
+import { calculateProductivityScore } from '../utils/productivity';
 
 interface Task {
   id: string;
@@ -32,6 +33,7 @@ interface Goal {
   targetDate: string;
   status: 'pending' | 'completed';
   progress: number;
+  createdAt: string;
 }
 
 const HomeDashboard: React.FC = () => {
@@ -40,9 +42,9 @@ const HomeDashboard: React.FC = () => {
   const { language } = useLanguage();
   const getTimeGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return language === 'Tamil' ? 'காலை வணக்கம்' : 'Good Morning';
-    if (hour < 18) return language === 'Tamil' ? 'மதிய வணக்கம்' : 'Good Afternoon';
-    return language === 'Tamil' ? 'மாலை வணக்கம்' : 'Good Evening';
+    if (hour < 12) return language === 'Tamil' ? 'போருக்குத் தயார்' : 'Awaken — Grind Starts';
+    if (hour < 18) return language === 'Tamil' ? 'தொடர்ந்து முன்னேறு' : 'Stay Relentless';
+    return language === 'Tamil' ? 'வெற்றியுடன் முடி' : 'Earn Your Rest';
   };
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -55,47 +57,63 @@ const HomeDashboard: React.FC = () => {
 
 
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!user?.id) return;
 
-    const fetchData = async () => {
-      // Fetch Tasks
-      const { data: tasksData } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('userId', user.id);
-      if (tasksData) setTasks(tasksData);
+    // Fetch Tasks
+    const { data: tasksData } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('userId', user.id);
+    if (tasksData) setTasks(tasksData);
 
-      // Fetch Routines
-      const { data: routinesData } = await supabase
-        .from('routines')
-        .select('*')
-        .eq('user_id', user.id);
-      if (routinesData) setRoutines(routinesData);
+    // Fetch Routines
+    const { data: routinesData } = await supabase
+      .from('routines')
+      .select('*')
+      .eq('user_id', user.id);
+    if (routinesData) setRoutines(routinesData);
 
-      // Fetch Routine Logs for the last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const startDayStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
+    // Fetch Routine Logs for the last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const startDayStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
 
-      const { data: logsData } = await supabase
-        .from('routine_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('completed_at', startDayStr);
-      if (logsData) setRoutineLogs(logsData);
+    const { data: logsData } = await supabase
+      .from('routine_logs')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('completed_at', startDayStr);
+    if (logsData) setRoutineLogs(logsData);
 
-      // Fetch Goals
-      const { data: goalsData } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('userId', user.id)
-        .order('createdAt', { ascending: false });
-      if (goalsData) setGoals(goalsData);
+    // Fetch Goals
+    const { data: goalsData } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('userId', user.id)
+      .order('createdAt', { ascending: false });
+    if (goalsData) setGoals(goalsData);
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+  
+  // Automatic Daily Reset Check at Midnight
+  useEffect(() => {
+    const checkMidnight = () => {
+      const lastCheck = localStorage.getItem('last_dashboard_reset_date');
+      const today = new Date().toLocaleDateString();
+      if (lastCheck && lastCheck !== today) {
+        console.log('Midnight detected. Resetting dashboard data.');
+        fetchData();
+      }
+      localStorage.setItem('last_dashboard_reset_date', today);
     };
 
-    fetchData();
-  }, [user]);
+    const interval = setInterval(checkMidnight, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   // Derived Data
   const today = new Date();
@@ -108,7 +126,7 @@ const HomeDashboard: React.FC = () => {
     const pA = a.priority === 'High' ? 3 : a.priority === 'Medium' ? 2 : 1;
     const pB = b.priority === 'High' ? 3 : b.priority === 'Medium' ? 2 : 1;
     return pB - pA;
-  }).slice(0, 4);
+  }).slice(0, 2);
 
   const upcomingReminders = useMemo(() => {
     try {
@@ -155,25 +173,81 @@ const HomeDashboard: React.FC = () => {
 
 
 
-  const activeGoals = goals.filter(g => g.status === 'pending').slice(0, 3);
 
-  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  // Productivity Chart Data
+  const totalTasksCount = tasks.length;
+  const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
+  const tasksProgress = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
-  const handleCompleteTask = async (taskId: string) => {
-    setCompletingTaskId(taskId);
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'completed', updatedAt: new Date().toISOString() } : t));
-    
-    const { error } = await supabase
-      .from('tasks')
-      .update({ status: 'completed', updatedAt: new Date().toISOString() })
-      .eq('id', taskId);
+  const routinesProgress = activeRoutinesTodayCount > 0 ? Math.round((completedRoutinesToday / activeRoutinesTodayCount) * 100) : 0;
 
-    if (error) {
-      console.error('Error completing task:', error);
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'pending' } : t));
+  const totalGoalsCount = goals.length;
+  const avgGoalProgress = totalGoalsCount > 0 
+    ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / totalGoalsCount) 
+    : 0;
+
+
+  // Productivity logic with weights: Routines (60%), Tasks (20%), Goals (20%)
+  const overallProgress = calculateProductivityScore({
+    tasksProgress,
+    routinesProgress,
+    goalsProgress: avgGoalProgress
+  });
+
+  const [activeQuote, setActiveQuote] = useState<string | null>(null);
+  // Dynamic data for 5% intervals
+  const progressIntervals = [
+    { min: 0, tag: 'Warming Up', quote: 'Every journey starts with a single pulse.' },
+    { min: 5, tag: 'Getting Started', quote: 'Small steps lead to massive destinations.' },
+    { min: 10, tag: 'First Gear', quote: 'Traction gained. Keep the wheels turning.' },
+    { min: 15, tag: 'Movement', quote: 'You are no longer standing still.' },
+    { min: 20, tag: 'Building Heat', quote: 'Heat is building. Don\'t cool down now.' },
+    { min: 25, tag: 'Momentum', quote: 'Your momentum is becoming a force.' },
+    { min: 30, tag: 'In Motion', quote: 'Rhythm found. Keep your breath steady.' },
+    { min: 35, tag: 'Rising Up', quote: 'You\'re climbing. The view gets better.' },
+    { min: 40, tag: 'Consistent', quote: 'Consistency is your greatest weapon.' },
+    { min: 45, tag: 'Disciplined', quote: 'Halfway there. Sacrifice the comfort.' },
+    { min: 50, tag: 'Locked In', quote: 'Locked in. Silence the distractions.' },
+    { min: 55, tag: 'Focused', quote: 'Focus is a muscle. Flex it harder.' },
+    { min: 60, tag: 'Strong Pace', quote: 'Strong pace. Your body follows your mind.' },
+    { min: 65, tag: 'Hard Work', quote: 'True progress happens in the grind.' },
+    { min: 70, tag: 'Elite Force', quote: 'Elite effort detected. Stay relentless.' },
+    { min: 75, tag: 'High Speed', quote: 'Speed is addictive. Don\'t let up.' },
+    { min: 80, tag: 'Beast Mode', quote: 'Beast mode engaged. Destroy the list.' },
+    { min: 85, tag: 'Unstoppable', quote: 'Unstoppable. The finish line is scared.' },
+    { min: 90, tag: 'Legendary', quote: 'Legendary status approaching. Push!' },
+    { min: 95, tag: 'Near Perfect', quote: 'Near perfection. Finish with pride.' },
+    { min: 100, tag: 'Stayed Hardy', quote: 'You stayed Hardy. You won today.' },
+  ];
+
+  const currentProgressData = [...progressIntervals].reverse().find(i => overallProgress >= i.min) || progressIntervals[0];
+
+  const getMotivationalTagline = () => currentProgressData.quote;
+  const getStatusTagline = () => currentProgressData.tag;
+
+  const showQuote = () => {
+    let quote = "";
+    if (overallProgress <= 20) {
+      quote = "Every journey starts with the first step.";
+    } else if (overallProgress <= 50) {
+      quote = "Keep running. Momentum is building.";
+    } else if (overallProgress <= 80) {
+      quote = "You are making strong progress.";
+    } else if (overallProgress < 100) {
+      quote = "Almost there. Stay Hardy.";
+    } else {
+      quote = "You made it today. Great work.";
     }
-    setCompletingTaskId(null);
+    setActiveQuote(quote);
   };
+
+  const handleRunnerAction = () => {
+    showQuote();
+    // For mobile or click, we might want it to persist slightly longer or auto-dismiss
+    setTimeout(() => setActiveQuote(null), 3000);
+  };
+
+
   
   return (
     <div className={`page-shell ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
@@ -185,116 +259,180 @@ const HomeDashboard: React.FC = () => {
           .shortcut-btn:active::after { content: attr(data-label); position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #0b0f19; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.7rem; white-space: nowrap; z-index: 100; font-weight: 800; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
         }
 
-        .today-focus-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 1rem;
+        @keyframes runner-run {
+          0%, 100% { transform: scaleX(-1) translateY(0) rotate(0); }
+          50% { transform: scaleX(-1) translateY(-3px) rotate(-3deg); }
         }
-        @media (max-width: 600px) {
-          .today-focus-grid { grid-template-columns: 1fr; }
+        .runner-indicator {
+          position: absolute;
+          top: 0;
+          transition: left 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+          z-index: 100;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+          transform: translateY(-90%) translateX(-50%);
         }
-
-        .focus-tile {
+        .runner-icon {
+          font-size: 1.8rem;
+          filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+          animation: runner-run 1.2s infinite ease-in-out;
+          display: block;
+          user-select: none;
+          line-height: 1;
+          transform: scaleX(-1);
+        }
+        .runner-3d-shadow {
+          width: 14px;
+          height: 3px;
+          background: rgba(0, 0, 0, 0.4);
+          border-radius: 50%;
+          filter: blur(1.5px);
+          opacity: 0.5;
+        }
+        .quote-bubble {
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #ffffff;
+          color: #000000;
+          padding: 6px 12px;
+          border-radius: 12px;
+          font-size: 0.7rem;
+          font-weight: 900;
+          white-space: nowrap;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+          animation: quote-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          margin-bottom: 12px;
+          z-index: 101;
+        }
+        .quote-bubble::after {
+          content: "";
+          position: absolute;
+          top: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          border-width: 6px;
+          border-style: solid;
+          border-color: #ffffff transparent transparent transparent;
+        }
+        @keyframes quote-pop {
+          0% { opacity: 0; transform: translateX(-50%) scale(0.5); }
+          100% { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
+        .journey-track {
+          position: relative;
+          height: 16px;
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 20px;
+          margin: 60px 0 30px;
+          overflow: visible;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
           display: flex;
           align-items: center;
-          gap: 1rem;
-          background: #000000 !important;
-          padding: 1rem;
+        }
+        .journey-segment {
+          height: 100%;
+          transition: width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+          position: relative;
+        }
+        .journey-milestone {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 50%;
+          top: 50%;
+          transform: translateY(-50%);
+        }
+        .home-arrival-message {
+          position: absolute;
+          top: -45px;
+          right: -20px;
+          background: #10b981;
+          color: #ffffff;
+          padding: 4px 10px;
+          border-radius: 8px;
+          font-size: 0.65rem;
+          font-weight: 950;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+          animation: quote-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          white-space: nowrap;
+        }
+        .home-arrival-message::after {
+          content: "";
+          position: absolute;
+          top: 100%;
+          right: 25px;
+          border-width: 5px;
+          border-style: solid;
+          border-color: #10b981 transparent transparent transparent;
+        }
+        .journey-segment::after {
+          content: "";
+          position: absolute;
+          top: 0; right: 0; bottom: 0; left: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+          animation: flow 2s infinite linear;
+        }
+        @keyframes flow {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        .journey-label {
+          position: absolute;
+          top: 20px;
+          font-size: 0.6rem;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          white-space: nowrap;
+          opacity: 0.6;
+        }
+        .productivity-journey-container {
+          padding: 1.5rem;
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 1.5rem;
+          border: 1px solid rgba(255, 255, 255, 0.03);
+          margin-top: 0.5rem;
+          width: 100%;
+          box-sizing: border-box;
+        }
+        @media (max-width: 480px) {
+          .chart-wrapper {
+            width: 180px;
+            height: 180px;
+          }
+        }
+        .legend-container {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          width: 100%;
+        }
+        .legend-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem 1.25rem;
+          background: #000000;
           border-radius: 1.25rem;
           border: 1px solid rgba(255, 255, 255, 0.04);
           transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
           cursor: pointer;
-          position: relative;
         }
-        .focus-tile:hover {
-          transform: translateY(-4px) scale(1.02);
-          background: #050508 !important;
-        }
-        @keyframes run-bobble {
-          0%, 100% { transform: translateY(0) rotate(0); }
-          50% { transform: translateY(-3px) rotate(-8deg); }
-        }
-        .focus-tile:hover .running-animation {
-          animation: run-bobble 0.45s infinite ease-in-out;
-        }
-        @keyframes target-pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.15) rotate(5deg); }
-        }
-        .focus-tile:hover .goals-animation {
-          animation: target-pulse 0.45s infinite ease-in-out;
-        }
-        @keyframes clip-swing {
-          0%, 100% { transform: rotate(0); }
-          50% { transform: rotate(-12deg); }
-        }
-        .focus-tile:hover .tasks-animation {
-          animation: clip-swing 0.45s infinite ease-in-out;
-        }
-        @keyframes fire-flicker {
-          0%, 100% { transform: scale(1); opacity: 0.9; }
-          30% { transform: scale(1.12) rotate(-2deg); opacity: 1; filter: drop-shadow(0 0 5px #ef4444); }
-          50% { transform: scale(0.95) rotate(1deg); opacity: 0.85; }
-          80% { transform: scale(1.08) rotate(-1deg); opacity: 1; }
-        }
-        .fire-animation {
-          animation: fire-flicker 0.4s infinite ease-in-out;
-        }
-
-        /* Border Glow Accents */
-        .tasks-tile { border-color: rgba(59, 130, 246, 0.2); }
-        .tasks-tile:hover { 
-          border-color: rgba(59, 130, 246, 0.6); 
-          box-shadow: 0 0 20px rgba(59, 130, 246, 0.15); 
-        }
-        .routine-tile { border-color: rgba(168, 85, 247, 0.2); }
-        .routine-tile:hover { 
-          border-color: rgba(168, 85, 247, 0.6); 
-          box-shadow: 0 0 20px rgba(168, 85, 247, 0.15); 
-        }
-        .goals-tile { border-color: rgba(245, 158, 11, 0.2); }
-        .goals-tile:hover { 
-          border-color: rgba(245, 158, 11, 0.6); 
-          box-shadow: 0 0 20px rgba(245, 158, 11, 0.15); 
-        }
-
-        .focus-icon-bg {
-          width: 44px;
-          height: 44px;
-          border-radius: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          transition: transform 0.3s ease;
-        }
-        .focus-tile:hover .focus-icon-bg {
-          transform: scale(1.1) rotate(5deg);
-        }
-
-        .tasks-tile .focus-icon-bg { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-        .routine-tile .focus-icon-bg { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
-        .goals-tile .focus-icon-bg { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-
-        .focus-icon-bg .material-symbols-outlined {
-          font-size: 1.5rem;
-          font-variation-settings: 'FILL' 1;
-        }
-
-        .focus-content { text-align: left; }
-        .focus-value {
-          font-size: 1.5rem;
-          font-weight: 900;
-          color: #ffffff;
-          line-height: 1;
-        }
-        .focus-label {
-          font-size: 0.6rem;
-          font-weight: 900;
-          text-transform: uppercase;
-          color: #94a3b8;
-          letter-spacing: 0.1em;
-          margin-top: 0.3rem;
+        .legend-card:hover {
+          transform: translateX(6px);
+          background: #050508;
+          border-color: rgba(255, 255, 255, 0.1);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         }
 
         /* ── Routine Snapshot Styles ── */
@@ -379,6 +517,19 @@ const HomeDashboard: React.FC = () => {
           -webkit-mask-composite: xor;
           mask-composite: exclude;
           opacity: 0.3;
+          transition: opacity 0.3s ease;
+        }
+
+        .clickable-neon-box {
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .clickable-neon-box:hover {
+          transform: translateY(-4px);
+          background: rgba(12, 12, 18, 0.6) !important;
+        }
+        .clickable-neon-box:hover::before {
+          opacity: 0.6;
         }
 
         .floating-shortcuts-bar {
@@ -426,6 +577,20 @@ const HomeDashboard: React.FC = () => {
           font-variation-settings: 'FILL' 1;
         }
 
+        /* Colorful Shelf Buttons */
+        .shelf-btn-task { color: #3b82f6; background: rgba(59, 130, 246, 0.05); }
+        .shelf-btn-task:hover { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        
+        .shelf-btn-goal { color: #00f2fe; background: rgba(0, 242, 254, 0.05); }
+        .shelf-btn-goal:hover { background: rgba(0, 242, 254, 0.15); color: #22d3ee; }
+        
+        .shelf-btn-routine { color: #a855f7; background: rgba(168, 85, 247, 0.05); }
+        .shelf-btn-routine:hover { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+        
+        .shelf-btn-stats { color: #f59e0b; background: rgba(245, 158, 11, 0.05); }
+        .shelf-btn-stats:hover { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+
+
         @media (max-width: 600px) {
           .inner-tasks-grid { grid-template-columns: 1fr !important; }
           .floating-shortcuts-bar { width: calc(100% - 2rem); justify-content: space-around; }
@@ -451,7 +616,18 @@ const HomeDashboard: React.FC = () => {
             gap: 0.75rem;
             align-items: stretch;
           }
-          .desktop-split-grid .neon-box { margin-bottom: 0 !important; }
+        .inner-task-row:hover {
+          background: rgba(255, 255, 255, 0.05) !important;
+          border-color: rgba(255, 255, 255, 0.1) !important;
+          transform: translateX(4px);
+        }
+        .reminder-row-link {
+          transition: all 0.2s ease;
+        }
+        .reminder-row-link:hover {
+          background: rgba(16, 185, 129, 0.08) !important;
+          border-color: rgba(16, 185, 129, 0.2) !important;
+          transform: translateX(4px);
         }
       `}</style>
       <div className="aurora-bg">
@@ -471,15 +647,6 @@ const HomeDashboard: React.FC = () => {
               const month = now.toLocaleDateString('en-US', { month: 'long' });
               const day = now.getDate();
               return `Today is ${dayName}, ${month} ${day}`;
-            })()}
-          </p>
-          <p style={{ color: '#10b981', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.03em', marginTop: '0.2rem', opacity: 0.8 }}>
-            {(() => {
-              const now = new Date();
-              const year = now.getFullYear();
-              const endOfYear = new Date(year, 11, 31);
-              const diff = Math.ceil((endOfYear.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              return `${diff} days left in ${year} — make them count.`;
             })()}
           </p>
           
@@ -510,45 +677,74 @@ const HomeDashboard: React.FC = () => {
             <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Today's Focus</h2>
           </div>
 
-          <div className="today-focus-grid">
-            <div className="focus-tile tasks-tile" onClick={() => navigate('/dashboard')}>
-              <div className="focus-icon-bg">
-                <span className="material-symbols-outlined tasks-animation">assignment_turned_in</span>
+          <div className="productivity-journey-container">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
+              <div>
+                <span style={{ fontSize: '0.65rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Stay Hardy Score</span>
+                <div style={{ fontSize: '2.2rem', fontWeight: 950, color: '#ffffff', lineHeight: 1, marginTop: '0.2rem' }}>
+                   {overallProgress}%
+                </div>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, margin: '0.5rem 0 0', fontStyle: 'italic' }}>
+                  {getMotivationalTagline()}
+                </p>
               </div>
-              <div className="focus-content">
-                <div className="focus-value">{pendingTasks.length}</div>
-                <div className="focus-label">Tasks</div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ padding: '0.4rem 0.8rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {getStatusTagline()}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="focus-tile routine-tile" onClick={() => navigate('/routine')}>
-              <div className="focus-icon-bg">
-                <span className="material-symbols-outlined running-animation">directions_run</span>
-              </div>
-              <div className="focus-content">
-                <div className="focus-value">{completedRoutinesToday}/{activeRoutinesTodayCount}</div>
-                <div className="focus-label">Routine</div>
-              </div>
-            </div>
+            <div className="journey-track">
+              {/* Milesone indicators for cleaner structure */}
+              <div className="journey-milestone" style={{ left: '25%' }}></div>
+              <div className="journey-milestone" style={{ left: '50%' }}></div>
+              <div className="journey-milestone" style={{ left: '75%' }}></div>
 
-            <div className="focus-tile goals-tile" onClick={() => navigate('/goals')}>
-              <div className="focus-icon-bg">
-                <span className="material-symbols-outlined goals-animation">emoji_events</span>
+              {/* Runner Character */}
+              <div 
+                className="runner-indicator" 
+                style={{ left: `${overallProgress}%` }} 
+                onClick={handleRunnerAction}
+                onMouseEnter={showQuote}
+                onMouseLeave={() => setActiveQuote(null)}
+                onTouchStart={handleRunnerAction}
+              >
+                {activeQuote && <div className="quote-bubble" style={{ bottom: '130%', marginBottom: '8px' }}>{activeQuote}</div>}
+                <span className="runner-icon">🏃</span>
               </div>
-              <div className="focus-content">
-                <div className="focus-value">{activeGoals.length}</div>
-                <div className="focus-label">Goals</div>
+
+              {/* Progress Segments - Weighted Visualization */}
+              <div className="journey-segment" style={{ width: `${tasksProgress * 0.2}%`, background: 'linear-gradient(90deg, #3b82f6, #60a5fa)', borderTopLeftRadius: '20px', borderBottomLeftRadius: '20px', boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }}></div>
+              <div className="journey-segment" style={{ width: `${routinesProgress * 0.6}%`, background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)' }}></div>
+              <div className="journey-segment" style={{ width: `${avgGoalProgress * 0.2}%`, background: 'linear-gradient(90deg, #ef4444, #f87171)', borderTopRightRadius: overallProgress === 100 ? '20px' : 0, borderBottomRightRadius: overallProgress === 100 ? '20px' : 0, boxShadow: '0 0 15px rgba(239, 68, 68, 0.3)' }}></div>
+
+                {overallProgress === 100 && <div className="home-arrival-message" style={{ top: '-40px' }}>You are home</div>}
               </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginTop: '1.5rem', padding: '0 0.5rem' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }}></div>
+                 <span style={{ color: '#94a3b8', fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tasks</span>
+               </div>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
+                 <span style={{ color: '#94a3b8', fontSize: '0.66rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Routines</span>
+               </div>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }}></div>
+                 <span style={{ color: '#94a3b8', fontSize: '0.66rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Goals</span>
+               </div>
             </div>
           </div>
 
           {/* Inner Tasks List Row inside container box row frame */}
           <div className="inner-tasks-grid" style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.6rem' }}>
             {topPendingTasks.length > 0 ? topPendingTasks.map(t => (
-              <div key={t.id} className="inner-task-row" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem 0.85rem', borderRadius: '0.85rem', border: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer' }} onClick={() => handleCompleteTask(t.id)}>
-                <div onClick={(e) => { e.stopPropagation(); handleCompleteTask(t.id); }} style={{ width: '1.2rem', height: '1.2rem', borderRadius: '50%', border: '2.2px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, background: completingTaskId === t.id ? '#10b981' : 'transparent', transition: 'background 0.2s ease' }}>
-                  {completingTaskId === t.id && <span className="material-symbols-outlined" style={{ fontSize: '0.75rem', color: '#000', fontVariationSettings: "'wght' 800" }}>check</span>}
-                </div>
+              <div key={t.id} className="inner-task-row" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem 0.85rem', borderRadius: '0.85rem', border: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'all 0.2s ease' }} onClick={() => navigate('/dashboard')}>
+                <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: '#10b981', opacity: 0.7, flexShrink: 0 }}>assignment</span>
                 <div style={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
                 <span style={{ fontSize: '0.6rem', fontWeight: 900, background: t.priority === 'High' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', color: t.priority === 'High' ? '#ef4444' : '#f59e0b', padding: '0.15rem 0.5rem', borderRadius: '0.5rem' }}>{t.priority}</span>
               </div>
@@ -560,8 +756,11 @@ const HomeDashboard: React.FC = () => {
                 <div style={{ fontSize: '0.7rem', fontWeight: 900, color: '#10b981', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Upcoming Reminders (3 Days)</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
                   {upcomingReminders.map((r, i) => (
-                    <Link key={i} to="/calendar" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.01)', cursor: 'pointer', textDecoration: 'none', width: '100%', boxSizing: 'border-box' }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%', fontWeight: 700 }}>{r.title}</span>
+                    <Link key={i} to="/calendar" className="reminder-row-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.01)', cursor: 'pointer', textDecoration: 'none', width: '100%', boxSizing: 'border-box' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', maxWidth: '75%', overflow: 'hidden' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: '#10b981', opacity: 0.8 }}>notifications</span>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>{r.title}</span>
+                      </div>
                       <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 800 }}>{r.date.split('-').slice(1).join('/')}</span>
                     </Link>
                   ))}
@@ -575,10 +774,9 @@ const HomeDashboard: React.FC = () => {
         <div className="desktop-split-grid">
 
         {/* 2. Today Routine Neon Box */}
-        <div className="neon-box">
+        <div className="neon-box clickable-neon-box" onClick={() => navigate('/routine')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Today Routine</h2>
-            <button onClick={() => navigate('/routine')} style={{ background: 'none', border: 'none', color: '#10b981', fontSize: '0.75rem', fontWeight: 900, cursor: 'pointer', textTransform: 'uppercase' }}>View Routine</button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
@@ -613,10 +811,10 @@ const HomeDashboard: React.FC = () => {
         </div>
 
         {/* 3. Upcoming Goals Snapshot Neon Box */}
-        <div className="neon-box">
+        <div className="neon-box clickable-neon-box" onClick={() => navigate('/goals')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
             <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Goals Snapshot</h2>
-            <button onClick={() => navigate('/goals')} style={{ background: 'none', border: 'none', color: '#10b981', fontSize: '0.75rem', fontWeight: 900, cursor: 'pointer', textTransform: 'uppercase' }}>View Goals</button>
+
           </div>
 
           <div className="upcoming-goals-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
@@ -625,33 +823,37 @@ const HomeDashboard: React.FC = () => {
                if (!b.targetDate) return -1;
                return new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime();
             }).slice(0, 3).map(goal => {
-               let daysLeftStr = 'No due date';
-               let isOverdue = false;
-               if (goal.targetDate) {
-                 const diffDays = Math.ceil((new Date(goal.targetDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                 isOverdue = diffDays < 0;
-                 daysLeftStr = isOverdue ? `${Math.abs(diffDays)} Days Overdue` : `${diffDays} Days Left`;
-               }
+
+               
+                const calToday = new Date();
+                calToday.setHours(0, 0, 0, 0);
+                const calTarget = new Date(goal.targetDate);
+                calTarget.setHours(0, 0, 0, 0);
+                const diffDays = Math.ceil((calTarget.getTime() - calToday.getTime()) / (1000 * 60 * 60 * 24));
+                const isUrgent = goal.targetDate && diffDays < 10;
+                let daysLeftStr = 'No due date';
+                if (goal.targetDate) {
+                  if (diffDays === 0) daysLeftStr = 'Overdue Today';
+                  else if (diffDays < 0) daysLeftStr = `${Math.abs(diffDays)} Days Overdue`;
+                  else daysLeftStr = `${diffDays} Days Left`;
+                }
 
                return (
-                  <div key={goal.id} className="neon-inner-card goal-card-inner" onClick={() => navigate('/goals')} style={{ padding: '0.85rem', background: 'rgba(255,255,255,0.01)', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.02)', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div key={goal.id} className="neon-inner-card goal-card-inner" style={{ padding: '0.85rem', background: isUrgent ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255,255,255,0.01)', borderRadius: '1.25rem', border: isUrgent ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', gap: '0.75rem', transition: 'all 0.3s ease' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ width: '28px', height: '28px', background: 'rgba(0, 242, 254, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00f2fe', flexShrink: 0 }}>
+                      <div style={{ width: '28px', height: '28px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', flexShrink: 0 }}>
                         <span className="material-symbols-outlined" style={{ fontSize: '1rem', fontVariationSettings: "'FILL' 1" }}>track_changes</span>
                       </div>
                       <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{goal.name}</div>
                     </div>
 
-                    <div style={{ height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ width: `${goal.progress || 0}%`, height: '100%', background: 'linear-gradient(90deg, #00f2fe, #a855f7)', borderRadius: '3px' }}></div>
-                    </div>
+
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem' }}>
-                      <div style={{ color: '#00f2fe', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      <div style={{ color: isUrgent ? '#ef4444' : '#00f2fe', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                         <span className="material-symbols-outlined" style={{ fontSize: '0.75rem' }}>schedule</span>
                         {daysLeftStr}
                       </div>
-                      <div style={{ color: '#94a3b8', fontWeight: 900 }}>{goal.progress || 0}%</div>
                     </div>
                   </div>
                );
@@ -665,10 +867,10 @@ const HomeDashboard: React.FC = () => {
 
         {/* 3. Floating Shortcuts Bar edge shelf row setups below */}
         <div className="floating-shortcuts-bar">
-          <button onClick={() => navigate('/dashboard')} className="shelf-btn"><span className="material-symbols-outlined">check_circle</span>Task</button>
-          <button onClick={() => navigate('/goals')} className="shelf-btn"><span className="material-symbols-outlined">star</span>Goal</button>
-          <button onClick={() => navigate('/routine')} className="shelf-btn"><span className="material-symbols-outlined">calendar_today</span>Routine</button>
-          <button onClick={() => navigate('/stats')} className="shelf-btn"><span className="material-symbols-outlined">insights</span>Stats</button>
+          <button onClick={() => navigate('/dashboard')} className="shelf-btn shelf-btn-task"><span className="material-symbols-outlined">check_circle</span>Task</button>
+          <button onClick={() => navigate('/goals')} className="shelf-btn shelf-btn-goal"><span className="material-symbols-outlined">star</span>Goal</button>
+          <button onClick={() => navigate('/routine')} className="shelf-btn shelf-btn-routine"><span className="material-symbols-outlined">calendar_today</span>Routine</button>
+          <button onClick={() => navigate('/stats')} className="shelf-btn shelf-btn-stats"><span className="material-symbols-outlined">insights</span>Stats</button>
         </div>
 
 
