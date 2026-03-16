@@ -391,6 +391,10 @@ const HomeDashboard: React.FC = () => {
           padding: 1rem 1.25rem !important;
           border-radius: 1.25rem !important;
         }
+
+        @media (max-width: 650px) {
+          .upcoming-goals-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
       <div className="aurora-bg">
         <div className="aurora-gradient-1"></div>
@@ -492,48 +496,78 @@ const HomeDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. Routine Snapshot Neon Box (Active Goals rendered inside list setups) */}
+        {/* 2. Routine Snapshot Neon Box */}
         <div className="neon-box">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
             <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Routine Snapshot</h2>
+            <button onClick={() => navigate('/routine')} style={{ background: 'none', border: 'none', color: '#10b981', fontSize: '0.75rem', fontWeight: 900, cursor: 'pointer', textTransform: 'uppercase' }}>View Routine</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+            <div className="neon-inner-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.01)', padding: '1rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)' }}>
+              <div style={{ position: 'relative', width: '42px', height: '42px', flexShrink: 0 }}>
+                <svg width="42" height="42" viewBox="0 0 42 42">
+                  <circle cx="21" cy="21" r="16" fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="3"></circle>
+                  <circle cx="21" cy="21" r="16" fill="transparent" stroke="#10b981" strokeWidth="3" strokeDasharray={`${activeRoutinesTodayCount > 0 ? ((completedRoutinesToday || 0) / activeRoutinesTodayCount) * 100 : 0} ${100 - (activeRoutinesTodayCount > 0 ? ((completedRoutinesToday || 0) / activeRoutinesTodayCount) * 100 : 0)}`} strokeDashoffset="25" strokeLinecap="round" />
+                </svg>
+                <span className="material-symbols-outlined" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '1.1rem', color: '#10b981', fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#ffffff' }}>Completed: {completedRoutinesToday}</div>
+                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 700, marginTop: '0.1rem' }}>Created: {activeRoutinesTodayCount}</div>
+              </div>
+            </div>
+
+            <div className="neon-inner-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.01)', padding: '1rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)' }}>
+              <div style={{ width: '42px', height: '42px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '1.25rem', fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#f87171' }}>{currentStreak}-Day Streak</div>
+                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 700, marginTop: '0.1rem' }}>Keep it going! 🔥</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Upcoming Goals Snapshot Neon Box */}
+        <div className="neon-box">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Goals Snapshot</h2>
             <button onClick={() => navigate('/goals')} style={{ background: 'none', border: 'none', color: '#10b981', fontSize: '0.75rem', fontWeight: 900, cursor: 'pointer', textTransform: 'uppercase' }}>View Goals</button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {activeGoals.map(goal => {
+          <div className="upcoming-goals-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+            {([...goals].filter(g => g.status === 'pending').sort((a, b) => {
+               if (!a.targetDate) return 1;
+               if (!b.targetDate) return -1;
+               return new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime();
+            }).slice(0, 3).map(goal => {
                let daysLeftStr = 'No due date';
+               let isOverdue = false;
                if (goal.targetDate) {
                  const diffDays = Math.ceil((new Date(goal.targetDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                 daysLeftStr = diffDays < 0 ? `${Math.abs(diffDays)} Days Overdue` : `${diffDays} Days Left`;
+                 isOverdue = diffDays < 0;
+                 daysLeftStr = isOverdue ? `${Math.abs(diffDays)} Days Overdue` : `${diffDays} Days Left`;
                }
 
                return (
-                  <div key={goal.id} className="neon-inner-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.01)', padding: '1rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)' }}>
-                    <div style={{ position: 'relative', width: '42px', height: '42px', flexShrink: 0 }}>
-                      <svg width="42" height="42" viewBox="0 0 42 42">
-                        <circle cx="21" cy="21" r="16" fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="3"></circle>
-                        <circle cx="21" cy="21" r="16" fill="transparent" stroke="#00f2fe" strokeWidth="3" strokeDasharray={`${goal.progress || 0} ${100 - (goal.progress || 0)}`} strokeDashoffset="25" strokeLinecap="round" />
-                      </svg>
-                      <span className="material-symbols-outlined" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '1.1rem', color: '#00f2fe', fontVariationSettings: "'FILL' 1" }}>track_changes</span>
+                  <div key={goal.id} className="neon-inner-card goal-card-inner" onClick={() => navigate('/goals')} style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)', cursor: 'pointer' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.35rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{goal.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.65rem', color: isOverdue ? '#ef4444' : '#00f2fe', fontWeight: 800, marginBottom: '0.6rem' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '0.75rem' }}>schedule</span>
+                      {daysLeftStr}
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.5rem' }}>{goal.name}</div>
-                      <div style={{ height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${goal.progress || 0}%`, height: '100%', background: 'linear-gradient(90deg, #00f2fe, #a855f7)', borderRadius: '3px' }}></div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 900, color: '#00f2fe' }}>{goal.progress || 0}%</div>
-                      <div style={{ fontSize: '0.6rem', color: '#64748b', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem', marginTop: '0.2rem' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '0.75rem' }}>schedule</span>
-                        {daysLeftStr}
-                      </div>
+                    <div style={{ height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ width: `${goal.progress || 0}%`, height: '100%', background: 'linear-gradient(90deg, #00f2fe, #a855f7)', borderRadius: '3px' }}></div>
                     </div>
                   </div>
                );
-            })}
+            }))}
           </div>
+          {goals.filter(g => g.status === 'pending').length === 0 && <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No active goals. Time to set some!</div>}
         </div>
+
 
         {/* 3. Floating Shortcuts Bar edge shelf row setups below */}
         <div className="floating-shortcuts-bar">
