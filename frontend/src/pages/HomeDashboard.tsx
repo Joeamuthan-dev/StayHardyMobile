@@ -532,70 +532,6 @@ const HomeDashboard: React.FC = () => {
           opacity: 0.6;
         }
 
-        .floating-shortcuts-bar {
-          position: fixed;
-          bottom: 1.25rem;
-          left: 50%;
-          transform: translateX(-50%);
-          display: flex;
-          gap: 0.25rem;
-          background: rgba(6, 6, 8, 0.85);
-          backdrop-filter: blur(25px) saturate(180%);
-          padding: 0.4rem;
-          border-radius: 1.25rem;
-          border: 1px solid rgba(255, 255, 255, 0.03);
-          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
-          z-index: 999;
-          max-width: 90%;
-        }
-
-        .shelf-btn {
-          display: flex;
-          align-items: center;
-          gap: 0.4rem;
-          background: transparent;
-          border: none;
-          color: #94a3b8;
-          font-size: 0.75rem;
-          font-weight: 800;
-          padding: 0.6rem 0.85rem;
-          border-radius: 1rem;
-          cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-          white-space: nowrap;
-        }
-        .shelf-btn:hover {
-          color: #ffffff;
-          background: rgba(255, 255, 255, 0.03);
-          transform: translateY(-1px);
-        }
-        .shelf-btn:active { transform: scale(0.96); }
-        .shelf-btn .material-symbols-outlined {
-          font-size: 1.15rem;
-          font-variation-settings: 'FILL' 1;
-        }
-
-        /* Colorful Shelf Buttons */
-        .shelf-btn-task { color: #3b82f6; background: rgba(59, 130, 246, 0.05); }
-        .shelf-btn-task:hover { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-        
-        .shelf-btn-goal { color: #00f2fe; background: rgba(0, 242, 254, 0.05); }
-        .shelf-btn-goal:hover { background: rgba(0, 242, 254, 0.15); color: #22d3ee; }
-        
-        .shelf-btn-routine { color: #a855f7; background: rgba(168, 85, 247, 0.05); }
-        .shelf-btn-routine:hover { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
-        
-        .shelf-btn-stats { color: #f59e0b; background: rgba(245, 158, 11, 0.05); }
-        .shelf-btn-stats:hover { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-
-
-        @media (max-width: 600px) {
-          .inner-tasks-grid { grid-template-columns: 1fr !important; }
-          .floating-shortcuts-bar { width: calc(100% - 2rem); justify-content: space-around; }
-          .shelf-btn { padding: 0.6rem 0.5rem; font-size: 0.65rem; gap: 0.2rem; }
-        }
 
         .focus-tile {
           display: flex;
@@ -680,7 +616,7 @@ const HomeDashboard: React.FC = () => {
           <div className="productivity-journey-container">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
               <div>
-                <span style={{ fontSize: '0.65rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Stay Hardy Score</span>
+                <span style={{ fontSize: '0.65rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Score</span>
                 <div style={{ fontSize: '2.2rem', fontWeight: 950, color: '#ffffff', lineHeight: 1, marginTop: '0.2rem' }}>
                    {overallProgress}%
                 </div>
@@ -865,13 +801,6 @@ const HomeDashboard: React.FC = () => {
         </div>
 
 
-        {/* 3. Floating Shortcuts Bar edge shelf row setups below */}
-        <div className="floating-shortcuts-bar">
-          <button onClick={() => navigate('/dashboard')} className="shelf-btn shelf-btn-task"><span className="material-symbols-outlined">check_circle</span>Task</button>
-          <button onClick={() => navigate('/goals')} className="shelf-btn shelf-btn-goal"><span className="material-symbols-outlined">star</span>Goal</button>
-          <button onClick={() => navigate('/routine')} className="shelf-btn shelf-btn-routine"><span className="material-symbols-outlined">calendar_today</span>Routine</button>
-          <button onClick={() => navigate('/stats')} className="shelf-btn shelf-btn-stats"><span className="material-symbols-outlined">insights</span>Stats</button>
-        </div>
 
 
 

@@ -19,7 +19,7 @@ const MobileNav: React.FC = () => {
     { path: '/goals', icon: 'star', label: t('goals') },
     { path: '/routine', icon: 'calendar_check', label: t('routine') },
     { path: '/calendar', icon: 'calendar_month', label: 'Calendar' },
-    { path: '/planner', icon: 'event_note', label: t('timeline') },
+    { path: '/planner', icon: 'history', label: t('timeline') },
     ...(user?.role === 'admin' ? [{ path: '/admin', icon: 'admin_panel_settings', label: 'Admin Hub' }] : []),
     { path: '/settings', icon: 'person', label: t('profile') },
   ];
