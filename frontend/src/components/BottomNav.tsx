@@ -12,6 +12,7 @@ const BottomNav: React.FC<{ isHidden?: boolean }> = ({ isHidden }) => {
   const { t } = useLanguage();
   const { logout, user } = useAuth();
   const [isIntroOpen, setIsIntroOpen] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -33,10 +34,10 @@ const BottomNav: React.FC<{ isHidden?: boolean }> = ({ isHidden }) => {
   return (
     <>
       {/* ── Mobile Top Hamburger ── */}
-      <MobileNav />
+      <MobileNav isOpen={isMobileMenuOpen} setIsOpen={setIsMobileMenuOpen} />
 
       {/* ── Mobile & Desktop Home bottom nav (Floating Shelf Design) ── */}
-      {(location.pathname !== '/settings') && (
+      {(location.pathname !== '/settings' && !isMobileMenuOpen) && (
         <div className={`floating-shortcuts-bar ${location.pathname === '/home' ? 'desktop-home-visible' : ''}`}>
           <button 
             onClick={() => navigate('/dashboard')} 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import {  useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import BottomNav from '../components/BottomNav';
@@ -71,7 +71,7 @@ const Routine: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
-  
+
   // Statistics State
   const [activeStatCategory, setActiveStatCategory] = useState('All');
   const [timeRange, setTimeRange] = useState<TimeRange>('7d');
@@ -188,21 +188,21 @@ const Routine: React.FC = () => {
         const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
         const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
         activeCategories.forEach(cat => {
-            const catRoutines = routines.filter(r => r.category === cat);
-            let monthScheduled = 0;
-            let monthCompleted = 0;
-            for (let day = new Date(monthStart); day <= monthEnd && day <= now; day.setDate(day.getDate() + 1)) {
-                const dayName = days[day.getDay()];
-                const dStr = day.toISOString().split('T')[0];
-                const scheduledToday = catRoutines.filter(r => r.days.includes(dayName));
-                monthScheduled += scheduledToday.length;
-                const completedToday = logs.filter(l => {
-                    const routine = catRoutines.find(r => r.id === l.routine_id);
-                    return l.completed_at === dStr && !!routine;
-                }).length;
-                monthCompleted += completedToday;
-            }
-            dataPoint[cat] = monthScheduled > 0 ? Math.round((monthCompleted / monthScheduled) * 100) : 0;
+          const catRoutines = routines.filter(r => r.category === cat);
+          let monthScheduled = 0;
+          let monthCompleted = 0;
+          for (let day = new Date(monthStart); day <= monthEnd && day <= now; day.setDate(day.getDate() + 1)) {
+            const dayName = days[day.getDay()];
+            const dStr = day.toISOString().split('T')[0];
+            const scheduledToday = catRoutines.filter(r => r.days.includes(dayName));
+            monthScheduled += scheduledToday.length;
+            const completedToday = logs.filter(l => {
+              const routine = catRoutines.find(r => r.id === l.routine_id);
+              return l.completed_at === dStr && !!routine;
+            }).length;
+            monthCompleted += completedToday;
+          }
+          dataPoint[cat] = monthScheduled > 0 ? Math.round((monthCompleted / monthScheduled) * 100) : 0;
         });
         result.push(dataPoint);
       }
@@ -270,7 +270,7 @@ const Routine: React.FC = () => {
     const isNowCompleted = !routine.completed;
 
     // 1. Optimistically update routines state for instant UI feedback
-    setRoutines(prev => prev.map(r => 
+    setRoutines(prev => prev.map(r =>
       r.id === routine.id ? { ...r, completed: isNowCompleted } : r
     ));
 
@@ -287,10 +287,10 @@ const Routine: React.FC = () => {
 
     try {
       if (isNowCompleted) {
-        const { error } = await supabase.from('routine_logs').insert([{ 
-          routine_id: routine.id, 
-          user_id: user.id, 
-          completed_at: today 
+        const { error } = await supabase.from('routine_logs').insert([{
+          routine_id: routine.id,
+          user_id: user.id,
+          completed_at: today
         }]);
         if (error) throw error;
       } else {
@@ -305,7 +305,7 @@ const Routine: React.FC = () => {
     } catch (err) {
       console.error('Failed to sync routine status:', err);
       // Revert state on failure
-      setRoutines(prev => prev.map(r => 
+      setRoutines(prev => prev.map(r =>
         r.id === routine.id ? { ...r, completed: !isNowCompleted } : r
       ));
       if (isNowCompleted) {
@@ -343,128 +343,128 @@ const Routine: React.FC = () => {
       <div className="routine-content-grid" style={{ display: 'grid', gridTemplateColumns: '0.75fr 1.25fr', gap: '1.5rem', alignItems: 'start' }}>
         {/* Left Side: Daily Action */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                <h2 style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>Daily Actions</h2>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button onClick={() => setShowAllModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '0.75rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}>View All</button>
-                    <button 
-                       onClick={() => setShowModal(true)} 
-                       style={{ 
-                         display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', 
-                         border: 'none', padding: '0.4rem 0.8rem', borderRadius: '0.75rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' 
-                       }}
-                    >
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>add_circle</span>
-                        Create Routine
-                    </button>
-                </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>Daily Actions</h2>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button onClick={() => setShowAllModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-main)', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '0.75rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}>View All</button>
+              <button
+                onClick={() => setShowModal(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981',
+                  border: 'none', padding: '0.4rem 0.8rem', borderRadius: '0.75rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>add_circle</span>
+                Create Routine
+              </button>
             </div>
-            
-            {showEncouragement && (
-              <div className="encouragement-banner">
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <span className="material-symbols-outlined" style={{ color: '#10b981', fontSize: '20px' }}>auto_awesome</span>
-                  <p style={{ margin: 0, fontSize: '0.75rem', lineHeight: '1.4', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    Start your streak! Habit logs are only available for the <strong style={{ color: 'var(--text-main)' }}>current day</strong>. 
-                    Login daily to keep your momentum high and your charts growing. 🚀
-                  </p>
-                </div>
-                <button onClick={() => setShowEncouragement(false)} className="close-banner-btn">
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
-                </button>
-              </div>
-            )}
+          </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {loading ? <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Syncing...</div> : routines.length === 0 ? <div onClick={() => setShowModal(true)} style={{ padding: '2rem', background: 'rgba(255,255,255,0.02)', borderRadius: '1.25rem', border: '2px dashed rgba(255,255,255,0.1)', textAlign: 'center', cursor: 'pointer' }}><p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 800 }}>Add your first habit.</p></div> : 
-                  routines
-                    .filter(routine => routine.days.includes(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]))
-                    .map(routine => (
-                      <div key={routine.id} className={`routine-card-new ${routine.completed ? 'completed' : ''}`}>
-                          <div className="card-accent" style={{ background: routine.color }}></div>
-                          
-                          <div className="card-main-content">
-                              <div className="card-icon-wrapper" style={{ border: `1px solid ${routine.color}30`, color: routine.color }}>
-                                  <span className="material-symbols-outlined">{routine.icon}</span>
-                              </div>
-                              
-                              <div className="card-text-content">
-                                  <div className="card-category-strip">
-                                      <span className="category-dot" style={{ background: routine.color }}></span>
-                                      {routine.category}
-                                  </div>
-                                  <h3 className="card-title">{routine.title}</h3>
-                              </div>
-                          </div>
-                          
-                          <div className="card-actions-wrapper">
-                              <div 
-                                className={`physical-toggle ${routine.completed ? 'active' : ''}`} 
-                                onClick={() => toggleCompletion(routine)}
-                              >
-                                  <div className="toggle-bg-icons">
-                                      <span className="material-symbols-outlined cross">close</span>
-                                      <span className="material-symbols-outlined check">check</span>
-                                  </div>
-                                  <div className="toggle-knob"></div>
-                              </div>
-                          </div>
-                      </div>
-                    )
-                )}
+          {showEncouragement && (
+            <div className="encouragement-banner">
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <span className="material-symbols-outlined" style={{ color: '#10b981', fontSize: '20px' }}>auto_awesome</span>
+                <p style={{ margin: 0, fontSize: '0.75rem', lineHeight: '1.4', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Start your streak! Habit logs are only available for the <strong style={{ color: 'var(--text-main)' }}>current day</strong>.
+                  Login daily to keep your momentum high and your charts growing. 🚀
+                </p>
+              </div>
+              <button onClick={() => setShowEncouragement(false)} className="close-banner-btn">
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
+              </button>
             </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {loading ? <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Syncing...</div> : routines.length === 0 ? <div onClick={() => setShowModal(true)} style={{ padding: '2rem', background: 'rgba(255,255,255,0.02)', borderRadius: '1.25rem', border: '2px dashed rgba(255,255,255,0.1)', textAlign: 'center', cursor: 'pointer' }}><p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 800 }}>Add your first habit.</p></div> :
+              routines
+                .filter(routine => routine.days.includes(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]))
+                .map(routine => (
+                  <div key={routine.id} className={`routine-card-new ${routine.completed ? 'completed' : ''}`}>
+                    <div className="card-accent" style={{ background: routine.color }}></div>
+
+                    <div className="card-main-content">
+                      <div className="card-icon-wrapper" style={{ border: `1px solid ${routine.color}30`, color: routine.color }}>
+                        <span className="material-symbols-outlined">{routine.icon}</span>
+                      </div>
+
+                      <div className="card-text-content" style={{ minWidth: 0, flex: 1 }}>
+                        <div className="card-category-strip">
+                          <span className="category-dot" style={{ background: routine.color }}></span>
+                          {routine.category}
+                        </div>
+                        <h3 className="card-title">{routine.title}</h3>
+                      </div>
+                    </div>
+
+                    <div className="card-actions-wrapper" style={{ flexShrink: 0 }}>
+                      <div
+                        className={`physical-toggle ${routine.completed ? 'active' : ''}`}
+                        onClick={() => toggleCompletion(routine)}
+                      >
+                        <div className="toggle-bg-icons">
+                          <span className="material-symbols-outlined cross">close</span>
+                          <span className="material-symbols-outlined check">check</span>
+                        </div>
+                        <div className="toggle-knob"></div>
+                      </div>
+                    </div>
+                  </div>
+                )
+                )}
+          </div>
         </section>
 
         {/* Right Side: Chart and Consistency with Grouped Controls */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="glass-card chart-section-card" style={{ padding: '1.5rem', borderRadius: '1.5rem', minHeight: '440px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem' }}>
-                <h2 style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Routine Consistency</h2>
-                <div className="range-filter-container">
-                    {(['7d', '1m', '3m', '6m', '1y'] as TimeRange[]).map(range => <button key={range} onClick={() => setTimeRange(range)} className={`range-btn ${timeRange === range ? 'active' : ''}`}>{range.toUpperCase()}</button>)}
-                </div>
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Routine Consistency</h2>
+              <div className="range-filter-container">
+                {(['7d', '1m', '3m', '6m', '1y'] as TimeRange[]).map(range => <button key={range} onClick={() => setTimeRange(range)} className={`range-btn ${timeRange === range ? 'active' : ''}`}>{range.toUpperCase()}</button>)}
+              </div>
             </div>
-            
+
             <div style={{ height: '280px', width: '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={lineChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} opacity={0.5} />
-                    <XAxis 
-                        dataKey="date" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 700 }} 
-                    />
-                    <YAxis hide domain={[0, 100]} />
-                    <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px' }} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, paddingTop: '10px' }} />
-                    {activeStatCategory === 'All' ? categoryAverages.map(cat => (
-                        <Line key={cat.category} type="monotone" dataKey={cat.category} stroke={cat.color} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                    )) : <Line type="monotone" dataKey={activeStatCategory} stroke={categoryAverages.find(c => c.category === activeStatCategory)?.color || '#10b981'} strokeWidth={4} dot={false} activeDot={{ r: 6 }} />}
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} opacity={0.5} />
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 700 }}
+                  />
+                  <YAxis hide domain={[0, 100]} />
+                  <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '12px' }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 800, paddingTop: '10px' }} />
+                  {activeStatCategory === 'All' ? categoryAverages.map(cat => (
+                    <Line key={cat.category} type="monotone" dataKey={cat.category} stroke={cat.color} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+                  )) : <Line type="monotone" dataKey={activeStatCategory} stroke={categoryAverages.find(c => c.category === activeStatCategory)?.color || '#10b981'} strokeWidth={4} dot={false} activeDot={{ r: 6 }} />}
                 </LineChart>
-                </ResponsiveContainer>
+              </ResponsiveContainer>
             </div>
 
             <div className="chart-category-divider" style={{ marginTop: '1rem' }}>
-                <button onClick={() => setActiveStatCategory('All')} className={`cat-btn-inner all-cat-btn ${activeStatCategory === 'All' ? 'active' : ''}`}><span className="material-symbols-outlined" style={{ fontSize: '1.2rem' }}>grid_view</span></button>
-                {categoryAverages.map(cat => (
-                    <button key={cat.category} onClick={() => setActiveStatCategory(cat.category)} className={`cat-btn-inner ${activeStatCategory === cat.category ? 'active' : ''}`} style={{ '--cat-color': cat.color } as any}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '1.2rem' }}>{routines.find(r => r.category === cat.category)?.icon || 'category'}</span>
-                    </button>
-                ))}
+              <button onClick={() => setActiveStatCategory('All')} className={`cat-btn-inner all-cat-btn ${activeStatCategory === 'All' ? 'active' : ''}`}><span className="material-symbols-outlined" style={{ fontSize: '1.2rem' }}>grid_view</span></button>
+              {categoryAverages.map(cat => (
+                <button key={cat.category} onClick={() => setActiveStatCategory(cat.category)} className={`cat-btn-inner ${activeStatCategory === cat.category ? 'active' : ''}`} style={{ '--cat-color': cat.color } as any}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '1.2rem' }}>{routines.find(r => r.category === cat.category)?.icon || 'category'}</span>
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Performance Summary Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
             {categoryAverages.map(cat => (
-                <div key={cat.category} className="glass-card" style={{ padding: '1rem', borderRadius: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ position: 'relative', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" stroke="rgba(255,255,255,0.05)" strokeWidth="4" fill="none" /><circle cx="20" cy="20" r="17" stroke={cat.color} strokeWidth="4" fill="none" strokeDasharray={`${2 * Math.PI * 17 * (cat.average / 100)} ${2 * Math.PI * 17}`} strokeLinecap="round" transform="rotate(-90 20 20)" /></svg>
-                        <span style={{ position: 'absolute', fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-main)' }}>{cat.average}%</span>
-                    </div>
-                    <div><div style={{ fontSize: '0.85rem', fontWeight: 900, color: 'var(--text-main)' }}>{cat.category}</div><div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 800 }}>Consistency</div></div>
+              <div key={cat.category} className="glass-card" style={{ padding: '1rem', borderRadius: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ position: 'relative', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" stroke="rgba(255,255,255,0.05)" strokeWidth="4" fill="none" /><circle cx="20" cy="20" r="17" stroke={cat.color} strokeWidth="4" fill="none" strokeDasharray={`${2 * Math.PI * 17 * (cat.average / 100)} ${2 * Math.PI * 17}`} strokeLinecap="round" transform="rotate(-90 20 20)" /></svg>
+                  <span style={{ position: 'absolute', fontSize: '0.65rem', fontWeight: 900, color: 'var(--text-main)' }}>{cat.average}%</span>
                 </div>
+                <div><div style={{ fontSize: '0.85rem', fontWeight: 900, color: 'var(--text-main)' }}>{cat.category}</div><div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 800 }}>Consistency</div></div>
+              </div>
             ))}
           </div>
         </section>
@@ -491,25 +491,25 @@ const Routine: React.FC = () => {
                   <label style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>COLOR</label>
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
                     {['#10b981', '#0ea5e9', '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#84cc16', '#14b8a6'].map(c => (
-                      <div 
-                        key={c} 
-                        onClick={() => setColor(c)} 
-                        style={{ 
-                          width: '24px', height: '24px', borderRadius: '50%', background: c, cursor: 'pointer', 
+                      <div
+                        key={c}
+                        onClick={() => setColor(c)}
+                        style={{
+                          width: '24px', height: '24px', borderRadius: '50%', background: c, cursor: 'pointer',
                           border: color === c ? '2px solid white' : '2px solid transparent',
                           boxShadow: color === c ? `0 0 10px ${c}` : 'none',
                           transition: 'all 0.2s'
-                        }} 
+                        }}
                       />
                     ))}
                     <div style={{ position: 'relative', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--text-secondary)', cursor: 'pointer' }}>palette</span>
-                      <input 
-                        type="color" 
-                        value={color} 
+                      <input
+                        type="color"
+                        value={color}
                         onChange={(e) => setColor(e.target.value)}
-                        style={{ 
-                          position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' 
+                        style={{
+                          position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer'
                         }}
                       />
                     </div>
@@ -522,28 +522,41 @@ const Routine: React.FC = () => {
           </div>
         </div>
       )}
-{showAllModal && (
-  <div onClick={() => setShowAllModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-    <div onClick={e => e.stopPropagation()} style={{ background: '#040914', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '1.5rem', width: '100%', maxWidth: '400px', padding: '1.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: 'white' }}>Manage Routines</h3>
-        <button onClick={() => setShowAllModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><span className="material-symbols-outlined">close</span></button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '0.25rem' }}>
-        {routines.map(r => (
-          <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: `${r.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: r.color || '#10b981' }}><span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{r.icon || 'fitness_center'}</span></div>
-              <div><div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'white' }}>{r.title}</div><div style={{ fontSize: '0.6rem', color: '#64748b' }}>{r.category}</div></div>
+      {showAllModal && (
+        <div onClick={() => setShowAllModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#040914', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '1.5rem', width: '100%', maxWidth: '400px', padding: '1.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: 'white' }}>Manage Routines</h3>
+              <button onClick={() => setShowAllModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}><span className="material-symbols-outlined">close</span></button>
             </div>
-            <button onClick={() => handleDeleteRoutine(r.id)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem' }}><span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span></button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '350px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+              {routines.map(r => (
+                <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0, flex: 1 }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: `${r.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: r.color || '#10b981', flexShrink: 0 }}><span className="material-symbols-outlined" style={{ fontSize: '18px' }}>{r.icon || 'fitness_center'}</span></div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        fontSize: '0.8rem',
+                        fontWeight: 800,
+                        color: 'white',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        wordBreak: 'break-word'
+                      }}>{r.title}</div>
+                      <div style={{ fontSize: '0.6rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.category}</div>
+                    </div>
+                  </div>
+                  <button onClick={() => handleDeleteRoutine(r.id)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem' }}><span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span></button>
+                </div>
+              ))}
+              {routines.length === 0 && <div style={{ textAlign: 'center', padding: '1rem', color: '#64748b', fontSize: '0.8rem' }}>No routines created yet.</div>}
+            </div>
           </div>
-        ))}
-        {routines.length === 0 && <div style={{ textAlign: 'center', padding: '1rem', color: '#64748b', fontSize: '0.8rem' }}>No routines created yet.</div>}
-      </div>
-    </div>
-  </div>
-)}
+        </div>
+      )}
       <BottomNav isHidden={isSidebarHidden} />
       <style>{`
         .routine-page { padding-bottom: 8rem; }
@@ -693,6 +706,7 @@ const Routine: React.FC = () => {
           align-items: center;
           gap: 1rem;
           flex: 1;
+          min-width: 0;
         }
         .card-icon-wrapper {
           width: 44px;
@@ -709,6 +723,9 @@ const Routine: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: 0.25rem;
+          min-width: 0;
+          flex: 1;
+          overflow: hidden;
         }
         .card-category-strip {
           display: flex;
@@ -731,6 +748,12 @@ const Routine: React.FC = () => {
           font-weight: 800;
           color: var(--text-main);
           transition: all 0.3s;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          word-break: break-word;
         }
         .completed .card-title {
           color: rgba(255, 255, 255, 0.3);

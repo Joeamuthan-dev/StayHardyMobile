@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
-const MobileNav: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
+interface MobileNavProps {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+}
+
+const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
@@ -164,7 +168,7 @@ const MobileNav: React.FC = () => {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 2rem;
+          margin-bottom: 1.25rem;
         }
 
         .close-drawer-btn {
@@ -177,21 +181,25 @@ const MobileNav: React.FC = () => {
         .drawer-nav {
           display: flex;
           flex-direction: column;
-          gap: 0.5rem;
+          gap: 0.35rem;
           flex: 1;
+          overflow-y: auto;
+          padding-right: 4px;
         }
+        .drawer-nav::-webkit-scrollbar { width: 3px; }
+        .drawer-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
 
         .drawer-nav-item {
           display: flex;
           align-items: center;
-          gap: 1rem;
-          padding: 0.875rem 1.25rem;
+          gap: 0.875rem;
+          padding: 0.7rem 1rem;
           border-radius: 1rem;
           background: rgba(255, 255, 255, 0.03);
           border: 1px solid rgba(255, 255, 255, 0.05);
           color: var(--text-secondary);
           font-weight: 600;
-          font-size: 0.95rem;
+          font-size: 0.9rem;
           text-align: left;
           width: 100%;
           cursor: pointer;
@@ -224,7 +232,8 @@ const MobileNav: React.FC = () => {
         }
 
         .drawer-footer {
-          padding-top: 1.5rem;
+          padding-top: 1rem;
+          margin-top: 0.5rem;
           border-top: 1px solid rgba(255, 255, 255, 0.05);
         }
 
@@ -240,6 +249,31 @@ const MobileNav: React.FC = () => {
         @media (max-width: 767px) {
           .mobile-hamburger-btn {
             display: flex;
+          }
+        }
+
+        /* Short Screen Optimizations */
+        @media (max-height: 700px) {
+          .mobile-drawer {
+            padding: 1rem;
+          }
+          .drawer-header {
+            margin-bottom: 0.75rem;
+          }
+          .drawer-nav-item {
+            padding: 0.55rem 0.875rem;
+            font-size: 0.85rem;
+            gap: 0.75rem;
+          }
+          .drawer-nav-item .material-symbols-outlined {
+            font-size: 1.1rem;
+          }
+          .drawer-footer {
+            padding-top: 0.75rem;
+          }
+          .drawer-footer button {
+            padding: 0.6rem 1rem !important;
+            font-size: 0.85rem !important;
           }
         }
       `}</style>
