@@ -574,7 +574,6 @@ const HomeDashboard: React.FC = () => {
 
         @media (max-width: 650px) {
           .upcoming-goals-grid { grid-template-columns: 1fr !important; }
-          .inner-tasks-grid { grid-template-columns: 1fr !important; }
         }
 
         @media (min-width: 769px) {
@@ -602,6 +601,7 @@ const HomeDashboard: React.FC = () => {
           .status-tagline-container {
             display: none !important;
           }
+          .inner-tasks-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
       <div className="aurora-bg">
