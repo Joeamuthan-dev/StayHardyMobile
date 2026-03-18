@@ -715,12 +715,12 @@ const HomeDashboard: React.FC = () => {
           </div>
 
           {/* Inner Tasks List Row inside container box row frame */}
-          <div className="inner-tasks-grid" style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.6rem' }}>
-            {topPendingTasks.length > 0 && (
-              <p style={{ gridColumn: 'span 2', fontSize: '0.65rem', color: '#64748b', fontWeight: 800, margin: '0 0 0.1rem 0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Top 2 Pending Tasks
-              </p>
-            )}
+          {topPendingTasks.length > 0 && (
+            <p style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 800, margin: '1rem 0 0.25rem 0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Top 2 Pending Tasks
+            </p>
+          )}
+          <div className="inner-tasks-grid" style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.6rem' }}>
             {topPendingTasks.length > 0 ? topPendingTasks.map((t, index) => {
               const taglines = ["Still waiting 👀", "Pending... don't ignore 😏", "This needs your attention"];
               const taglinePos = (t.id.length + index) % taglines.length;
