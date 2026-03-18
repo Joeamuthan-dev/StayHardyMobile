@@ -342,7 +342,7 @@ const Routine: React.FC = () => {
 
       <div className="routine-content-grid" style={{ display: 'grid', gridTemplateColumns: '0.75fr 1.25fr', gap: '1.5rem', alignItems: 'start' }}>
         {/* Left Side: Daily Action */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <section className="routine-daily-actions" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>Daily Actions</h2>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -416,7 +416,7 @@ const Routine: React.FC = () => {
         </section>
 
         {/* Right Side: Chart and Consistency with Grouped Controls */}
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <section className="routine-right-section" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="glass-card chart-section-card" style={{ padding: '1.5rem', borderRadius: '1.5rem', minHeight: '440px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', gap: '1rem' }}>
               <h2 style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-main)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Routine Consistency</h2>
@@ -456,7 +456,7 @@ const Routine: React.FC = () => {
           </div>
 
           {/* Performance Summary Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+          <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
             {categoryAverages.map(cat => (
               <div key={cat.category} className="glass-card" style={{ padding: '1rem', borderRadius: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <div style={{ position: 'relative', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -833,7 +833,28 @@ const Routine: React.FC = () => {
           100% { transform: scale(1); }
         }
         
-        @media (max-width: 1024px) { .routine-content-grid { grid-template-columns: 1fr !important; } }
+        @media (max-width: 1024px) {
+          .routine-content-grid {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 1.5rem !important;
+          }
+          .routine-right-section {
+            display: contents !important;
+          }
+          .routine-daily-actions { order: 1; }
+          .chart-section-card { order: 2; }
+          .stats-grid { order: 3; }
+        }
+        
+        @media (max-width: 480px) {
+          .chart-section-card {
+            padding: 1rem !important;
+          }
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
       `}</style>
     </div>
   );

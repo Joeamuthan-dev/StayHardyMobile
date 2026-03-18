@@ -474,6 +474,7 @@ const HomeDashboard: React.FC = () => {
         }
         @media (max-width: 480px) {
           .routine-snapshot-grid { grid-template-columns: 1fr; }
+          .inner-tasks-grid { grid-template-columns: 1fr !important; }
         }
 
         .snapshot-card {
