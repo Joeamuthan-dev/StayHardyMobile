@@ -601,6 +601,7 @@ const HomeDashboard: React.FC = () => {
           .status-tagline-container {
             display: none !important;
           }
+          .inner-tasks-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
       <div className="aurora-bg">
@@ -719,7 +720,7 @@ const HomeDashboard: React.FC = () => {
               Top 2 Pending Tasks
             </p>
           )}
-          <div className="inner-tasks-grid" style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem' }}>
+          <div className="inner-tasks-grid" style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.6rem' }}>
             {topPendingTasks.length > 0 ? topPendingTasks.map((t, index) => {
               const taglines = ["Still waiting 👀", "Pending... don't ignore 😏", "This needs your attention"];
               const taglinePos = (t.id.length + index) % taglines.length;

@@ -23,7 +23,7 @@ const BottomNav: React.FC<{ isHidden?: boolean }> = ({ isHidden }) => {
     { path: '/stats', icon: 'insert_chart', label: t('stats') },
     { path: '/dashboard', icon: 'checklist', label: t('home') },
     { path: '/goals', icon: 'star', label: t('goals') },
-    { path: '/routine', icon: 'calendar_check', label: t('routine') },
+    { path: '/routine', icon: 'calendar_check', label: t('routine'), hasBadge: true, badgeText: 'NEW' },
     { path: '/calendar', icon: 'calendar_month', label: 'Calendar' },
     { path: '/planner', icon: 'history', label: t('timeline') },
     ...(user?.role === 'admin' ? [{ path: '/admin', icon: 'admin_panel_settings', label: 'Admin Hub' }] : []),
@@ -73,6 +73,25 @@ const BottomNav: React.FC<{ isHidden?: boolean }> = ({ isHidden }) => {
       {/* ── Desktop left sidebar (hidden on mobile) ── */}
       {!isHidden && (
         <aside className="desktop-sidebar">
+          <style>{`
+            @keyframes pulseGlow {
+              0% { box-shadow: 0 0 0 0px rgba(16, 185, 129, 0.4); }
+              70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+              100% { box-shadow: 0 0 0 0px rgba(16, 185, 129, 0); }
+            }
+            .nav-badge {
+              margin-left: auto;
+              background: #10b981;
+              color: #ffffff;
+              font-size: 0.6rem;
+              font-weight: 900;
+              padding: 2px 6px;
+              border-radius: 10px;
+              letter-spacing: 0.05em;
+              box-shadow: 0 0 0 0px rgba(16, 185, 129, 0.4);
+              animation: pulseGlow 2s infinite;
+            }
+          `}</style>
           <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
             <img src="https://tiavhmbpplerffdjmodw.supabase.co/storage/v1/object/sign/APPMEDIA/STAY.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9hYjVjYTJiZS0xMmVjLTQwNmYtOWZmNy03YmJmOGIzMTc5YWEiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJBUFBNRURJQS9TVEFZLnBuZyIsImlhdCI6MTc3MzgyNDg1OSwiZXhwIjoxOTMxNTA0ODU5fQ.DRm3ClsU3QcR4ejuNhG1f0BjvSQjNfhRIFQGu1axH4w" alt="logo" style={{ width: '1.66rem', height: '1.66rem', objectFit: 'contain' }} />
             <span>StayHardy</span>
@@ -95,6 +114,9 @@ const BottomNav: React.FC<{ isHidden?: boolean }> = ({ isHidden }) => {
                   {item.icon}
                 </span>
                 <span>{item.label}</span>
+                {(item as any).hasBadge && (
+                  <span className="nav-badge">{(item as any).badgeText}</span>
+                )}
               </button>
             ))}
           </nav>
