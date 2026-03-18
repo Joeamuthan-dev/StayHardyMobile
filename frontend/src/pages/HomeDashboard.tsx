@@ -474,7 +474,6 @@ const HomeDashboard: React.FC = () => {
         }
         @media (max-width: 480px) {
           .routine-snapshot-grid { grid-template-columns: 1fr; }
-          .inner-tasks-grid { grid-template-columns: 1fr !important; }
         }
 
         .snapshot-card {
@@ -575,6 +574,7 @@ const HomeDashboard: React.FC = () => {
 
         @media (max-width: 650px) {
           .upcoming-goals-grid { grid-template-columns: 1fr !important; }
+          .inner-tasks-grid { grid-template-columns: 1fr !important; }
         }
 
         @media (min-width: 769px) {
