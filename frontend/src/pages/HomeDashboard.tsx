@@ -800,16 +800,16 @@ const HomeDashboard: React.FC = () => {
         {/* 3. Upcoming Goals Snapshot Neon Box */}
         <div className="neon-box clickable-neon-box" onClick={() => navigate('/goals')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Goals Snapshot</h2>
+            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Goals Due Soon</h2>
 
           </div>
 
-          <div className="upcoming-goals-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+          <div className="upcoming-goals-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
             {([...goals].filter(g => g.status === 'pending').sort((a, b) => {
                if (!a.targetDate) return 1;
                if (!b.targetDate) return -1;
                return new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime();
-            }).slice(0, 3).map(goal => {
+            }).slice(0, 2).map(goal => {
 
                
                 const calToday = new Date();
