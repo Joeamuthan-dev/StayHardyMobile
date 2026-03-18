@@ -735,26 +735,26 @@ const HomeDashboard: React.FC = () => {
                   {/* Priority is intentionally hidden from this view */}
                 </div>
               );
-            }) : <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', gridColumn: 'span 2', padding: '0.75rem' }}>No pending actions today.</div>}
-
-            {/* Upcoming Reminders Hook below task list setup grid frame */}
-            {upcomingReminders.length > 0 && (
-              <div style={{ gridColumn: 'span 2', marginTop: '0.4rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
-                <div style={{ fontSize: '0.7rem', fontWeight: 900, color: '#10b981', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Upcoming Reminders (3 Days)</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
-                  {upcomingReminders.map((r, i) => (
-                    <Link key={i} to="/calendar" className="reminder-row-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.01)', cursor: 'pointer', textDecoration: 'none', width: '100%', boxSizing: 'border-box' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', maxWidth: '75%', overflow: 'hidden' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: '#10b981', opacity: 0.8 }}>notifications</span>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>{r.title}</span>
-                      </div>
-                      <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 800 }}>{r.date.split('-').slice(1).join('/')}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
+            }) : <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', padding: '0.75rem' }}>No pending actions today.</div>}
           </div>
+
+          {/* Upcoming Reminders Hook below task list setup grid frame */}
+          {upcomingReminders.length > 0 && (
+            <div style={{ marginTop: '0.4rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 900, color: '#10b981', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Upcoming Reminders (3 Days)</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+                {upcomingReminders.map((r, i) => (
+                  <Link key={i} to="/calendar" className="reminder-row-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.01)', cursor: 'pointer', textDecoration: 'none', width: '100%', boxSizing: 'border-box' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', maxWidth: '75%', overflow: 'hidden' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: '#10b981', opacity: 0.8 }}>notifications</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>{r.title}</span>
+                    </div>
+                    <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 800 }}>{r.date.split('-').slice(1).join('/')}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Desktop Split Grid wrapper starting node down to Goal Snap closes inclusive triggers flawlessly forwards */}
