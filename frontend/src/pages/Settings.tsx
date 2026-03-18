@@ -31,6 +31,7 @@ const Settings: React.FC = () => {
 
 
 
+  /*
   const handleExportData = async () => {
     if (!user?.id) return;
     try {
@@ -44,6 +45,7 @@ const Settings: React.FC = () => {
       const link = document.createElement('a'); link.download = `stayhardy_data_${user.name || 'user'}.json`; link.href = URL.createObjectURL(blob); link.click();
     } catch (err) { console.error('Export failed:', err); }
   };
+  */
 
   const handleResetData = async () => {
     if (!user?.id || !showConfirmReset.type) return;
@@ -409,10 +411,12 @@ const Settings: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           <h3 style={{ fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em', marginLeft: '0.5rem', marginBottom: '0.25rem' }}>Data Management & Privacy</h3>
           <div className="glass-card" style={{ padding: '0.5rem' }}>
+            {/* 
             <button onClick={handleExportData} style={{ width: '100%', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-main)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><span className="material-symbols-outlined" style={{ color: '#10b981' }}>download</span><span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Export My Data</span></div>
               <span className="material-symbols-outlined" style={{ color: '#64748b', fontSize: '1.2rem' }}>chevron_right</span>
             </button>
+            */}
             <button onClick={() => setShowConfirmReset({ show: true, type: 'delete' })} style={{ width: '100%', padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}><span className="material-symbols-outlined">person_remove</span><span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Delete Account</span></div>
               <span className="material-symbols-outlined" style={{ color: '#64748b', fontSize: '1.2rem' }}>chevron_right</span>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
 import BottomNav from '../components/BottomNav';
@@ -6,6 +7,7 @@ import BottomNav from '../components/BottomNav';
 
 const Feedback: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [message, setMessage] = useState('');
   const [type, setType] = useState('Feature');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,7 +76,23 @@ const Feedback: React.FC = () => {
         <div className="aurora-gradient-2"></div>
       </div>
 
-      <header className="dashboard-header" style={{ marginBottom: '2.5rem' }}>
+      <header className="dashboard-header" style={{ marginBottom: '2.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <button 
+          onClick={() => navigate('/settings')}
+          className="notification-btn"
+          style={{ 
+            background: 'rgba(255, 255, 255, 0.05)', 
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '40px',
+            height: '40px',
+            borderRadius: '12px'
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ color: 'white' }}>chevron_left</span>
+        </button>
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 900, margin: 0, color: 'white' }}>Feedback</h1>
           <p style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '0.25rem' }}>

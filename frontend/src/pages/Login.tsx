@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import gsap from 'gsap';
 import { supabase } from '../supabase';
 
@@ -58,8 +58,6 @@ const Login: React.FC = () => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const navigate = useNavigate();
-
   // Redirect instantly if user is already logged in
   React.useEffect(() => {
     if (user && !authLoading) {
@@ -574,6 +572,7 @@ const Login: React.FC = () => {
             <span style={{ color: 'var(--primary)' }}>{isLogin ? 'Sign Up' : 'Log In'}</span>
           </a>
           
+          {/* 
           {isLogin && (
             <a 
               href="#" 
@@ -583,6 +582,7 @@ const Login: React.FC = () => {
               Forgot your PIN?
             </a>
           )}
+          */}
         </div>
       </div>
     </div>

@@ -83,12 +83,13 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onE
     isDragging
   } = useSortable({ id: task.id });
 
+  const priorityColor = task.priority === 'High' ? '#ef4444' : task.priority === 'Medium' ? '#f59e0b' : '#10b981';
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: transition || 'all 0.2s ease',
     zIndex: isDragging ? 20 : 'auto',
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.7 : 1,
   };
 
   return (
@@ -96,62 +97,111 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onE
       ref={setNodeRef}
       style={{
         ...style,
-        borderLeft: `4px solid ${task.priority === 'High' ? '#ef4444' : task.priority === 'Medium' ? '#f59e0b' : '#10b981'}`,
-        cursor: 'pointer' // explicitly indicate clickability
+        position: 'relative',
+        cursor: 'pointer',
+        padding: '1.25rem',
+        borderRadius: '24px',
+        background: 'linear-gradient(145deg, rgba(20,20,20,0.95), rgba(10,10,10,0.95))',
+        border: '1px solid rgba(255,255,255,0.03)',
+        boxShadow: `inset 4px 0 0 0 ${priorityColor}, 0 8px 20px rgba(0,0,0,0.4)`
       }}
       {...attributes}
       {...listeners}
-      className={`glass-card task-card group ${task.status === 'completed' ? 'completed' : ''}`}
+      className={`task-card-modern ${task.status === 'completed' ? 'completed' : ''}`}
       onClick={(e) => {
-        // Only trigger if not clicking checkbox or dragging
         if ((e.target as HTMLElement).closest('.checkbox-custom')) return;
-        onEdit(task); // We'll modify onEdit to act as view/edit details on click
+        onEdit(task);
+      }}
+      onMouseEnter={(e) => {
+        if (!isDragging) {
+          e.currentTarget.style.transform = 'translateY(-2px) scale(1.01)';
+          e.currentTarget.style.boxShadow = `inset 4px 0 0 0 ${priorityColor}, 0 12px 25px rgba(0,0,0,0.5), -4px 0 15px ${priorityColor}33`; // Add subtle glow
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isDragging) {
+          e.currentTarget.style.transform = 'translateY(0) scale(1)';
+          e.currentTarget.style.boxShadow = `inset 4px 0 0 0 ${priorityColor}, 0 8px 20px rgba(0,0,0,0.4)`;
+        }
       }}
     >
-      <div className="task-card-header" style={{ marginBottom: '0.5rem', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
-          <div
-            className={`checkbox-custom ${task.status === 'completed' ? 'checked' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onToggle(task); }}
-          >
-            {task.status === 'completed' && <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: 'white' }}>check</span>}
-          </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', minWidth: 0 }}>
+        <div
+          className={`checkbox-custom ${task.status === 'completed' ? 'checked' : ''}`}
+          onClick={(e) => { e.stopPropagation(); onToggle(task); }}
+          style={{ 
+            marginTop: '0.1rem',
+            width: '22px', 
+            height: '22px', 
+            borderRadius: '50%', 
+            border: task.status === 'completed' ? 'none' : '2px solid rgba(255,255,255,0.15)',
+            background: task.status === 'completed' ? '#10b981' : 'rgba(255,255,255,0.03)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            transition: 'all 0.2s ease',
+            cursor: 'pointer'
+          }}
+        >
+          {task.status === 'completed' && <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: 'white', fontWeight: 900 }}>check</span>}
+        </div>
+        
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           <h4 
-            className={`task-card-title ${task.status === 'completed' ? 'strike-through' : ''}`} 
+            className={`${task.status === 'completed' ? 'strike-through' : ''}`} 
             style={{ 
               margin: 0,
-              flex: 1,
-              minWidth: 0
+              fontSize: '0.95rem',
+              fontWeight: 800,
+              color: task.status === 'completed' ? 'rgba(255,255,255,0.3)' : '#ffffff',
+              letterSpacing: '0.02em',
+              lineHeight: 1.3
             }}
           >
             {task.title}
           </h4>
-        </div>
-      </div>
+          
+          {task.description && (
+            <p style={{ 
+              margin: 0, 
+              color: 'rgba(255,255,255,0.4)', 
+              fontSize: '0.75rem',
+              lineHeight: 1.5,
+              fontWeight: 600,
+              textTransform: 'uppercase', 
+              letterSpacing: '0.04em'
+            }}>
+              {task.description}
+            </p>
+          )}
 
-      <div style={{ marginBottom: '0.5rem' }}>
-        {task.image_url && (
-          <div style={{ width: '100%', height: '120px', borderRadius: '0.75rem', overflow: 'hidden', marginBottom: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <img src={task.image_url} alt={task.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {task.image_url && (
+            <div style={{ width: '100%', height: '120px', borderRadius: '0.75rem', overflow: 'hidden', marginTop: '0.25rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <img src={task.image_url} alt={task.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          )}
+
+          <div style={{ marginTop: '0.5rem' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                padding: '0.25rem 0.6rem',
+                borderRadius: '8px',
+                fontSize: '0.6rem',
+                fontWeight: 900,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                background: getCategoryColor(task.category).bg,
+                color: getCategoryColor(task.category).text,
+                border: `1px solid ${getCategoryColor(task.category).border}`,
+                boxShadow: `0 2px 8px ${getCategoryColor(task.category).bg}`
+              }}
+            >
+              {task.category || 'General'}
+            </span>
           </div>
-        )}
-        {task.description && (
-          <p className="task-card-note" style={{ margin: 0, color: 'var(--text-secondary)' }}>{task.description}</p>
-        )}
-      </div>
-
-
-      <div style={{ marginTop: 'auto' }}>
-        <span
-          className="task-card-category"
-          style={{
-            background: getCategoryColor(task.category).bg,
-            color: getCategoryColor(task.category).text,
-            borderColor: getCategoryColor(task.category).border
-          }}
-        >
-          {task.category || 'General'}
-        </span>
+        </div>
       </div>
     </div>
   );
@@ -165,11 +215,20 @@ interface DroppableColumnProps {
   onEdit: (task: Task) => void;
 }
 
-const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onToggle, onEdit }) => {
-
-
+const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, tasks, onToggle, onEdit }) => {
   const { setNodeRef, isOver } = useDroppable({ id });
 
+  const getColumnIcon = () => {
+    if (id === 'High') return <span style={{ color: '#ef4444', fontWeight: 900, fontSize: '1rem', marginRight: '6px' }}>!</span>;
+    if (id === 'Medium') return <span className="material-symbols-outlined" style={{ color: '#f59e0b', fontSize: '1rem', marginRight: '6px', verticalAlign: 'middle', fontWeight: 700 }}>bar_chart</span>;
+    return <span className="material-symbols-outlined" style={{ color: '#10b981', fontSize: '1rem', marginRight: '6px', verticalAlign: 'middle', fontWeight: 700 }}>done_all</span>;
+  }
+
+  const getCustomTitle = () => {
+    if (id === 'High') return 'GAME CHANGER';
+    if (id === 'Medium') return 'IMPORTANT';
+    return 'LATER';
+  }
 
   return (
     <div
@@ -177,28 +236,34 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onT
       className={`priority-column ${isOver ? 'is-over' : ''}`}
       style={{
         transition: 'all 0.2s ease',
+        background: 'rgba(15,15,15,0.4)',
+        border: '1px solid rgba(255,255,255,0.02)',
+        borderRadius: '32px',
+        padding: '1.5rem',
+        height: '100%',
       }}
     >
-      <div className="priority-column-header" style={{ justifyContent: 'flex-start', gap: '0.75rem', paddingBottom: '0.75rem' }}>
-        <div className="priority-column-title" style={{ color: 'var(--text-main)', fontSize: '0.7rem' }}>
-          <span className="material-symbols-outlined" style={{
-            fontSize: '1rem',
-            color: id === 'High' ? '#ef4444' : id === 'Medium' ? '#fbbf24' : '#10b981'
-          }}>
-            {id === 'High' ? 'priority_high' : id === 'Medium' ? 'equalizer' : 'low_priority'}
-          </span>
-          {title}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+        <div style={{ 
+          color: '#ffffff', 
+          fontSize: '0.8rem', 
+          fontWeight: 900, 
+          letterSpacing: '0.05em',
+          display: 'flex',
+          alignItems: 'center',
+          textTransform: 'uppercase'
+        }}>
+          {getColumnIcon()}
+          {getCustomTitle()}
         </div>
         <span 
-          className="column-count"
           style={{
-            background: id === 'High' ? 'rgba(239, 68, 68, 0.1)' : id === 'Medium' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+            background: id === 'High' ? 'rgba(239, 68, 68, 0.15)' : id === 'Medium' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
             color: id === 'High' ? '#ef4444' : id === 'Medium' ? '#f59e0b' : '#10b981',
-            padding: '0.3rem 0.6rem',
-            borderRadius: '2rem',
-            fontSize: '0.8rem', // 0.8rem is larger than 0.7rem title text!
+            padding: '2px 8px',
+            borderRadius: '12px',
+            fontSize: '0.85rem',
             fontWeight: 900,
-            border: `1px solid ${id === 'High' ? 'rgba(239, 68, 68, 0.15)' : id === 'Medium' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)'}`
           }}
         >
           {tasks.length}
@@ -206,13 +271,13 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onT
       </div>
 
       <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-
         <div 
           className="task-grid" 
           style={{ 
             display: 'grid', 
             gridTemplateColumns: '1fr', 
-            gap: '1rem' 
+            gap: '1.25rem',
+            paddingBottom: '2rem'
           }}
         >
           {tasks.map(task => (
@@ -225,9 +290,6 @@ const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, title, tasks, onT
           ))}
         </div>
       </SortableContext>
-
-
-
     </div>
   );
 };
@@ -299,129 +361,60 @@ const Dashboard: React.FC = () => {
 
 
   const getDynamicQuote = useCallback((currentTasks: Task[]) => {
-    const today = new Date().setHours(0, 0, 0, 0);
-    const todayCreatedTasks = currentTasks.filter(t => new Date(t.createdAt).setHours(0, 0, 0, 0) === today);
-    const todayCompletedTasks = currentTasks.filter(t =>
-      t.status === 'completed' &&
-      t.updatedAt &&
-      new Date(t.updatedAt).setHours(0, 0, 0, 0) === today
-    );
-
-    const score = todayCreatedTasks.length > 0
-      ? Math.floor((todayCompletedTasks.length / todayCreatedTasks.length) * 100)
-      : 0;
-
-    if (todayCreatedTasks.length === 0) {
-      return "Your to-do list is basically a cemetery at this point.";
+    const totalTasks = currentTasks.length;
+    
+    if (totalTasks === 0) {
+      return "Start by creating your first task 🚀";
     }
 
-    if (score === 0) {
-      const items = [
-        "Is 'doing nothing' on your list? Because you're crushing it.",
-        "I’ve seen statues with more productivity than you today.",
-        "Your potential is currently in a deep coma. Time to wake it up.",
-        "Zero percent? That's not a score, that's a cry for help.",
-        "Your to-do list is starting to look like a history book.",
-        "If laziness was an Olympic sport, you’d have the gold already.",
-        "The only thing you've finished today is the oxygen in the room.",
-        "Dreaming about success is great. Waking up and working for it is better.",
-        "A journey of a thousand miles begins with... actually getting off the couch.",
-        "Zero tasks done. Is your productivity on a sabbatical?"
-      ];
-      return items[Math.floor(Math.random() * items.length)];
-    }
+    const completedTasks = currentTasks.filter(t => t.status === 'completed').length;
+    const score = Math.floor((completedTasks / totalTasks) * 100);
 
     if (score <= 20) {
       const items = [
-        "Oh, look! You did something. Should I call a parade?",
-        "One task down? Don't strain yourself, hero.",
-        "You're moving with all the urgency of a tectonic plate.",
-        "20%? My grandma moves faster while napping. Pathetic effort.",
-        "A slow start is still a start, but let's pick up the pace.",
-        "You've barely scratched the surface. Keep digging.",
-        "The bar was on the floor, and you just barely stepped over it.",
-        "Is this your 'grind mode'? Because it looks like 'idle mode'.",
-        "Progress is progress, but this is dangerously close to zero.",
-        "Moving like a snail on a salt flat. Pick it up!"
+        "Wow… creating tasks is your hobby, not completing them?",
+        "At this rate, even procrastination is disappointed.",
+        "Zero percent? That's not a score, that's a cry for help.",
+        "Your to-do list is starting to look like a history book."
       ];
       return items[Math.floor(Math.random() * items.length)];
     }
 
     if (score <= 40) {
       const items = [
-        "You're technically working. It’s barely visible, but it's there.",
-        "Slow and steady wins the race, but you're not even in the race yet.",
-        "Better than zero, I guess. Barely.",
-        "Waking up? You're still half-asleep based on this progress.",
-        "You're at the bottom of the mountain looking up. Start climbing.",
-        "Don't stop now, you're just starting to be useful.",
-        "Actually moving now. Let's see if it lasts more than five minutes.",
-        "The engine is sputtering. Give it some gas.",
-        "You're in the 'Participation Trophy' zone right now.",
-        "Low battery energy detected. Plug into your goals."
+        "Good start… but are we stopping here?",
+        "You’re halfway to being serious. Keep going.",
+        "A slow start is still a start, but let's pick up the pace.",
+        "Don't stop now, you're just starting to be useful."
       ];
       return items[Math.floor(Math.random() * items.length)];
     }
 
     if (score <= 60) {
       const items = [
-        "Aggressively average. You’re the human version of a lukewarm cup of water.",
-        "Halfway there. Or halfway to giving up. We’ll see.",
-        "You're doing 'just enough' to not feel guilty. I see you.",
-        "Average performance. You're the human equivalent of unflavored oatmeal.",
-        "The middle of the road is where the accidents happen. Pick a side.",
-        "You're neither failing nor succeeding. You're just... existing.",
-        "Balanced, as all things should be. But also kind of boring.",
-        "Not bad, but 'not bad' doesn't build empires.",
-        "You're the vanilla ice cream of productivity. Nice, but forgettable.",
-        "Operating at 50% capacity. Your goals deserve 100%."
+        "Not bad. But you can definitely do better.",
+        "Consistency is missing. Fix that.",
+        "Aggressively average. Let's aim higher.",
+        "You're doing 'just enough' to not feel guilty. I see you."
       ];
       return items[Math.floor(Math.random() * items.length)];
     }
 
     if (score <= 80) {
       const items = [
-        "Actually getting things done? Who are you and what have you done with the owner?",
-        "Don't get cocky. You still have plenty of time to fail.",
-        "Impressive. For you. Which isn't saying much, but still.",
-        "You're actually being useful. Don't ruin it by taking a 3-hour break.",
-        "Consistency is key. You've found the key, now don't lose it.",
+        "Now this looks promising. Keep the momentum.",
+        "Discipline is kicking in. Don’t slow down.",
         "Solid work. You're outperforming 80% of the population right now.",
-        "The momentum is real. Ride the wave.",
-        "Keep this up and people might actually start relying on you.",
-        "Serious progress detected. Stay in the zone.",
-        "You're breathing down the neck of greatness. Keep pushing."
-      ];
-      return items[Math.floor(Math.random() * items.length)];
-    }
-
-    if (score < 100) {
-      const items = [
-        "Absolute beast mode. Almost perfect. Key word: almost.",
-        "Save some productivity for the rest of us, you overachiever.",
-        "You're so close to 100% it’s actually annoying.",
-        "Nearly elite. Keep that ego in check though.",
-        "Focus. Execution. Domination. You're almost there.",
-        "The finish line is in sight. Don't trip on your own success.",
-        "You're making this look easy. Don't get lazy at the end.",
-        "Elite performance detected. Keep the pressure on.",
-        "The beast is awake. Don't let it go back to sleep.",
-        "Almost legendary. Just a few more steps."
+        "The momentum is real. Ride the wave."
       ];
       return items[Math.floor(Math.random() * items.length)];
     }
 
     const items = [
-      "100% completion? You’re definitely lying, but I’ll take it. Legend.",
-      "Productivity God. Now go touch some grass, you machine.",
-      "Clean sweep! Are you even human or just a well-coded bot?",
-      "THE GOAT. 100% sweep. You productivity monster.",
-      "Perfection achieved. Today, you are the master of your fate.",
-      "Mission accomplished. Now go celebrate... by planning tomorrow.",
-      "Unstoppable. Unmatched. Unbelievable. You did it.",
-      "The board is empty, but your legacy is growing. Nice work.",
-      "Full stack of wins today. You're the human equivalent of a victory lap.",
-      "Absolute absolute monster productivity. You are THE LEGEND!"
+      "Excellent. This is what focus looks like. 🔥",
+      "You’re doing what most people avoid. Respect. 👑",
+      "Absolute beast mode. Almost perfect.",
+      "Clean sweep! Are you even human or just a well-coded bot?"
     ];
     return items[Math.floor(Math.random() * items.length)];
   }, []);

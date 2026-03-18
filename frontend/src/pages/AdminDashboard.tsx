@@ -5,6 +5,51 @@ import { supabase } from '../supabase';
 import BottomNav from '../components/BottomNav';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
+const UserMetrics: React.FC<{ userId: string }> = ({ userId }) => {
+  const [counts, setCounts] = useState({ tasks: 0, goals: 0, routines: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCounts = async () => {
+      setLoading(true);
+      const [
+        { count: tCount },
+        { count: gCount },
+        { count: rCount }
+      ] = await Promise.all([
+        supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('userId', userId),
+        supabase.from('goals').select('*', { count: 'exact', head: true }).eq('userId', userId),
+        supabase.from('routines').select('*', { count: 'exact', head: true }).eq('user_id', userId)
+      ]);
+      if (isMounted) {
+        setCounts({ tasks: tCount || 0, goals: gCount || 0, routines: rCount || 0 });
+        setLoading(false);
+      }
+    };
+    fetchCounts();
+    return () => { isMounted = false; };
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <React.Fragment>
+        <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', fontWeight: 900, color: 'white', fontSize: '0.85rem', opacity: 0.5 }}>...</td>
+        <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', fontWeight: 900, color: 'white', fontSize: '0.85rem', opacity: 0.5 }}>...</td>
+        <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', fontWeight: 900, color: 'white', fontSize: '0.85rem', opacity: 0.5 }}>...</td>
+      </React.Fragment>
+    );
+  }
+
+  return (
+    <React.Fragment>
+      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', fontWeight: 900, color: 'white', fontSize: '0.85rem' }}>{counts.tasks}</td>
+      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', fontWeight: 900, color: 'white', fontSize: '0.85rem' }}>{counts.goals}</td>
+      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'center', fontWeight: 900, color: 'white', fontSize: '0.85rem' }}>{counts.routines}</td>
+    </React.Fragment>
+  );
+};
+
 const AdminDashboard: React.FC = () => {
   const [isSidebarHidden, setIsSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const toggleSidebar = () => { setIsSidebarHidden(prev => { const next = !prev; localStorage.setItem('sidebarHidden', next.toString()); return next; }); };
@@ -25,6 +70,8 @@ const AdminDashboard: React.FC = () => {
   const [userTabFilter, setUserTabFilter] = useState<'All' | 'admin' | 'user'>('All');
   const [userSortOrder, setUserSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
+  const [userPageOffset, setUserPageOffset] = useState(0);
 
   useEffect(() => {
     // Role check
@@ -41,10 +88,11 @@ const AdminDashboard: React.FC = () => {
       const { data: feedbackData } = await supabase
         .from('feedback')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
       
       if (feedbackData) {
-        setFeedbacks(feedbackData.slice(0, 50));
+        setFeedbacks(feedbackData);
         setStats(prev => ({ ...prev, feedback: feedbackData.length }));
       }
 
@@ -54,30 +102,58 @@ const AdminDashboard: React.FC = () => {
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (userError) console.error('Error fetching users:', userError);
-      
-      if (userData) {
-        setUsers(userData);
-        setStats(prev => ({ ...prev, users: userData.length }));
-      }
+      if (userError) console.error('Error fetching admin user stats:', userError);
 
-      // 3. Fetch All Tasks for Charting
-      const { data: taskData } = await supabase
-        .from('tasks')
-        .select('id, created_at')
-        .order('created_at', { ascending: false });
-      
-      if (taskData) {
-        setStats(prev => ({ ...prev, tasks: taskData.length }));
+      // 3. Fetch All Tasks, Goals, Routines for Charting & Aggregation
+      const [
+        { data: taskData },
+        { data: goalData },
+        { data: routineData }
+      ] = await Promise.all([
+        supabase.from('tasks').select('id, createdAt, userId'),
+        supabase.from('goals').select('id, createdAt, userId'),
+        supabase.from('routines').select('id, created_at, user_id')
+      ]);
+
+      // Standardize the shape for our local aggregations (convert createdAt -> created_at, user_id -> userId)
+      const tasks = (taskData || []).map(t => ({ id: t.id, created_at: t.createdAt, userId: t.userId }));
+      const goals = (goalData || []).map(g => ({ id: g.id, created_at: g.createdAt, userId: g.userId }));
+      const routines = (routineData || []).map(r => ({ id: r.id, created_at: r.created_at, userId: r.user_id }));
+
+      setStats(prev => ({ 
+        ...prev, 
+        tasks: tasks.length,
+        goals: goals.length,
+        routines: routines.length
+      }));
+
+      // Aggregate counts per user to avoid N+1 queries natively via memory map
+      if (userData) {
+        const userActivityMap: Record<string, { tasks: number, goals: number, routines: number }> = {};
+        userData.forEach(u => {
+           userActivityMap[u.id] = { tasks: 0, goals: 0, routines: 0 };
+        });
+
+        tasks.forEach(t => { if (userActivityMap[t.userId]) userActivityMap[t.userId].tasks++; });
+        goals.forEach(g => { if (userActivityMap[g.userId]) userActivityMap[g.userId].goals++; });
+        routines.forEach(r => { if (userActivityMap[r.userId]) userActivityMap[r.userId].routines++; });
+
+        const enrichedUsers = userData.map((u: any) => ({
+          ...u,
+          stats: userActivityMap[u.id] || { tasks: 0, goals: 0, routines: 0 }
+        }));
+
+        setUsers(enrichedUsers);
+        setStats(prev => ({ ...prev, users: enrichedUsers.length }));
       }
 
       // 4. Process Chart Data
-      processChartData(userData || [], taskData || [], timeRange);
+      processChartData(userData || [], tasks, goals, routines, timeRange);
     };
 
     fetchData();
 
-    // Subscribe to changes
+    // Subscribe to changes (omitted goal/routine specific channels to respect requirement: minimal additions, reuse existing structure, avoid heavy subscriptions if minimal live updates are acceptable)
     const feedbackChannel = supabase
       .channel('admin_feedback')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'feedback' }, () => fetchData())
@@ -92,9 +168,9 @@ const AdminDashboard: React.FC = () => {
       supabase.removeChannel(feedbackChannel);
       supabase.removeChannel(userChannel);
     };
-  }, [user, timeRange]);
+  }, [user, timeRange, userPageOffset]);
 
-  const processChartData = (users: any[], tasks: any[], days: number) => {
+  const processChartData = (usersData: any[], tasks: any[], goals: any[], routines: any[], days: number) => {
     const data = [];
     const now = new Date();
     
@@ -104,13 +180,17 @@ const AdminDashboard: React.FC = () => {
       const dateStr = date.toISOString().split('T')[0];
       const displayDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-      const daySignups = users.filter(u => u.created_at && u.created_at.startsWith(dateStr)).length;
+      const daySignups = usersData.filter(u => u.created_at && u.created_at.startsWith(dateStr)).length;
       const dayTasks = tasks.filter(t => t.created_at && t.created_at.startsWith(dateStr)).length;
+      const dayGoals = goals.filter(g => g.created_at && g.created_at.startsWith(dateStr)).length;
+      const dayRoutines = routines.filter(r => r.created_at && r.created_at.startsWith(dateStr)).length;
 
       data.push({
         name: displayDate,
         signups: daySignups,
         tasks: dayTasks,
+        goals: dayGoals,
+        routines: dayRoutines
       });
     }
     setChartData(data);
@@ -353,6 +433,14 @@ const AdminDashboard: React.FC = () => {
                         <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                       </linearGradient>
+                      <linearGradient id="colorGoals" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorRoutines" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                      </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                     <XAxis 
@@ -379,6 +467,8 @@ const AdminDashboard: React.FC = () => {
                     />
                     <Area type="monotone" dataKey="signups" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorSignups)" name="New Users" />
                     <Area type="monotone" dataKey="tasks" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorTasks)" name="Tasks Created" />
+                    <Area type="monotone" dataKey="goals" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorGoals)" name="Goals Created" />
+                    <Area type="monotone" dataKey="routines" stroke="#a855f7" strokeWidth={3} fillOpacity={1} fill="url(#colorRoutines)" name="Routines Created" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -404,7 +494,7 @@ const AdminDashboard: React.FC = () => {
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {users.slice(0, 3).map(u => (
+                  {users.slice(0, 10).map(u => (
                     <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
                       <div>
                         <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>{u.name}</div>
@@ -497,6 +587,9 @@ const AdminDashboard: React.FC = () => {
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                       <th style={{ padding: '1rem 1.5rem', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.1em' }}>User Details</th>
+                      <th style={{ padding: '1rem 1.5rem', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#3b82f6', letterSpacing: '0.1em', textAlign: 'center' }}>Tasks</th>
+                      <th style={{ padding: '1rem 1.5rem', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#f59e0b', letterSpacing: '0.1em', textAlign: 'center' }}>Goals</th>
+                      <th style={{ padding: '1rem 1.5rem', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#a855f7', letterSpacing: '0.1em', textAlign: 'center' }}>Routines</th>
                       <th style={{ padding: '1rem 1.5rem', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.1em' }}>Last Active</th>
                       <th style={{ padding: '1rem 1.5rem', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.1em', textAlign: 'center' }}>Status</th>
                       <th style={{ padding: '1rem 1.5rem', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.1em', textAlign: 'right' }}>Management</th>
@@ -516,6 +609,7 @@ const AdminDashboard: React.FC = () => {
                         const dateB = new Date(b.created_at).getTime();
                         return userSortOrder === 'newest' ? dateB - dateA : dateA - dateB;
                       })
+                      .slice(userPageOffset, userPageOffset + 10)
                       .map((u, idx) => {
                         return (
                         <tr 
@@ -530,8 +624,13 @@ const AdminDashboard: React.FC = () => {
                           <td style={{ padding: '1.25rem 1.5rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                               <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#BBFF00', fontWeight: 800, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
-                                {(u.avatar_url || u.avatarUrl) ? (
-                                  <img src={u.avatar_url || u.avatarUrl} alt={u.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                {((u.avatar_url || u.avatarUrl) && !brokenImages.has(u.id)) ? (
+                                  <img 
+                                    src={u.avatar_url || u.avatarUrl} 
+                                    alt={u.name} 
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                    onError={() => setBrokenImages(prev => new Set(prev).add(u.id))}
+                                  />
                                 ) : (
                                   u.name?.charAt(0).toUpperCase() || 'U'
                                 )}
@@ -542,6 +641,7 @@ const AdminDashboard: React.FC = () => {
                               </div>
                             </div>
                           </td>
+                          <UserMetrics userId={u.id} />
                           <td style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>
                             {u.created_at ? new Date(u.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : 'N/A'}
                           </td>
@@ -585,6 +685,37 @@ const AdminDashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+
+            {/* Pagination Controls */}
+            {users.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', padding: '0 1rem' }}>
+                <button
+                  onClick={() => setUserPageOffset(Math.max(0, userPageOffset - 10))}
+                  disabled={userPageOffset === 0}
+                  style={{
+                    padding: '0.5rem 1rem', background: userPageOffset === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(187,255,0,0.1)',
+                    color: userPageOffset === 0 ? '#64748b' : '#BBFF00', border: 'none', borderRadius: '0.5rem',
+                    fontWeight: 900, cursor: userPageOffset === 0 ? 'not-allowed' : 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '10px'
+                  }}
+                >
+                  Previous
+                </button>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700 }}>
+                  Showing {(userPageOffset || 0) + 1} to {(userPageOffset || 0) + users.length}
+                </div>
+                <button
+                  onClick={() => setUserPageOffset(userPageOffset + 10)}
+                  disabled={users.length < 10}
+                  style={{
+                    padding: '0.5rem 1rem', background: users.length < 10 ? 'rgba(255,255,255,0.05)' : 'rgba(187,255,0,0.1)',
+                    color: users.length < 10 ? '#64748b' : '#BBFF00', border: 'none', borderRadius: '0.5rem',
+                    fontWeight: 900, cursor: users.length < 10 ? 'not-allowed' : 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '10px'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
             </div>
 
             {users.length === 0 && (

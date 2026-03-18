@@ -101,19 +101,33 @@ const HomeDashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
     
-    // First-time intro logic
-    const hasSeenIntro = localStorage.getItem('has_seen_stay_hardy_intro');
-    if (!hasSeenIntro) {
-      setTimeout(() => {
-        setIsFirstTime(true);
-        setIsIntroOpen(true);
-      }, 1500); // Slight delay for better entrance
-    }
-  }, [fetchData]);
+    // First-time intro logic (Only show once globally per user)
+    const checkAndShowIntro = async () => {
+      // Small delay to let user load fully if needed
+      if (!user) return;
+      
+      const { data } = await supabase.auth.getUser();
+      const hasSeenIntro = data.user?.user_metadata?.has_seen_stay_hardy_intro;
+      
+      if (!hasSeenIntro) {
+        setTimeout(() => {
+          setIsFirstTime(true);
+          setIsIntroOpen(true);
+        }, 1500); // Slight delay for better entrance
+      }
+    };
+    checkAndShowIntro();
+  }, [fetchData, user]);
 
-  const handleCloseIntro = () => {
+  const handleCloseIntro = async () => {
     setIsIntroOpen(false);
-    localStorage.setItem('has_seen_stay_hardy_intro', 'true');
+    
+    // Save to database so it never shows again across devices
+    if (user?.id) {
+      await supabase.auth.updateUser({
+        data: { has_seen_stay_hardy_intro: true }
+      });
+    }
   };
   
   // Automatic Daily Reset Check at Midnight
@@ -701,13 +715,27 @@ const HomeDashboard: React.FC = () => {
 
           {/* Inner Tasks List Row inside container box row frame */}
           <div className="inner-tasks-grid" style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.6rem' }}>
-            {topPendingTasks.length > 0 ? topPendingTasks.map(t => (
-              <div key={t.id} className="inner-task-row" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem 0.85rem', borderRadius: '0.85rem', border: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'all 0.2s ease' }} onClick={() => navigate('/dashboard')}>
-                <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: '#10b981', opacity: 0.7, flexShrink: 0 }}>assignment</span>
-                <div style={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                <span style={{ fontSize: '0.6rem', fontWeight: 900, background: t.priority === 'High' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', color: t.priority === 'High' ? '#ef4444' : '#f59e0b', padding: '0.15rem 0.5rem', borderRadius: '0.5rem' }}>{t.priority}</span>
-              </div>
-            )) : <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', gridColumn: 'span 2', padding: '0.75rem' }}>No pending actions today.</div>}
+            {topPendingTasks.length > 0 && (
+              <p style={{ gridColumn: 'span 2', fontSize: '0.65rem', color: '#64748b', fontWeight: 800, margin: '0 0 0.1rem 0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Top 2 Pending Tasks
+              </p>
+            )}
+            {topPendingTasks.length > 0 ? topPendingTasks.map((t, index) => {
+              const taglines = ["Still waiting 👀", "Pending... don't ignore 😏", "This needs your attention"];
+              const taglinePos = (t.id.length + index) % taglines.length;
+              const dynamicTagline = taglines[taglinePos];
+              
+              return (
+                <div key={t.id} className="inner-task-row" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem 0.85rem', borderRadius: '0.85rem', border: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'all 0.2s ease' }} onClick={() => navigate('/dashboard')}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: '#10b981', opacity: 0.7, flexShrink: 0, marginTop: '0.1rem' }}>assignment</span>
+                  <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+                    <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, marginTop: '0.15rem' }}>{dynamicTagline}</div>
+                  </div>
+                  {/* Priority is intentionally hidden from this view */}
+                </div>
+              );
+            }) : <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', gridColumn: 'span 2', padding: '0.75rem' }}>No pending actions today.</div>}
 
             {/* Upcoming Reminders Hook below task list setup grid frame */}
             {upcomingReminders.length > 0 && (
