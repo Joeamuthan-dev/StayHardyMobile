@@ -44,7 +44,7 @@ const App: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-pin" element={<ForgotPin />} />
         <Route path="/reset-pin" element={<ResetPin />} />
-        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>

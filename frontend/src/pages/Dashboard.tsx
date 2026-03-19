@@ -423,7 +423,7 @@ const Dashboard: React.FC = () => {
     if (!user?.id) return;
     const { data, error: fetchError } = await supabase
       .from('tasks')
-      .select('*')
+      .select('id, title, description, status, category, priority, createdAt, updatedAt, order_index, image_url')
       .eq('userId', user.id)
       .order('order_index', { ascending: true });
 

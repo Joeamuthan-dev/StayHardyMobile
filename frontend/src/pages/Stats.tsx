@@ -337,7 +337,7 @@ const Stats: React.FC = () => {
       // Fetch Tasks
       const { data: tasksData, error: taskErr } = await supabase
         .from('tasks')
-        .select('*')
+        .select('id, status, category, createdAt, updatedAt')
         .eq('userId', user.id);
       if (taskErr) console.error('Supabase fetch error:', taskErr);
       else if (tasksData) setTasks(tasksData as Task[]);
@@ -353,7 +353,7 @@ const Stats: React.FC = () => {
       // Fetch Routines
       const { data: routinesData } = await supabase
         .from('routines')
-        .select('*')
+        .select('id, title, days')
         .eq('user_id', user.id);
       if (routinesData) setRoutines(routinesData as Routine[]);
 
@@ -364,7 +364,7 @@ const Stats: React.FC = () => {
 
       const { data: logsData } = await supabase
         .from('routine_logs')
-        .select('*')
+        .select('routine_id, completed_at')
         .eq('user_id', user.id)
         .gte('completed_at', startDayStr);
       if (logsData) setRoutineLogs(logsData as RoutineLog[]);
@@ -372,7 +372,7 @@ const Stats: React.FC = () => {
       // Fetch Goals
       const { data: goalsData } = await supabase
         .from('goals')
-        .select('*')
+        .select('id, name, targetDate, status, progress, createdAt, updatedAt')
         .eq('userId', user.id);
       if (goalsData) setGoals(goalsData as Goal[]);
     };
@@ -478,10 +478,6 @@ const Stats: React.FC = () => {
       const dayStart = d.getTime();
       const nextDayStart = dayStart + 24 * 60 * 60 * 1000;
 
-      const tasksCreated = tasks.filter(t => {
-        const cDate = new Date(t.createdAt).getTime();
-        return cDate >= dayStart && cDate < nextDayStart;
-      }).length;
 
       const tasksCompleted = tasks.filter(t => {
         if (t.status !== 'completed' || !t.updatedAt) return false;
@@ -489,10 +485,6 @@ const Stats: React.FC = () => {
         return uDate >= dayStart && uDate < nextDayStart;
       }).length;
 
-      const goalsCreated = goals.filter(g => {
-        const cDate = new Date(g.createdAt).getTime();
-        return cDate >= dayStart && cDate < nextDayStart;
-      }).length;
 
       const goalsCompleted = goals.filter(g => {
         if (g.status !== 'completed' || !g.updatedAt) return false;
@@ -502,8 +494,8 @@ const Stats: React.FC = () => {
 
       data.push({
         name: dayStr,
-        tasks: tasksCreated + tasksCompleted,
-        goals: goalsCreated + goalsCompleted
+        tasks: tasksCompleted,
+        goals: goalsCompleted
       });
     }
     return data;
