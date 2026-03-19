@@ -4,6 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import BottomNav from '../components/BottomNav';
 import { supabase } from '../supabase';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   LineChart,
   Line,
@@ -61,6 +65,39 @@ const DEFAULT_CATEGORIES = ['Health', 'Work', 'Mindset', 'Growth', 'Home', 'Soci
 
 type TimeRange = '7d' | '1m' | '3m' | '6m' | '1y';
 
+const SortableRoutineCard: React.FC<{ routine: RoutineData; toggleCompletion: (r: any) => void }> = ({ routine, toggleCompletion }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: routine.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    cursor: 'grab',
+  };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className={`routine-card-new ${(routine as any).completed ? 'completed' : ''}`}>
+      <div className="card-accent" style={{ background: routine.color }}></div>
+      <div className="card-main-content">
+        <div className="card-icon-wrapper" style={{ border: `1px solid ${routine.color}30`, color: routine.color }}>
+          <span className="material-symbols-outlined">{routine.icon}</span>
+        </div>
+        <div className="card-text-content" style={{ minWidth: 0, flex: 1 }}>
+          <div className="card-category-strip"><span className="category-dot" style={{ background: routine.color }}></span>{routine.category}</div>
+          <h3 className="card-title">{routine.title}</h3>
+        </div>
+      </div>
+      <div className="card-actions-wrapper" style={{ flexShrink: 0 }}>
+        <div
+          className={`physical-toggle ${(routine as any).completed ? 'active' : ''}`}
+          onClick={(e) => { e.stopPropagation(); toggleCompletion(routine); }}
+        >
+          <div className="toggle-bg-icons"><span className="material-symbols-outlined cross">close</span><span className="material-symbols-outlined check">check</span></div>
+          <div className="toggle-knob"></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Routine: React.FC = () => {
   const { user } = useAuth();
   useLanguage();
@@ -90,6 +127,24 @@ const Routine: React.FC = () => {
   const [newCategory, setNewCategory] = useState('');
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setRoutines((items) => {
+        const oldIndex = items.findIndex(item => item.id === active.id);
+        const newIndex = items.findIndex(item => item.id === over.id);
+        const reordered = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem(`routine_order_${user?.id}`, JSON.stringify(reordered.map(r => r.id)));
+        return reordered;
+      });
+    }
+  };
 
   const categories = useMemo(() => {
     const fromRoutines = Array.from(new Set(routines.map(r => r.category)));
@@ -139,6 +194,22 @@ const Routine: React.FC = () => {
         const isMissedYesterday = isActiveYesterday && !isCompletedYesterday;
         return { ...r, completed: isCompletedToday, missed: isMissedYesterday, isActiveToday };
       });
+
+      const savedOrder = localStorage.getItem(`routine_order_${user.id}`);
+      if (savedOrder) {
+        try {
+          const orderArray = JSON.parse(savedOrder);
+          mapped.sort((a, b) => {
+            const idxA = orderArray.indexOf(a.id);
+            const idxB = orderArray.indexOf(b.id);
+            if (idxA === -1 && idxB === -1) return 0;
+            if (idxA === -1) return 1;
+            if (idxB === -1) return -1;
+            return idxA - idxB;
+          });
+        } catch (err) { console.error('Error parsing saved order:', err); }
+      }
+
       setRoutines(mapped);
     } catch (err) { console.error('Error fetching data:', err); } finally { setLoading(false); }
   }, [user?.id, timeRange]);
@@ -376,42 +447,17 @@ const Routine: React.FC = () => {
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {loading ? <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Syncing...</div> : routines.length === 0 ? <div onClick={() => setShowModal(true)} style={{ padding: '2rem', background: 'rgba(255,255,255,0.02)', borderRadius: '1.25rem', border: '2px dashed rgba(255,255,255,0.1)', textAlign: 'center', cursor: 'pointer' }}><p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 800 }}>Add your first habit.</p></div> :
-              routines
-                .filter(routine => routine.days.includes(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]))
-                .map(routine => (
-                  <div key={routine.id} className={`routine-card-new ${routine.completed ? 'completed' : ''}`}>
-                    <div className="card-accent" style={{ background: routine.color }}></div>
-
-                    <div className="card-main-content">
-                      <div className="card-icon-wrapper" style={{ border: `1px solid ${routine.color}30`, color: routine.color }}>
-                        <span className="material-symbols-outlined">{routine.icon}</span>
-                      </div>
-
-                      <div className="card-text-content" style={{ minWidth: 0, flex: 1 }}>
-                        <div className="card-category-strip">
-                          <span className="category-dot" style={{ background: routine.color }}></span>
-                          {routine.category}
-                        </div>
-                        <h3 className="card-title">{routine.title}</h3>
-                      </div>
-                    </div>
-
-                    <div className="card-actions-wrapper" style={{ flexShrink: 0 }}>
-                      <div
-                        className={`physical-toggle ${routine.completed ? 'active' : ''}`}
-                        onClick={() => toggleCompletion(routine)}
-                      >
-                        <div className="toggle-bg-icons">
-                          <span className="material-symbols-outlined cross">close</span>
-                          <span className="material-symbols-outlined check">check</span>
-                        </div>
-                        <div className="toggle-knob"></div>
-                      </div>
-                    </div>
-                  </div>
-                )
-                )}
+            {loading ? <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>Syncing...</div> : routines.length === 0 ? <div onClick={() => setShowModal(true)} style={{ padding: '2rem', background: 'rgba(255,255,255,0.02)', borderRadius: '1.25rem', border: '2px dashed rgba(255,255,255,0.1)', textAlign: 'center', cursor: 'pointer' }}><p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 800 }}>Add your first habit.</p></div> : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={routines.filter(r => r.days.includes(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()])).map(r => r.id)} strategy={verticalListSortingStrategy}>
+                  {routines
+                    .filter(routine => routine.days.includes(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date().getDay()]))
+                    .map(routine => (
+                      <SortableRoutineCard key={routine.id} routine={routine} toggleCompletion={toggleCompletion} />
+                    ))}
+                </SortableContext>
+              </DndContext>
+            )}
           </div>
         </section>
 
