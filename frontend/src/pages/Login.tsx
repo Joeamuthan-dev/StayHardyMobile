@@ -276,7 +276,8 @@ const Login: React.FC = () => {
       } else if (err.message.includes('rate limit')) {
         setError('Too many attempts. Please wait a few minutes.');
       } else {
-        setError(err.message || 'Authentication failed');
+        const msg = err.message || err.error_description;
+        setError(typeof msg === 'string' && msg.trim() !== '{}' && msg.trim() !== '' ? msg : 'Authentication failed');
       }
     }
   };

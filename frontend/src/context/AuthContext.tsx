@@ -94,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     // Run immediately but don't block UI if cache exists
-    fetchUserProfile();
+    // fetchUserProfile(); 
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
