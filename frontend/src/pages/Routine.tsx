@@ -72,6 +72,8 @@ const SortableRoutineCard: React.FC<{ routine: RoutineData; toggleCompletion: (r
     transition,
     opacity: isDragging ? 0.5 : 1,
     cursor: 'grab',
+    touchAction: 'none',
+    userSelect: 'none' as any,
   };
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className={`routine-card-new ${(routine as any).completed ? 'completed' : ''}`}>
