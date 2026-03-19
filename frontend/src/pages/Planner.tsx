@@ -29,7 +29,7 @@ const Planner: React.FC = () => {
     const fetchTasks = async () => {
       const { data } = await supabase
         .from('tasks')
-        .select('*')
+        .select('id, title, description, status, category, priority, createdAt, updatedAt, image_url')
         .eq('userId', user.id)
         .eq('status', 'completed')
         .order('updatedAt', { ascending: false });
@@ -39,7 +39,7 @@ const Planner: React.FC = () => {
     const fetchGoals = async () => {
       const { data } = await supabase
         .from('goals')
-        .select('*')
+        .select('id, name, status, createdAt, updatedAt')
         .eq('userId', user.id)
         .eq('status', 'completed')
         .order('updatedAt', { ascending: false });
@@ -79,7 +79,7 @@ const Planner: React.FC = () => {
     } catch (err) {
       console.error('Error deleting task:', err);
       // Trigger a re-fetch to sync back if delete failed
-      const { data } = await supabase.from('tasks').select('*').eq('userId', user?.id).order('createdAt', { ascending: false });
+      const { data } = await supabase.from('tasks').select('id, title, description, status, category, priority, createdAt, updatedAt, image_url').eq('userId', user?.id).order('createdAt', { ascending: false });
       if (data) setTasks(data as Task[]);
     }
   };
@@ -117,7 +117,7 @@ const Planner: React.FC = () => {
     } catch (err) {
       console.error('Error unticking task:', err);
       // Re-fetch on error
-      const { data } = await supabase.from('tasks').select('*').eq('userId', user?.id).eq('status', 'completed').order('updatedAt', { ascending: false });
+      const { data } = await supabase.from('tasks').select('id, title, description, status, category, priority, createdAt, updatedAt, image_url').eq('userId', user?.id).eq('status', 'completed').order('updatedAt', { ascending: false });
       if (data) setTasks(data as Task[]);
     }
   };
@@ -136,7 +136,7 @@ const Planner: React.FC = () => {
     } catch (err) {
       console.error('Error unticking goal:', err);
       // Re-fetch on error
-      const { data } = await supabase.from('goals').select('*').eq('userId', user?.id).eq('status', 'completed').order('updatedAt', { ascending: false });
+      const { data } = await supabase.from('goals').select('id, name, status, createdAt, updatedAt').eq('userId', user?.id).eq('status', 'completed').order('updatedAt', { ascending: false });
       if (data) setGoals(data);
     }
   };
