@@ -5,6 +5,7 @@ import { supabase } from '../supabase';
 
 
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const TreeGraphic = ({ isBloomed }: { isBloomed: boolean }) => {
   return (
@@ -49,6 +50,7 @@ const TreeGraphic = ({ isBloomed }: { isBloomed: boolean }) => {
 
 const Login: React.FC = () => {
   const { user, loading: authLoading } = useAuth(); // Connect useAuth
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -61,8 +63,8 @@ const Login: React.FC = () => {
   // Redirect instantly if user is already logged in
   React.useEffect(() => {
     if (user && !authLoading) {
-      if (user.role === 'admin') window.location.href = '/admin';
-      else window.location.href = '/home';
+      if (user.role === 'admin') navigate('/admin');
+      else navigate('/home');
     }
   }, [user, authLoading]);
 
@@ -230,9 +232,9 @@ const Login: React.FC = () => {
 
         const role = email.toLowerCase().trim() === 'joe@gmail.com' ? 'admin' : 'user';
         if (role === 'admin') {
-          window.location.href = '/admin';
+          navigate('/admin');
         } else {
-          window.location.href = '/home';
+          navigate('/home');
         }
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -261,7 +263,7 @@ const Login: React.FC = () => {
         }
 
         if (data.session) {
-          window.location.href = '/home';
+          navigate('/home');
         } else {
           setError('Signup successful! Please check your email to confirm your account and then Log In.');
           setIsLogin(true); // Switch to login view
