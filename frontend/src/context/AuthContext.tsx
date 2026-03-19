@@ -96,13 +96,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Run immediately but don't block UI if cache exists
     // fetchUserProfile(); 
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         fetchUserProfile();
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         localStorage.removeItem('user');
         setLoading(false);
+      } else {
+        // Handle INITIAL_SESSION or silent events to ensure the loader clears
+        if (!session) {
+          setLoading(false);
+        }
       }
     });
 
