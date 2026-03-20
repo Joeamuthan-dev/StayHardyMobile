@@ -26,8 +26,20 @@ const AdminDashboard: React.FC = () => {
   const [userTabFilter, setUserTabFilter] = useState<'All' | 'admin' | 'user'>('All');
   const [userSortOrder, setUserSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [totalUsersCount, setTotalUsersCount] = useState(0);
+  const [recentSignups, setRecentSignups] = useState<any[]>([]);
   const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
   const [userPageOffset, setUserPageOffset] = useState(0);
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSearch(userSearchQuery), 400);
+    return () => clearTimeout(handler);
+  }, [userSearchQuery]);
+
+  useEffect(() => {
+    if (debouncedSearch !== undefined) setUserPageOffset(0);
+  }, [debouncedSearch, userTabFilter]);
 
   useEffect(() => {
     // Role check
@@ -52,18 +64,54 @@ const AdminDashboard: React.FC = () => {
         setStats(prev => ({ ...prev, feedback: feedbackData.length }));
       }
 
-      // 2. Fetch Users
-      const { data: userData, error: userError } = await supabase
+      // 2. Fetch Overview "Recent Signups" (Limit 5)
+      const { data: rSignups } = await supabase
+        .from('users')
+        .select('id, name, created_at, role')
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (rSignups) setRecentSignups(rSignups);
+
+      // 3. Fetch Chart Users (created_at only) lightweight
+      const { data: chartUsers } = await supabase
+        .from('users')
+        .select('created_at');
+
+      // 4. Fetch Paginated Users for Users Tab
+      let userQuery = supabase
         .from('users')
         .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (userError) console.error('Error fetching admin user stats:', userError);
+        .order('created_at', { ascending: userSortOrder === 'newest' ? false : true })
+        .range(userPageOffset, userPageOffset + 9);
 
-      // 3. Fetch All Tasks, Goals, Routines for Charting & Aggregation via RPC
+      if (userTabFilter !== 'All') {
+        userQuery = userQuery.eq('role', userTabFilter);
+      }
+      if (debouncedSearch) {
+        userQuery = userQuery.or(`name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
+      }
+
+      const { data: userData, error: userError } = await userQuery;
+      if (userError) console.error('Error fetching admin users table:', userError);
+
+      // 5. Fetch Total Counter for Users Tab Footer and Pagination
+      let countQuery = supabase
+        .from('users')
+        .select('id', { count: 'exact', head: true });
+      
+      if (userTabFilter !== 'All') {
+        countQuery = countQuery.eq('role', userTabFilter);
+      }
+      if (debouncedSearch) {
+        countQuery = countQuery.or(`name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
+      }
+      const { count: countResult } = await countQuery;
+      if (countResult !== null) setTotalUsersCount(countResult);
+
+      // 6. Fetch All Tasks, Goals, Routines for Charting via RPC
       const { data: rpcCounts } = await supabase.rpc('get_global_counts');
 
-      // Standardize the shape for our local aggregations using RPC payloads
+      // Standardize the shape using RPC payloads
       const tasks = (rpcCounts?.tasks || []).map((t: any) => ({ created_at: t.created_at, userId: t.userId }));
       const goals = (rpcCounts?.goals || []).map((g: any) => ({ created_at: g.created_at, userId: g.userId }));
       const routines = (rpcCounts?.routines || []).map((r: any) => ({ created_at: r.created_at, userId: r.userId }));
@@ -78,7 +126,7 @@ const AdminDashboard: React.FC = () => {
         globalRoutines: rpcCounts?.total_routines || 0
       }));
 
-      // Aggregate counts per user to avoid N+1 queries natively via memory map
+      // Aggregate counts for PREFERRED 10 USERS with memory map optimization
       if (userData) {
         const userActivityMap: Record<string, { tasks: number, goals: number, routines: number, productivityScore: number }> = {};
         userData.forEach(u => {
@@ -89,21 +137,14 @@ const AdminDashboard: React.FC = () => {
         goals.forEach((g: any) => { if (userActivityMap[g.userId]) userActivityMap[g.userId].goals++; });
         routines.forEach((r: any) => { if (userActivityMap[r.userId]) userActivityMap[r.userId].routines++; });
 
-        // Calculate productivity score per user using weights: Routines (60%), Tasks (20%), Goals (20%)
         userData.forEach(u => {
           const uTasks = tasks.filter((t: any) => t.userId === u.id);
           const uGoals = goals.filter((g: any) => g.userId === u.id);
           const uRoutines = routines.filter((r: any) => r.userId === u.id);
 
-          const tasksProgress = uTasks.length > 0 
-            ? ((uTasks.filter((t: any) => t.status === 'completed').length) / uTasks.length) * 100 
-            : 0;
-
-          const goalsProgress = uGoals.length > 0 
-            ? (uGoals.reduce((acc: number, g: any) => acc + (g.status === 'completed' ? 100 : (Number(g.progress) || 0)), 0) / uGoals.length) 
-            : 0;
-
-          const routinesProgress = uRoutines.length > 0 ? 100 : 0; // Approximated over existing active triggers
+          const tasksProgress = uTasks.length > 0 ? ((uTasks.filter((t: any) => t.status === 'completed').length) / uTasks.length) * 100 : 0;
+          const goalsProgress = uGoals.length > 0 ? (uGoals.reduce((acc: number, g: any) => acc + (g.status === 'completed' ? 100 : (Number(g.progress) || 0)), 0) / uGoals.length) : 0;
+          const routinesProgress = uRoutines.length > 0 ? 100 : 0; 
 
           const score = Math.round((routinesProgress * 0.6) + (tasksProgress * 0.2) + (goalsProgress * 0.2));
           if (userActivityMap[u.id]) userActivityMap[u.id].productivityScore = score;
@@ -115,11 +156,10 @@ const AdminDashboard: React.FC = () => {
         }));
 
         setUsers(enrichedUsers);
-        setStats(prev => ({ ...prev, users: enrichedUsers.length }));
+        setStats(prev => ({ ...prev, users: countResult || prev.users }));
       }
 
-      // 4. Process Chart Data
-      processChartData(userData || [], tasks, goals, routines, timeRange);
+      processChartData(chartUsers || [], tasks, goals, routines, timeRange);
     };
 
     fetchData();
@@ -139,7 +179,7 @@ const AdminDashboard: React.FC = () => {
       supabase.removeChannel(feedbackChannel);
       supabase.removeChannel(userChannel);
     };
-  }, [user, timeRange, userPageOffset]);
+  }, [user, timeRange, userPageOffset, debouncedSearch, userTabFilter, userSortOrder]);
 
   const processChartData = (usersData: any[], tasks: any[], goals: any[], routines: any[], days: number) => {
     const data = [];
@@ -465,52 +505,54 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="glass-card" style={{ padding: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3 style={{ margin: 0, fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Recent Signups</h3>
-                <span style={{ fontSize: '9px', fontWeight: 900, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: '4px' }}>Live Users</span>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {users.slice(0, 10).map(u => (
-                    <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-                      <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>{u.name}</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Joined {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A'}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+              <div className="glass-card" style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Recent Signups</h3>
+                  <span style={{ fontSize: '9px', fontWeight: 900, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '2px 8px', borderRadius: '4px' }}>Live Users</span>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {recentSignups.map(u => (
+                      <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+                        <div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>{u.name}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Joined {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'N/A'}</div>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 900, color: u.role === 'admin' ? '#BBFF00' : '#64748b' }}>{u.role?.toUpperCase() || 'USER'}</span>
                       </div>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 900, color: u.role === 'admin' ? '#BBFF00' : '#64748b' }}>{u.role?.toUpperCase() || 'USER'}</span>
-                    </div>
-                  ))}
-                  {users.length === 0 && (
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>No users found.</div>
-                  )}
+                    ))}
+                    {recentSignups.length === 0 && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>No users found.</div>
+                    )}
+                </div>
               </div>
-            </div>
 
-            <div className="glass-card" style={{ padding: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3 style={{ margin: 0, fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Recent Feedback</h3>
-                <button onClick={() => setActiveTab('feedback')} style={{ color: '#BBFF00', background: 'none', border: 'none', fontSize: '9px', fontWeight: 900, cursor: 'pointer', textTransform: 'uppercase' }}>View All</button>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {feedbacks.slice(0, 3).map(f => (
-                    <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>{f.message.length > 60 ? f.message.substring(0, 60) + '...' : f.message}</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>From {f.user_name || 'Anonymous'}</div>
+              <div className="glass-card" style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>Recent Feedback</h3>
+                  <button onClick={() => setActiveTab('feedback')} style={{ color: '#BBFF00', background: 'none', border: 'none', fontSize: '9px', fontWeight: 900, cursor: 'pointer', textTransform: 'uppercase' }}>View All</button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {feedbacks.slice(0, 3).map(f => (
+                      <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>{f.message.length > 60 ? f.message.substring(0, 60) + '...' : f.message}</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>From {f.user_name || 'Anonymous'}</div>
+                        </div>
+                        <button 
+                          onClick={() => setDeleteFeedbackModal({ show: true, feedbackId: f.id })}
+                          style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem' }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>delete</span>
+                        </button>
                       </div>
-                      <button 
-                        onClick={() => setDeleteFeedbackModal({ show: true, feedbackId: f.id })}
-                        style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem' }}
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>delete</span>
-                      </button>
-                    </div>
-                  ))}
-                  {feedbacks.length === 0 && (
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>No feedback received.</div>
-                  )}
+                    ))}
+                    {feedbacks.length === 0 && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center' }}>No feedback received.</div>
+                    )}
+                </div>
               </div>
             </div>
 
@@ -555,7 +597,7 @@ const AdminDashboard: React.FC = () => {
                   </button>
 
                   <div style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--primary)', background: 'rgba(187,255,0,0.1)', padding: '0.4rem 0.8rem', borderRadius: '0.75rem' }}>
-                    {users.length} TOTAL
+                    {totalUsersCount} TOTAL
                   </div>
                 </div>
               </div>
@@ -572,21 +614,7 @@ const AdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {users
-                      .filter(u => {
-                        const matchesFilter = userTabFilter === 'All' || u.role === userTabFilter;
-                        const matchesSearch = !userSearchQuery || 
-                          u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-                          u.email?.toLowerCase().includes(userSearchQuery.toLowerCase());
-                        return matchesFilter && matchesSearch;
-                      })
-                      .sort((a, b) => {
-                        const dateA = new Date(a.created_at).getTime();
-                        const dateB = new Date(b.created_at).getTime();
-                        return userSortOrder === 'newest' ? dateB - dateA : dateA - dateB;
-                      })
-                      .slice(userPageOffset, userPageOffset + 10)
-                      .map((u, idx) => {
+                    {users.map((u, idx) => {
                         return (
                         <tr 
                           key={u.id} 

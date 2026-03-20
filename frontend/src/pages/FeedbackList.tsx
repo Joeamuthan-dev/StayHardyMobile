@@ -11,8 +11,9 @@ const FeedbackList: React.FC = () => {
     const fetchFeedbacks = async () => {
       const { data } = await supabase
         .from('feedback')
-        .select('*')
-        .order('createdAt', { ascending: false });
+        .select('id, userName, message, type, createdAt')
+        .order('createdAt', { ascending: false })
+        .limit(50);
       
       if (data) setFeedbacks(data);
       setLoading(false);

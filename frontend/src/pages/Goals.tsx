@@ -55,8 +55,9 @@ const Goals: React.FC = () => {
     if (!user?.id) return;
     const { data, error } = await supabase
       .from('goals')
-      .select('*')
+      .select('id, userId, name, description, targetDate, status, quote, image_url, createdAt, updatedAt')
       .eq('userId', user.id)
+      .eq('status', 'pending')
       .order('createdAt', { ascending: false });
 
     if (error) console.error('Error fetching goals:', error);

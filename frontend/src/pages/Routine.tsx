@@ -165,7 +165,7 @@ const Routine: React.FC = () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const { data: routinesData, error: rError } = await supabase.from('routines').select('*').eq('user_id', user.id);
+      const { data: routinesData, error: rError } = await supabase.from('routines').select('id, title, days, color, icon, category').eq('user_id', user.id);
       if (rError) throw rError;
       const now = new Date();
       let daysToFetch = 7;

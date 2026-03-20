@@ -19,6 +19,8 @@ interface Task {
 const Planner: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
+  const [totalTasksCount, setTotalTasksCount] = useState(0);
+  const [totalGoalsCount, setTotalGoalsCount] = useState(0);
   const [isTasksExpanded, setIsTasksExpanded] = useState(true);
   const [isGoalsExpanded, setIsGoalsExpanded] = useState(true);
   const { user } = useAuth();
@@ -27,23 +29,53 @@ const Planner: React.FC = () => {
     if (!user?.id) return;
 
     const fetchTasks = async () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0,0,0,0);
+      const yesterdayStr = yesterday.toISOString();
+
+      // 1. Fetch filtered list for display (Today + Yesterday)
       const { data } = await supabase
         .from('tasks')
-        .select('id, title, description, status, category, priority, createdAt, updatedAt, image_url')
+        .select('id, title, status, category, createdAt, updatedAt, image_url')
         .eq('userId', user.id)
         .eq('status', 'completed')
+        .gte('updatedAt', yesterdayStr)
         .order('updatedAt', { ascending: false });
       if (data) setTasks(data as Task[]);
+
+      // 2. Fetch total historical count
+      const { count } = await supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('userId', user.id)
+        .eq('status', 'completed');
+      if (count !== null) setTotalTasksCount(count);
     };
 
     const fetchGoals = async () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setHours(0,0,0,0);
+      const yesterdayStr = yesterday.toISOString();
+
+      // 1. Fetch filtered list for display (Today + Yesterday)
       const { data } = await supabase
         .from('goals')
         .select('id, name, status, createdAt, updatedAt')
         .eq('userId', user.id)
         .eq('status', 'completed')
+        .gte('updatedAt', yesterdayStr)
         .order('updatedAt', { ascending: false });
       if (data) setGoals(data);
+
+      // 2. Fetch total historical count
+      const { count } = await supabase
+        .from('goals')
+        .select('id', { count: 'exact', head: true })
+        .eq('userId', user.id)
+        .eq('status', 'completed');
+      if (count !== null) setTotalGoalsCount(count);
     };
 
     fetchTasks();
@@ -79,7 +111,7 @@ const Planner: React.FC = () => {
     } catch (err) {
       console.error('Error deleting task:', err);
       // Trigger a re-fetch to sync back if delete failed
-      const { data } = await supabase.from('tasks').select('id, title, description, status, category, priority, createdAt, updatedAt, image_url').eq('userId', user?.id).order('createdAt', { ascending: false });
+      const { data } = await supabase.from('tasks').select('id, title, status, category, createdAt, updatedAt, image_url').eq('userId', user?.id).order('createdAt', { ascending: false });
       if (data) setTasks(data as Task[]);
     }
   };
@@ -117,7 +149,7 @@ const Planner: React.FC = () => {
     } catch (err) {
       console.error('Error unticking task:', err);
       // Re-fetch on error
-      const { data } = await supabase.from('tasks').select('id, title, description, status, category, priority, createdAt, updatedAt, image_url').eq('userId', user?.id).eq('status', 'completed').order('updatedAt', { ascending: false });
+      const { data } = await supabase.from('tasks').select('id, title, status, category, createdAt, updatedAt, image_url').eq('userId', user?.id).eq('status', 'completed').order('updatedAt', { ascending: false });
       if (data) setTasks(data as Task[]);
     }
   };
@@ -178,7 +210,7 @@ const Planner: React.FC = () => {
             >
               <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#10b981', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span className="material-symbols-outlined">task_alt</span> Completed Tasks
-                <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 700, marginLeft: '0.2rem' }}>({tasks.length})</span>
+                <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 700, marginLeft: '0.2rem' }}>({totalTasksCount})</span>
               </h2>
               <span className="material-symbols-outlined dropdown-icon" style={{ transform: isTasksExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                 keyboard_arrow_down
@@ -241,7 +273,7 @@ const Planner: React.FC = () => {
             >
               <h2 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#f59e0b', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span className="material-symbols-outlined">emoji_events</span> Completed Goals
-                <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 700, marginLeft: '0.2rem' }}>({goals.length})</span>
+                <span style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 700, marginLeft: '0.2rem' }}>({totalGoalsCount})</span>
               </h2>
               <span className="material-symbols-outlined dropdown-icon" style={{ transform: isGoalsExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                 keyboard_arrow_down

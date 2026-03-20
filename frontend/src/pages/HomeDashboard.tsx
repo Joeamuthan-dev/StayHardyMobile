@@ -56,43 +56,63 @@ const HomeDashboard: React.FC = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isIntroOpen, setIsIntroOpen] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(false);
-
-
-
+  const [scoreData, setScoreData] = useState<{
+    tasks_progress: number;
+    routines_progress: number;
+    goals_progress: number;
+    overall_score: number;
+    tasks_total?: number;
+    tasks_completed?: number;
+    routines_total?: number;
+    routines_completed?: number;
+    goals_total?: number;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
 
-    // Fetch Tasks
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const todayDate = new Date();
+    const currentDayName = daysOfWeek[todayDate.getDay()];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const localTodayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    // 1. Fetch Productivity Score calculated in DB
+    const { data: score } = await supabase.rpc('get_productivity_score', {
+      p_user_id: user.id,
+      p_day_name: currentDayName,
+      p_today_str: localTodayStr
+    });
+    if (score) setScoreData(score);
+
+    // 2. Fetch Lists with columns optimized
     const { data: tasksData } = await supabase
       .from('tasks')
-      .select('*')
+      .select('id, title, status, priority, createdAt, category')
       .eq('userId', user.id);
     if (tasksData) setTasks(tasksData);
 
-    // Fetch Routines
     const { data: routinesData } = await supabase
       .from('routines')
-      .select('*')
+      .select('id, title, days')
       .eq('user_id', user.id);
     if (routinesData) setRoutines(routinesData);
 
-    // Fetch Routine Logs for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const startDayStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
 
     const { data: logsData } = await supabase
       .from('routine_logs')
-      .select('*')
+      .select('routine_id, completed_at')
       .eq('user_id', user.id)
       .gte('completed_at', startDayStr);
-    if (logsData) setRoutineLogs(logsData);
+    if (logsData) setRoutineLogs(logsData as RoutineLog[]);
 
-    // Fetch Goals
     const { data: goalsData } = await supabase
       .from('goals')
-      .select('*')
+      .select('id, name, status, progress, targetDate, createdAt')
       .eq('userId', user.id)
       .order('createdAt', { ascending: false });
     if (goalsData) setGoals(goalsData);
@@ -179,9 +199,9 @@ const HomeDashboard: React.FC = () => {
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const todayDate = new Date();
   const currentDayName = daysOfWeek[todayDate.getDay()];
-  const activeRoutinesTodayCount = routines.filter(r => r.days?.includes(currentDayName)).length;
+  const activeRoutinesTodayCount = scoreData?.routines_total ?? routines.filter(r => r.days?.includes(currentDayName)).length;
 
-  const completedRoutinesToday = routineLogs.filter(l => l.completed_at === localTodayStr).length;
+  const completedRoutinesToday = scoreData?.routines_completed ?? routineLogs.filter(l => l.completed_at === localTodayStr).length;
 
   let currentStreak = 0;
   const uniqueLogDaysSet = new Set(routineLogs.map(l => l.completed_at));
@@ -206,20 +226,16 @@ const HomeDashboard: React.FC = () => {
 
 
   // Productivity Chart Data
-  const totalTasksCount = tasks.length;
-  const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
-  const tasksProgress = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+  // Use DB calculated scores with client-side fallback
+  const tasksProgress = scoreData?.tasks_progress ?? (tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100) : 0);
+  
+  const routinesProgress = scoreData?.routines_progress ?? (activeRoutinesTodayCount > 0 ? Math.round((completedRoutinesToday / activeRoutinesTodayCount) * 100) : 0);
 
-  const routinesProgress = activeRoutinesTodayCount > 0 ? Math.round((completedRoutinesToday / activeRoutinesTodayCount) * 100) : 0;
+  const avgGoalProgress = scoreData?.goals_progress ?? (goals.length > 0 
+    ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / goals.length) 
+    : 0);
 
-  const totalGoalsCount = goals.length;
-  const avgGoalProgress = totalGoalsCount > 0 
-    ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / totalGoalsCount) 
-    : 0;
-
-
-  // Productivity logic with weights: Routines (60%), Tasks (20%), Goals (20%)
-  const overallProgress = calculateProductivityScore({
+  const overallProgress = scoreData?.overall_score ?? calculateProductivityScore({
     tasksProgress,
     routinesProgress,
     goalsProgress: avgGoalProgress

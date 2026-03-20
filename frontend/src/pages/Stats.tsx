@@ -329,11 +329,36 @@ const Stats: React.FC = () => {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [trendDays, setTrendDays] = useState(7);
   const { user } = useAuth();
+  const [scoreData, setScoreData] = useState<{
+    tasks_progress: number;
+    routines_progress: number;
+    goals_progress: number;
+    overall_score: number;
+    tasks_total?: number;
+    tasks_completed?: number;
+    routines_total?: number;
+    routines_completed?: number;
+    goals_total?: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!user?.id) return;
 
     const fetchAllData = async () => {
+      // 1. Fetch Productivity Score calculated in DB
+      const daysOfWeek = [ 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat' ];
+      const todayDate = new Date();
+      const currentDayName = daysOfWeek[todayDate.getDay()];
+      const localTodayStr = new Date(todayDate.getTime() - (todayDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+      const { data: score, error: scoreErr } = await supabase.rpc('get_productivity_score', {
+        p_user_id: user.id,
+        p_day_name: currentDayName,
+        p_today_str: localTodayStr
+      });
+      if (scoreErr) console.error('Score RPC error:', scoreErr);
+      else if (score) setScoreData(score);
+
       // Fetch Tasks
       const { data: tasksData, error: taskErr } = await supabase
         .from('tasks')
@@ -406,25 +431,25 @@ const Stats: React.FC = () => {
     ...tasks.map((t: Task) => t.category)
   ])).filter(c => c && c !== '');
     
-  const totalGoals = goals.length;
+  const totalGoals = scoreData?.goals_total ?? goals.length;
   const activeGoalsCount = goals.filter(g => g.status === 'pending').length;
   const overdueGoalsCount = goals.filter(g => g.status === 'pending' && g.targetDate && new Date(g.targetDate).getTime() < new Date().setHours(0,0,0,0)).length;
-  const avgGoalProgress = totalGoals > 0 ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / totalGoals) : 0;
+  const avgGoalProgress = scoreData?.goals_progress ?? (totalGoals > 0 ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / totalGoals) : 0);
 
-  const totalUserTasks = tasks.length;
-  const completedUserTasks = tasks.filter((t: Task) => t.status === 'completed').length;
+  const totalUserTasks = scoreData?.tasks_total ?? tasks.length;
+  const completedUserTasks = scoreData?.tasks_completed ?? tasks.filter((t: Task) => t.status === 'completed').length;
   const pendingCount = tasks.filter(t => t.status === 'pending').length;
-  const taskCompletionRate = totalUserTasks > 0 ? Math.round((completedUserTasks / totalUserTasks) * 100) : 0;
+  const taskCompletionRate = scoreData?.tasks_progress ?? (totalUserTasks > 0 ? Math.round((completedUserTasks / totalUserTasks) * 100) : 0);
 
   const totalRoutines = routines.length;
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const todayDate = new Date();
   const currentDayName = daysOfWeek[todayDate.getDay()];
-  const activeRoutinesTodayCount = routines.filter(r => r.days?.includes(currentDayName)).length;
+  const activeRoutinesTodayCount = scoreData?.routines_total ?? routines.filter(r => r.days?.includes(currentDayName)).length;
 
   const localTodayStr = new Date(todayDate.getTime() - (todayDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-  const routinesCompletedToday = routineLogs.filter(l => l.completed_at === localTodayStr).length;
-  const todayRoutineRate = activeRoutinesTodayCount > 0 ? Math.round((routinesCompletedToday / activeRoutinesTodayCount) * 100) : 0;
+  const routinesCompletedToday = scoreData?.routines_completed ?? routineLogs.filter(l => l.completed_at === localTodayStr).length;
+  const todayRoutineRate = scoreData?.routines_progress ?? (activeRoutinesTodayCount > 0 ? Math.round((routinesCompletedToday / activeRoutinesTodayCount) * 100) : 0);
 
   let currentStreak = 0;
   const uniqueLogDaysSet = new Set(routineLogs.map(l => l.completed_at));
@@ -460,7 +485,7 @@ const Stats: React.FC = () => {
   });
   const weeklyConsistency = expectedRoutinesLast7Days > 0 ? Math.min(100, Math.round((last7DaysLogs.length / expectedRoutinesLast7Days) * 100)) : 0;
 
-  const dynamicTodayScore = calculateProductivityScore({
+  const dynamicTodayScore = scoreData?.overall_score ?? calculateProductivityScore({
     tasksProgress: taskCompletionRate,
     routinesProgress: todayRoutineRate,
     goalsProgress: avgGoalProgress
