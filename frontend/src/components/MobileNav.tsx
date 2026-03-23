@@ -56,6 +56,7 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
 
   const premium = canAccessStatsAndRoutine(user);
   const upsell = shouldShowLifetimeUpsell(user);
+  const isAdmin = user?.email === 'joe@gmail.com' || user?.role === 'admin';
 
   const menuItems = React.useMemo((): NavItem[] => {
     let accentIdx = 0;
@@ -299,42 +300,44 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
             </button>
           </nav>
 
-          <div className="mn-settings">
-            <button
-              type="button"
-              style={{ animationDelay: `${50 + (menuItems.length + 1) * 50}ms` }}
-              className="mn-row mn-row--stagger mn-row--compact"
-              onClick={() => {
-                navigate('/feedback');
-                setIsOpen(false);
-              }}
-            >
-              <span className="mn-ico-box mn-ico-box--sm">
-                <span className="material-symbols-outlined">chat</span>
-              </span>
-              <span className="mn-row-text">
-                <span className="mn-row-title">Send feedback</span>
-              </span>
-              <span className="material-symbols-outlined mn-chevron">chevron_right</span>
-            </button>
-            <button
-              type="button"
-              style={{ animationDelay: `${50 + (menuItems.length + 2) * 50}ms` }}
-              className="mn-row mn-row--stagger mn-row--compact"
-              onClick={() => {
-                setShowSupportModal(true);
-                setIsOpen(false);
-              }}
-            >
-              <span className="mn-ico-box mn-ico-box--sm">
-                <span className="material-symbols-outlined">favorite</span>
-              </span>
-              <span className="mn-row-text">
-                <span className="mn-row-title">Support this app</span>
-              </span>
-              <span className="material-symbols-outlined mn-chevron">chevron_right</span>
-            </button>
-          </div>
+          {!isAdmin && (
+            <div className="mn-settings">
+              <button
+                type="button"
+                style={{ animationDelay: `${50 + (menuItems.length + 1) * 50}ms` }}
+                className="mn-row mn-row--stagger mn-row--compact"
+                onClick={() => {
+                  navigate('/feedback');
+                  setIsOpen(false);
+                }}
+              >
+                <span className="mn-ico-box mn-ico-box--sm">
+                  <span className="material-symbols-outlined">chat</span>
+                </span>
+                <span className="mn-row-text">
+                  <span className="mn-row-title">Send feedback</span>
+                </span>
+                <span className="material-symbols-outlined mn-chevron">chevron_right</span>
+              </button>
+              <button
+                type="button"
+                style={{ animationDelay: `${50 + (menuItems.length + 2) * 50}ms` }}
+                className="mn-row mn-row--stagger mn-row--compact"
+                onClick={() => {
+                  setShowSupportModal(true);
+                  setIsOpen(false);
+                }}
+              >
+                <span className="mn-ico-box mn-ico-box--sm">
+                  <span className="material-symbols-outlined">favorite</span>
+                </span>
+                <span className="mn-row-text">
+                  <span className="mn-row-title">Support this app</span>
+                </span>
+                <span className="material-symbols-outlined mn-chevron">chevron_right</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mn-footer">

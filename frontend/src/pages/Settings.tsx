@@ -849,10 +849,13 @@ const Settings: React.FC = () => {
 
         .set-profile-card {
           position: relative;
+          width: 100%;
           border-radius: 20px;
-          padding: 16px;
+          padding: 24px 20px 20px;
           margin-bottom: 1.35rem;
           overflow: hidden;
+          text-align: center;
+          box-sizing: border-box;
         }
         .set-profile-card--regular {
           background: rgba(255, 255, 255, 0.04);
@@ -906,22 +909,17 @@ const Settings: React.FC = () => {
             transform: rotate(360deg);
           }
         }
-        .set-profile-card-topbar {
-          position: relative;
-          z-index: 1;
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 8px;
-          margin-bottom: 12px;
-          min-height: 32px;
-        }
-        .set-profile-corner-ic {
+        .set-profile-role-icon {
+          position: absolute;
+          top: 12px;
+          right: 48px;
+          z-index: 2;
           font-size: 16px;
           line-height: 1;
           color: #00e87a;
+          pointer-events: none;
         }
-        .set-profile-corner-ic--admin {
+        .set-profile-role-icon--admin {
           font-size: 18px;
           color: #f59e0b;
         }
@@ -929,7 +927,7 @@ const Settings: React.FC = () => {
           background: rgba(255, 255, 255, 0.08);
           border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 10px;
-          padding: 6px;
+          padding: 6px 8px;
           cursor: pointer;
           display: inline-flex;
           align-items: center;
@@ -937,31 +935,37 @@ const Settings: React.FC = () => {
           color: #fff;
           transition: background 0.2s, border-color 0.2s;
         }
+        .set-profile-edit-btn--corner {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          z-index: 2;
+        }
         .set-profile-edit-btn .material-symbols-outlined {
           font-size: 14px !important;
         }
         .set-profile-edit-btn:active {
           background: rgba(255, 255, 255, 0.12);
         }
-        .set-profile-body {
+        .set-profile-stack {
           position: relative;
           z-index: 1;
           display: flex;
-          align-items: flex-start;
-          gap: 14px;
-        }
-        .set-profile-main {
-          flex: 1;
-          min-width: 0;
+          flex-direction: column;
+          align-items: center;
+          padding-top: 20px;
         }
         .set-avatar-wrap {
           position: relative;
+          width: 80px;
+          height: 80px;
+          margin: 0 auto;
           flex-shrink: 0;
         }
         .set-avatar {
           position: relative;
-          width: 56px;
-          height: 56px;
+          width: 80px;
+          height: 80px;
           border-radius: 50%;
           overflow: hidden;
           cursor: pointer;
@@ -971,16 +975,16 @@ const Settings: React.FC = () => {
           box-sizing: border-box;
         }
         .set-avatar--regular {
-          border: none;
+          border: 2px solid rgba(255, 255, 255, 0.2);
           background: transparent;
         }
         .set-avatar--pro {
           border: 2px solid #00e87a;
-          box-shadow: 0 0 12px rgba(0, 232, 122, 0.3);
+          box-shadow: 0 0 16px rgba(0, 232, 122, 0.3);
         }
         .set-avatar--admin {
           border: 2px solid #f59e0b;
-          box-shadow: 0 0 16px rgba(245, 158, 11, 0.35);
+          box-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
         }
         .set-avatar img {
           width: 100%;
@@ -995,51 +999,44 @@ const Settings: React.FC = () => {
           justify-content: center;
           font-family: 'Syne', system-ui, sans-serif;
           font-weight: 700;
-          font-size: 22px;
-        }
-        .set-avatar-initial--regular {
-          background: linear-gradient(135deg, #1c2b24, #0d1a13);
+          font-size: 28px;
           color: #00e87a;
-        }
-        .set-avatar-initial--pro {
           background: linear-gradient(135deg, #1c2b24, #0d1a13);
-          color: #00e87a;
         }
+        .set-avatar-initial--regular,
+        .set-avatar-initial--pro,
         .set-avatar-initial--admin {
-          background: linear-gradient(135deg, #78350f, #451a03);
-          color: #fcd34d;
+          background: linear-gradient(135deg, #1c2b24, #0d1a13);
+          color: #00e87a;
         }
         .set-online-dot {
           position: absolute;
-          bottom: 0;
-          right: 0;
-          width: 10px;
-          height: 10px;
+          bottom: 4px;
+          right: 4px;
+          width: 12px;
+          height: 12px;
           border-radius: 50%;
           background: #00e87a;
-          border: 2px solid rgba(8, 12, 10, 0.95);
+          border: 2px solid #080c0a;
           box-shadow: 0 0 6px rgba(0, 232, 122, 0.65);
         }
         .set-name-row {
           display: flex;
           align-items: center;
-          gap: 6px;
+          justify-content: center;
+          gap: 8px;
           flex-wrap: wrap;
+          margin-top: 12px;
         }
         .set-display-name {
           margin: 0;
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 16px;
-          font-weight: 600;
+          font-family: 'Syne', system-ui, sans-serif;
+          font-size: 18px;
+          font-weight: 700;
           color: #fff;
-          letter-spacing: -0.01em;
-        }
-        .set-admin-star {
-          font-size: 14px;
-          line-height: 1;
+          letter-spacing: -0.3px;
         }
         .set-pro-badge {
-          margin-left: 6px;
           display: inline-flex;
           align-items: center;
           padding: 3px 8px;
@@ -1049,37 +1046,37 @@ const Settings: React.FC = () => {
           font-family: 'DM Sans', system-ui, sans-serif;
           font-size: 9px;
           font-weight: 700;
-          letter-spacing: 1px;
+        }
+        .set-admin-inline-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 3px 8px;
+          border-radius: 20px;
+          background: rgba(245, 158, 11, 0.15);
+          border: 1px solid rgba(245, 158, 11, 0.35);
+          color: #f59e0b;
+          font-family: 'DM Sans', system-ui, sans-serif;
+          font-size: 9px;
+          font-weight: 700;
         }
         .set-email {
           margin: 4px 0 0;
           font-family: 'DM Sans', system-ui, sans-serif;
           font-size: 12px;
           color: rgba(255, 255, 255, 0.45);
+          text-align: center;
         }
         .set-email--pro {
           color: rgba(255, 255, 255, 0.5);
         }
         .set-pro-lifetime-line {
-          margin: 4px 0 0;
-          font-size: 10px;
-          letter-spacing: 0.06em;
-          color: #00e87a;
-        }
-        .set-admin-role-badge {
-          margin-top: 8px;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 4px 14px;
-          border-radius: 8px;
-          background: rgba(245, 158, 11, 0.15);
-          border: 1px solid rgba(245, 158, 11, 0.35);
+          margin: 6px 0 0;
           font-family: 'DM Sans', system-ui, sans-serif;
           font-size: 10px;
-          font-weight: 700;
-          color: #f59e0b;
-          letter-spacing: 1.5px;
+          font-weight: 500;
+          letter-spacing: 0.5px;
+          color: #00e87a;
+          text-align: center;
         }
         .set-lifetime-upsell-btn {
           margin-top: 10px;
@@ -1355,27 +1352,25 @@ const Settings: React.FC = () => {
                 <div className="set-profile-admin-shimmer__inner" />
               </div>
             )}
-            <div className="set-profile-card-topbar">
-              {profileCardVariant === 'pro' && (
-                <span className="set-profile-corner-ic" aria-hidden>
-                  ⚡
-                </span>
-              )}
-              {profileCardVariant === 'admin' && (
-                <span className="set-profile-corner-ic set-profile-corner-ic--admin" aria-hidden>
-                  👑
-                </span>
-              )}
-              <button
-                type="button"
-                className="set-profile-edit-btn"
-                aria-label="Edit profile photo"
-                onClick={() => document.getElementById('avatar-input')?.click()}
-              >
-                <span className="material-symbols-outlined">edit</span>
-              </button>
-            </div>
-            <div className="set-profile-body">
+            {profileCardVariant === 'pro' && (
+              <span className="set-profile-role-icon" aria-hidden>
+                ⚡
+              </span>
+            )}
+            {profileCardVariant === 'admin' && (
+              <span className="set-profile-role-icon set-profile-role-icon--admin" aria-hidden>
+                👑
+              </span>
+            )}
+            <button
+              type="button"
+              className="set-profile-edit-btn set-profile-edit-btn--corner"
+              aria-label="Edit profile photo"
+              onClick={() => document.getElementById('avatar-input')?.click()}
+            >
+              <span className="material-symbols-outlined">edit</span>
+            </button>
+            <div className="set-profile-stack">
               <div className="set-avatar-wrap">
                 <div
                   className={`set-avatar set-avatar--${profileCardVariant}`}
@@ -1418,40 +1413,28 @@ const Settings: React.FC = () => {
                 </div>
                 <span className="set-online-dot" title="Active" aria-hidden />
               </div>
-              <div className="set-profile-main">
-                <div className="set-name-row">
-                  <p className="set-display-name">{user?.name || 'Operator'}</p>
-                  {profileCardVariant === 'admin' && (
-                    <span className="set-admin-star" aria-hidden>
-                      ⭐
-                    </span>
-                  )}
-                  {profileCardVariant === 'pro' && <span className="set-pro-badge">PRO</span>}
-                </div>
-                <p
-                  className={`set-email ${profileCardVariant === 'pro' ? 'set-email--pro' : ''}`}
-                >
-                  {user?.email || 'No email on file'}
-                </p>
-                {profileCardVariant === 'pro' && (
-                  <p className="set-pro-lifetime-line">✦ Lifetime Access · No Subscription</p>
-                )}
+              <div className="set-name-row">
+                <p className="set-display-name">{user?.name || 'Operator'}</p>
                 {profileCardVariant === 'admin' && (
-                  <div className="set-admin-role-badge">
-                    <span aria-hidden>👑</span>
-                    <span>ADMIN</span>
-                  </div>
+                  <span className="set-admin-inline-badge">👑 ADMIN</span>
                 )}
-                {shouldShowLifetimeUpsell(user) && profileCardVariant === 'regular' && (
-                  <button
-                    type="button"
-                    className="set-lifetime-upsell-btn"
-                    onClick={() => navigate('/lifetime-access')}
-                  >
-                    {`LIFETIME ₹${LIFETIME_PRICE_INR}`}
-                  </button>
-                )}
+                {profileCardVariant === 'pro' && <span className="set-pro-badge">PRO</span>}
               </div>
+              <p className={`set-email ${profileCardVariant === 'pro' ? 'set-email--pro' : ''}`}>
+                {user?.email || 'No email on file'}
+              </p>
+              {profileCardVariant === 'pro' && (
+                <p className="set-pro-lifetime-line">✦ Lifetime Access · No Subscription</p>
+              )}
+              {shouldShowLifetimeUpsell(user) && profileCardVariant === 'regular' && (
+                <button
+                  type="button"
+                  className="set-lifetime-upsell-btn"
+                  onClick={() => navigate('/lifetime-access')}
+                >
+                  {`LIFETIME ₹${LIFETIME_PRICE_INR}`}
+                </button>
+              )}
             </div>
           </div>
           <input
@@ -1464,34 +1447,38 @@ const Settings: React.FC = () => {
 
 
 
-          <div className="set-sec-label set-sec-label--green">GROWTH AND FEEDBACK</div>
-          <div className="set-card">
-            <button type="button" className="set-row" onClick={() => navigate('/feedback')}>
-              <span className="set-ic set-ic--blue">
-                <span className="material-symbols-outlined">chat</span>
-              </span>
-              <span className="set-row-body">
-                <span className="set-row-title">Send Feedback</span>
-              </span>
-              <span className="material-symbols-outlined set-chev">chevron_right</span>
-            </button>
-            <button
-              type="button"
-              className="set-row"
-              onClick={() => {
-                setShowSupportModal(true);
-              }}
-            >
-              <span className="set-ic set-ic--pink">
-                <span className="material-symbols-outlined">favorite</span>
-              </span>
-              <span className="set-row-body">
-                <span className="set-row-title">Support This App</span>
-                <span className="set-row-sub--love">SHOW LOVE</span>
-              </span>
-              <span className="material-symbols-outlined set-chev">chevron_right</span>
-            </button>
-          </div>
+          {!isAdminProfileUser(user) && (
+            <>
+              <div className="set-sec-label set-sec-label--green">GROWTH AND FEEDBACK</div>
+              <div className="set-card">
+                <button type="button" className="set-row" onClick={() => navigate('/feedback')}>
+                  <span className="set-ic set-ic--blue">
+                    <span className="material-symbols-outlined">chat</span>
+                  </span>
+                  <span className="set-row-body">
+                    <span className="set-row-title">Send Feedback</span>
+                  </span>
+                  <span className="material-symbols-outlined set-chev">chevron_right</span>
+                </button>
+                <button
+                  type="button"
+                  className="set-row"
+                  onClick={() => {
+                    setShowSupportModal(true);
+                  }}
+                >
+                  <span className="set-ic set-ic--pink">
+                    <span className="material-symbols-outlined">favorite</span>
+                  </span>
+                  <span className="set-row-body">
+                    <span className="set-row-title">Support This App</span>
+                    <span className="set-row-sub--love">SHOW LOVE</span>
+                  </span>
+                  <span className="material-symbols-outlined set-chev">chevron_right</span>
+                </button>
+              </div>
+            </>
+          )}
 
           {!hidePushAndBiometricOnAndroid() && (
             <>

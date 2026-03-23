@@ -216,30 +216,6 @@ function computeBestStreak(routines: RoutineData[], logs: RoutineLog[]): number 
   return best;
 }
 
-/** Rolling 7-day completion vs scheduled slots (respects category filter). */
-function weekDoneVsTotal(
-  routines: RoutineData[],
-  logs: RoutineLog[],
-  filterChip: RoutineFilterChip,
-): { done: number; total: number } {
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  let done = 0;
-  let total = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - i);
-    const dStr = d.toISOString().split('T')[0];
-    const dayName = dayNames[d.getDay()];
-    const sched = routines.filter((r) => r.days.includes(dayName) && routineMatchesFilterChip(r, filterChip));
-    total += sched.length;
-    for (const r of sched) {
-      if (logs.some((l) => l.routine_id === r.id && l.completed_at === dStr)) done++;
-    }
-  }
-  return { done, total };
-}
-
 type SparkDay = {
   key: string;
   pct: number;
@@ -501,12 +477,13 @@ const PremiumRoutineCard: React.FC<{
 };
 
 const Routine: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   useLanguage();
   const [isSidebarHidden, setIsSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const [routines, setRoutines] = useState<RoutineData[]>([]);
   const [logs, setLogs] = useState<RoutineLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
 
@@ -521,6 +498,24 @@ const Routine: React.FC = () => {
   const [flashRoutineId, setFlashRoutineId] = useState<string | null>(null);
   const [consistencyIntro, setConsistencyIntro] = useState(false);
   const [streakDisplay, setStreakDisplay] = useState(0);
+
+  console.log('=== ROUTINES PAGE RENDER ===');
+  console.log('User:', user?.id);
+  console.log('Auth loading:', authLoading);
+  console.log('Routines state:', routines);
+  console.log('Component mounted at:', new Date().toISOString());
+
+  useEffect(() => {
+    console.log('=== ROUTINES useEffect FIRED ===');
+    console.log('User in effect:', user?.id);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setIsVisible(true);
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const dismissStreakBanner = useCallback(() => {
     setStreakBannerLeaving(true);
@@ -557,7 +552,16 @@ const Routine: React.FC = () => {
 
   const fetchRoutinesAndLogs = useCallback(
     async (options?: { force?: boolean }) => {
-      if (!user?.id) return;
+      if (authLoading) {
+        setLoading(true);
+        return;
+      }
+      if (!user?.id) {
+        setRoutines([]);
+        setLogs([]);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const rawR = await loadRoutinesRawStale<RoutineRow>(user.id);
@@ -619,7 +623,7 @@ const Routine: React.FC = () => {
         setLoading(false);
       }
     },
-    [user?.id, timeRange],
+    [authLoading, user?.id, timeRange],
   );
 
   useEffect(() => {
@@ -801,20 +805,10 @@ const Routine: React.FC = () => {
 
   const bestStreakAllTime = useMemo(() => computeBestStreak(routines, logs), [routines, logs]);
 
-  const weekDoneStat = useMemo(
-    () => weekDoneVsTotal(routines, logs, filterChip),
-    [routines, logs, filterChip],
-  );
-
   const sparklineDays = useMemo(
     () => buildLast7DaySparkline(routines, logs, filterChip),
     [routines, logs, filterChip],
   );
-
-  const weekProgressPct = useMemo(() => {
-    if (weekDoneStat.total <= 0) return 0;
-    return Math.min(100, (weekDoneStat.done / weekDoneStat.total) * 100);
-  }, [weekDoneStat.done, weekDoneStat.total]);
 
   useEffect(() => {
     if (previewConsistencyTab === '7d') setTimeRange('7d');
@@ -1015,11 +1009,23 @@ const Routine: React.FC = () => {
 
   const miniRingR = 11;
   const miniRingCirc = 2 * Math.PI * miniRingR;
-  const miniRingOffset = miniRingCirc - (ringPct / 100) * miniRingCirc;
+  const safeRingPct = Number.isFinite(ringPct) ? Math.min(100, Math.max(0, ringPct)) : 0;
+  const miniRingOffset = miniRingCirc - (safeRingPct / 100) * miniRingCirc;
 
   const scoreCards = categoryAverages.slice(0, 4);
   const legendCategories =
     chartCategories.length > 0 ? chartCategories.slice(0, 5) : categoryAverages.map((c) => c.category).slice(0, 5);
+
+  if (!isVisible) {
+    return (
+      <div className={`page-shell routine-page routine-premium-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
+        <div className="aurora-bg">
+          <div className="aurora-gradient-1" />
+          <div className="aurora-gradient-2" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`page-shell routine-page routine-premium-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
@@ -1154,25 +1160,6 @@ const Routine: React.FC = () => {
               </div>
               <div className="routine-consistency-stat-divider" aria-hidden />
               <div className="routine-consistency-stat routine-consistency-stat--2">
-                <span className="material-symbols-outlined routine-consistency-stat__check-ic" aria-hidden>
-                  check_circle
-                </span>
-                <div className="routine-consistency-stat__value-row">
-                  <span className="routine-consistency-stat__value">
-                    {weekDoneStat.done}/{weekDoneStat.total}
-                  </span>
-                  <span className="routine-consistency-stat__done-muted">done</span>
-                </div>
-                <span className="routine-consistency-stat__subl">This Week</span>
-                <div className="routine-consistency-week-bar">
-                  <div
-                    className={`routine-consistency-week-bar__fill ${consistencyIntro ? 'routine-consistency-week-bar__fill--go' : ''}`}
-                    style={{ ['--week-pct' as string]: `${weekProgressPct}%` }}
-                  />
-                </div>
-              </div>
-              <div className="routine-consistency-stat-divider" aria-hidden />
-              <div className="routine-consistency-stat routine-consistency-stat--3">
                 <span className="routine-consistency-stat__trophy" aria-hidden>
                   🏆
                 </span>
@@ -1845,10 +1832,6 @@ const Routine: React.FC = () => {
         }
         .routine-consistency-stat--2 {
           animation: routineStatIn 0.45s ease both;
-          animation-delay: 0.3s;
-        }
-        .routine-consistency-stat--3 {
-          animation: routineStatIn 0.45s ease both;
           animation-delay: 0.4s;
         }
         @keyframes routineStatIn {
@@ -1953,48 +1936,6 @@ const Routine: React.FC = () => {
           }
           to {
             stroke-dashoffset: var(--mini-ring-end);
-          }
-        }
-        .routine-consistency-stat__check-ic {
-          font-size: 20px !important;
-          font-variation-settings: 'FILL' 1, 'wght' 500;
-          color: #00e87a !important;
-          animation: routineCheckPop 0.4s cubic-bezier(0.34, 1.2, 0.64, 1) both;
-          animation-delay: 0.2s;
-        }
-        @keyframes routineCheckPop {
-          from {
-            transform: scale(0);
-          }
-          to {
-            transform: scale(1);
-          }
-        }
-        .routine-consistency-week-bar {
-          margin-top: 6px;
-          width: 100%;
-          max-width: 100%;
-          height: 3px;
-          border-radius: 2px;
-          background: rgba(255, 255, 255, 0.06);
-          overflow: hidden;
-        }
-        .routine-consistency-week-bar__fill {
-          height: 100%;
-          border-radius: 2px;
-          background: #00e87a;
-          width: 0;
-        }
-        .routine-consistency-week-bar__fill--go {
-          animation: routineWeekBarGrow 1s ease-out forwards;
-          animation-delay: 0.5s;
-        }
-        @keyframes routineWeekBarGrow {
-          from {
-            width: 0;
-          }
-          to {
-            width: var(--week-pct);
           }
         }
         .routine-consistency-stat__trophy {
