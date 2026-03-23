@@ -3,9 +3,32 @@ import BottomNav from '../components/BottomNav';
 import { useNavigate, Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { canAccessStatsAndRoutine } from '../lib/lifetimeAccess';
 import { supabase } from '../supabase';
 import { calculateProductivityScore } from '../utils/productivity';
+import { syncWidgetData } from '../lib/syncWidgetData';
+import { isCacheExpired, saveToCache, getStaleCache } from '../lib/cacheManager';
+import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
+import {
+  loadTasksListStale,
+  persistTasksList,
+  loadGoalsListStale,
+  persistGoalsList,
+  loadRoutinesRawStale,
+  persistRoutinesRaw,
+  loadRoutineLogsListStale,
+  persistRoutineLogsList,
+} from '../lib/listCaches';
+
+type HomeRoutineRow = { id: string; title: string; days: string[] };
 import WhyStayHardyModal from '../components/WhyStayHardyModal';
+import SupportModal from '../components/SupportModal';
+import {
+  ensureFirstOpenDate,
+  shouldShowAutomaticSupportPopup,
+  markSupportPopupShown,
+  isCompletedTaskToday,
+} from '../lib/supportPopup';
 
 interface Task {
   id: string;
@@ -47,6 +70,20 @@ const HomeDashboard: React.FC = () => {
     if (hour < 18) return language === 'Tamil' ? 'தொடர்ந்து முன்னேறு' : 'Stay Relentless';
     return language === 'Tamil' ? 'வெற்றியுடன் முடி' : 'Earn Your Rest';
   };
+  /** Time-of-day label for welcome line only (not the motivational title). */
+  const getWelcomeGreeting = () => {
+    const hour = new Date().getHours();
+    if (language === 'Tamil') {
+      if (hour >= 5 && hour < 12) return 'காலை வணக்கம்';
+      if (hour >= 12 && hour < 17) return 'மதிய வணக்கம்';
+      if (hour >= 17 && hour < 21) return 'இனிய மாலை';
+      return 'வணக்கம்';
+    }
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    if (hour >= 17 && hour < 21) return 'Good evening';
+    return 'Hey';
+  };
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -56,6 +93,8 @@ const HomeDashboard: React.FC = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isIntroOpen, setIsIntroOpen] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [supportGateReady, setSupportGateReady] = useState(false);
   const [scoreData, setScoreData] = useState<{
     tasks_progress: number;
     routines_progress: number;
@@ -78,45 +117,110 @@ const HomeDashboard: React.FC = () => {
     today.setHours(0, 0, 0, 0);
     const localTodayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
-    // 1. Fetch Productivity Score calculated in DB
-    const { data: score } = await supabase.rpc('get_productivity_score', {
-      p_user_id: user.id,
-      p_day_name: currentDayName,
-      p_today_str: localTodayStr
-    });
-    if (score) setScoreData(score);
-
-    // 2. Fetch Lists with columns optimized
-    const { data: tasksData } = await supabase
-      .from('tasks')
-      .select('id, title, status, priority, createdAt, category')
-      .eq('userId', user.id);
-    if (tasksData) setTasks(tasksData);
-
-    const { data: routinesData } = await supabase
-      .from('routines')
-      .select('id, title, days')
-      .eq('user_id', user.id);
-    if (routinesData) setRoutines(routinesData);
-
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const startDayStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
+    const startDayStr =
+      thirtyDaysAgo.getFullYear() +
+      '-' +
+      String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(thirtyDaysAgo.getDate()).padStart(2, '0');
 
-    const { data: logsData } = await supabase
-      .from('routine_logs')
-      .select('routine_id, completed_at')
-      .eq('user_id', user.id)
-      .gte('completed_at', startDayStr);
-    if (logsData) setRoutineLogs(logsData as RoutineLog[]);
+    const stTasks = await loadTasksListStale<Task>(user.id);
+    if (stTasks !== null) setTasks(stTasks as Task[]);
+    const stGoals = await loadGoalsListStale<Goal>(user.id);
+    if (stGoals !== null) setGoals(stGoals as Goal[]);
+    const stRoutines = await loadRoutinesRawStale<HomeRoutineRow>(user.id);
+    if (stRoutines !== null) setRoutines(stRoutines as Routine[]);
+    const stLogs = await loadRoutineLogsListStale<RoutineLog>(user.id);
+    if (stLogs !== null) {
+      setRoutineLogs(stLogs.filter((l) => l.completed_at >= startDayStr));
+    }
 
-    const { data: goalsData, error: goalsError } = await supabase
-      .from('goals')
-      .select('id, name, status, targetDate, createdAt')
-      .eq('userId', user.id)
-      .order('createdAt', { ascending: false });
-    if (goalsError) console.error('Error fetching goals:', goalsError);
-    if (goalsData) setGoals(goalsData);
+    const homeScoreSnap = await getStaleCache<{ user_id: string; score: NonNullable<typeof scoreData> }>(
+      CACHE_KEYS.home_stats,
+    );
+    if (homeScoreSnap?.user_id === user.id && homeScoreSnap.score) {
+      setScoreData(homeScoreSnap.score);
+    }
+
+    const tasksExp = await isCacheExpired(CACHE_KEYS.tasks_list, CACHE_EXPIRY_MINUTES.tasks_list);
+    const goalsExp = await isCacheExpired(CACHE_KEYS.goals_list, CACHE_EXPIRY_MINUTES.goals_list);
+    const routinesExp = await isCacheExpired(CACHE_KEYS.routines_list, CACHE_EXPIRY_MINUTES.routines_list);
+    const logsExp = await isCacheExpired(CACHE_KEYS.routine_logs_list, CACHE_EXPIRY_MINUTES.routines_list);
+
+    const [scoreRes, tasksRes, routinesRes, logsRes, goalsRes] = await Promise.all([
+      supabase.rpc('get_productivity_score', {
+        p_user_id: user.id,
+        p_day_name: currentDayName,
+        p_today_str: localTodayStr,
+      }),
+      tasksExp
+        ? supabase
+            .from('tasks')
+            .select('id, title, status, priority, createdAt, updatedAt, category')
+            .eq('userId', user.id)
+        : Promise.resolve({ data: null, error: null }),
+      routinesExp
+        ? supabase.from('routines').select('id, title, days').eq('user_id', user.id)
+        : Promise.resolve({ data: null, error: null }),
+      logsExp
+        ? supabase
+            .from('routine_logs')
+            .select('routine_id, completed_at')
+            .eq('user_id', user.id)
+            .gte('completed_at', startDayStr)
+        : Promise.resolve({ data: null, error: null }),
+      goalsExp
+        ? supabase
+            .from('goals')
+            .select('id, name, status, targetDate, createdAt')
+            .eq('userId', user.id)
+            .order('createdAt', { ascending: false })
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    if (scoreRes.data) {
+      setScoreData(scoreRes.data);
+      void saveToCache(
+        CACHE_KEYS.home_stats,
+        { user_id: user.id, score: scoreRes.data },
+        CACHE_EXPIRY_MINUTES.home_stats,
+      );
+    }
+
+    if (tasksExp && tasksRes.data) {
+      const tasksData = tasksRes.data;
+      setTasks(tasksData as Task[]);
+      void persistTasksList(user.id, tasksData);
+    }
+
+    if (routinesExp && routinesRes.data) {
+      const routinesData = routinesRes.data;
+      setRoutines(routinesData as Routine[]);
+      void persistRoutinesRaw(user.id, routinesData as HomeRoutineRow[]);
+    }
+
+    if (logsExp && logsRes.data) {
+      const logsData = logsRes.data as RoutineLog[];
+      const asLogs = logsData.filter((l) => l.completed_at >= startDayStr);
+      setRoutineLogs(asLogs);
+      const mergedMap = new Map<string, RoutineLog>();
+      for (const l of stLogs ?? []) mergedMap.set(`${l.routine_id}|${l.completed_at}`, l);
+      for (const l of asLogs) mergedMap.set(`${l.routine_id}|${l.completed_at}`, l);
+      void persistRoutineLogsList(user.id, [...mergedMap.values()]);
+    }
+
+    if (goalsExp) {
+      if (goalsRes.error) console.error('Error fetching goals:', goalsRes.error);
+      if (goalsRes.data) {
+        const goalsData = goalsRes.data;
+        setGoals(goalsData as Goal[]);
+        void persistGoalsList(user.id, goalsData as Goal[]);
+      }
+    }
+
+    void syncWidgetData();
   }, [user?.id]);
 
   useEffect(() => {
@@ -221,26 +325,6 @@ const HomeDashboard: React.FC = () => {
     }
   }
 
-  const getStreakColor = (s: number) => {
-    if (s === 0) return '#475569';
-    if (s <= 10) return '#4ade80'; // Light Green
-    if (s <= 20) return '#10b981'; // Dark Green
-    // Scaling from 20 to 100 days (HSL Hue 120 -> 0)
-    const ratio = Math.min(1, Math.max(0, (s - 20) / 80));
-    const hue = 120 - (ratio * 120); 
-    return `hsl(${Math.round(hue)}, 100%, 50%)`;
-  };
-
-  const getStreakTagline = (s: number) => {
-    if (s === 0) return 'Start your daily grind! 🌱';
-    if (s <= 10) return 'Building the habit! ⚡';
-    if (s <= 20) return 'Unstoppable Momentum! 🌪️';
-    if (s <= 50) return 'Warrior Mode Activated! ⚔️';
-    if (s <= 100) return 'Godlike Discipline! 👑';
-    return 'Unstoppable Legend! 🌟';
-  };
-
-
 
 
 
@@ -260,7 +344,6 @@ const HomeDashboard: React.FC = () => {
     goalsProgress: avgGoalProgress
   });
 
-  const [activeQuote, setActiveQuote] = useState<string | null>(null);
   // Dynamic data for 5% intervals
   const progressIntervals = [
     { min: 0, tag: 'Warming Up', quote: 'Every journey starts with a single pulse.' },
@@ -291,359 +374,591 @@ const HomeDashboard: React.FC = () => {
   const getMotivationalTagline = () => currentProgressData.quote;
   const getStatusTagline = () => currentProgressData.tag;
 
-  const showQuote = () => {
-    let quote = "";
-    if (overallProgress <= 20) {
-      quote = "Every journey starts with the first step.";
-    } else if (overallProgress <= 50) {
-      quote = "Keep running. Momentum is building.";
-    } else if (overallProgress <= 80) {
-      quote = "You are making strong progress.";
-    } else if (overallProgress < 100) {
-      quote = "Almost there. Stay Hardy.";
-    } else {
-      quote = "You made it today. Great work.";
+  const hubStatusPillClass =
+    overallProgress < 34 ? 'hub-status-pill--low' : overallProgress < 67 ? 'hub-status-pill--mid' : 'hub-status-pill--high';
+
+  const ringR = 30;
+  const ringC = 2 * Math.PI * ringR;
+  const routineFrac =
+    activeRoutinesTodayCount > 0 ? Math.min(1, completedRoutinesToday / activeRoutinesTodayCount) : 0;
+  const ringOffset = ringC - routineFrac * ringC;
+
+  const pendingGoalsSorted = useMemo(
+    () =>
+      [...goals]
+        .filter((g) => g.status === 'pending' && g.targetDate)
+        .sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime())
+        .slice(0, 5),
+    [goals],
+  );
+
+  const streakSubtext =
+    currentStreak <= 10 ? 'Building the habit ⚡' : currentStreak <= 30 ? 'Momentum locked in ⚡' : 'Unstoppable rhythm ⚡';
+
+  const firstName = user?.name?.split(' ')[0] || 'Operator';
+  const displayFirstName =
+    firstName.length > 0
+      ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
+      : firstName;
+
+  useEffect(() => {
+    ensureFirstOpenDate();
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setSupportGateReady(false);
+      return;
     }
-    setActiveQuote(quote);
-  };
+    setSupportGateReady(false);
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (cancelled) return;
+      const seen = !!data.user?.user_metadata?.has_seen_stay_hardy_intro;
+      if (!seen) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      if (cancelled) return;
+      setSupportGateReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
-  const handleRunnerAction = () => {
-    showQuote();
-    // For mobile or click, we might want it to persist slightly longer or auto-dismiss
-    setTimeout(() => setActiveQuote(null), 3000);
-  };
+  useEffect(() => {
+    if (!user?.id || !supportGateReady || isIntroOpen) return;
+    const tasksToday = tasks.filter(
+      (t) => t.status === 'completed' && isCompletedTaskToday(t.updatedAt)
+    ).length;
+    if (
+      !shouldShowAutomaticSupportPopup({
+        tasksCompletedToday: tasksToday,
+        routineStreak: currentStreak,
+        goalCount: goals.length,
+      })
+    ) {
+      return;
+    }
+    markSupportPopupShown();
+    const t = window.setTimeout(() => setShowSupportModal(true), 1200);
+    return () => window.clearTimeout(t);
+  }, [user?.id, supportGateReady, isIntroOpen, tasks, goals.length, currentStreak]);
 
-
-  
   return (
-    <div className={`page-shell ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
+    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
       <style>{`
-        @media (min-width: 769px) { .shortcut-btn-label { display: block !important; } }
-        @media (max-width: 768px) { 
-          .shortcut-btn-label { display: none !important; } 
-          .shortcut-btn { position: relative; }
-          .shortcut-btn:active::after { content: attr(data-label); position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #0b0f19; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.7rem; white-space: nowrap; z-index: 100; font-weight: 800; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .hub-daily-page {
+          --hub-radius: 20px;
         }
-
-        @keyframes runner-run {
-          0%, 100% { transform: scaleX(-1) translateY(0) rotate(0); }
-          50% { transform: scaleX(-1) translateY(-3px) rotate(-3deg); }
-        }
-        .runner-indicator {
-          position: absolute;
-          top: 0;
-          transition: left 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-          z-index: 100;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          cursor: pointer;
-          -webkit-tap-highlight-color: transparent;
-          transform: translateY(-90%) translateX(-50%);
-        }
-        .runner-icon {
-          font-size: 1.8rem;
-          filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
-          animation: runner-run 1.2s infinite ease-in-out;
-          display: block;
-          user-select: none;
-          line-height: 1;
-          transform: scaleX(-1);
-        }
-        .runner-3d-shadow {
-          width: 14px;
-          height: 3px;
-          background: rgba(0, 0, 0, 0.4);
-          border-radius: 50%;
-          filter: blur(1.5px);
-          opacity: 0.5;
-        }
-        .quote-bubble {
-          position: absolute;
-          bottom: 100%;
-          left: 50%;
-          transform: translateX(-50%);
-          background: #ffffff;
-          color: #000000;
-          padding: 6px 12px;
-          border-radius: 12px;
-          font-size: 0.7rem;
-          font-weight: 900;
-          white-space: nowrap;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-          animation: quote-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          margin-bottom: 12px;
-          z-index: 101;
-        }
-        .quote-bubble::after {
-          content: "";
-          position: absolute;
-          top: 100%;
-          left: 50%;
-          transform: translateX(-50%);
-          border-width: 6px;
-          border-style: solid;
-          border-color: #ffffff transparent transparent transparent;
-        }
-        @keyframes quote-pop {
-          0% { opacity: 0; transform: translateX(-50%) scale(0.5); }
-          100% { opacity: 1; transform: translateX(-50%) scale(1); }
-        }
-        .journey-track {
-          position: relative;
-          height: 16px;
-          background: rgba(255, 255, 255, 0.03);
-          border-radius: 20px;
-          margin: 60px 0 30px;
-          overflow: visible;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
-          display: flex;
-          align-items: center;
-        }
-        .journey-segment {
-          height: 100%;
-          transition: width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-          position: relative;
-        }
-        .journey-milestone {
-          position: absolute;
-          width: 4px;
-          height: 4px;
-          background: rgba(255, 255, 255, 0.2);
-          border-radius: 50%;
-          top: 50%;
-          transform: translateY(-50%);
-        }
-        .home-arrival-message {
-          position: absolute;
-          top: -45px;
-          right: -20px;
-          background: #10b981;
-          color: #ffffff;
-          padding: 4px 10px;
-          border-radius: 8px;
-          font-size: 0.65rem;
-          font-weight: 950;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-          animation: quote-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          white-space: nowrap;
-        }
-        .home-arrival-message::after {
-          content: "";
-          position: absolute;
-          top: 100%;
-          right: 25px;
-          border-width: 5px;
-          border-style: solid;
-          border-color: #10b981 transparent transparent transparent;
-        }
-        .journey-segment::after {
-          content: "";
-          position: absolute;
-          top: 0; right: 0; bottom: 0; left: 0;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-          animation: flow 2s infinite linear;
-        }
-        @keyframes flow {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        .journey-label {
-          position: absolute;
-          top: 20px;
-          font-size: 0.6rem;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          white-space: nowrap;
-          opacity: 0.6;
-        }
-        .productivity-journey-container {
-          padding: 1.5rem;
-          background: rgba(0, 0, 0, 0.3);
-          border-radius: 1.5rem;
-          border: 1px solid rgba(255, 255, 255, 0.03);
-          margin-top: 0.5rem;
-          width: 100%;
-          box-sizing: border-box;
-        }
-        @media (max-width: 480px) {
-          .chart-wrapper {
-            width: 180px;
-            height: 180px;
+        @media (max-width: 767px) {
+          .hub-daily-page.page-shell {
+            padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
           }
         }
-        .legend-container {
-          flex: 1;
+        @media (min-width: 768px) {
+          .hub-daily-page.page-shell {
+            padding-top: 12px;
+          }
+        }
+        .hub-page-header {
+          position: relative;
           display: flex;
           flex-direction: column;
-          gap: 0.75rem;
+          align-items: stretch;
+          gap: 0;
+          padding: 12px 16px 8px;
+          max-width: 720px;
+          margin: 0 auto;
+          box-sizing: border-box;
           width: 100%;
         }
-        .legend-card {
+        .hub-header-bg {
+          position: absolute;
+          inset: 0;
+          left: 0;
+          right: 0;
+          background: linear-gradient(180deg, rgba(0, 232, 122, 0.04) 0%, transparent 100%);
+          pointer-events: none;
+          z-index: 0;
+        }
+        .hub-header-row1 {
+          position: relative;
+          z-index: 1;
           display: flex;
-          align-items: center;
+          flex-direction: row;
           justify-content: space-between;
-          padding: 1rem 1.25rem;
-          background: #000000;
-          border-radius: 1.25rem;
-          border: 1px solid rgba(255, 255, 255, 0.04);
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          cursor: pointer;
+          align-items: center;
+          gap: 0.75rem;
+          min-height: 44px;
         }
-        .legend-card:hover {
-          transform: translateX(6px);
-          background: #050508;
-          border-color: rgba(255, 255, 255, 0.1);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-        }
-
-        /* ── Routine Snapshot Styles ── */
-        .routine-snapshot-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 1rem;
-        }
-        @media (max-width: 480px) {
-          .routine-snapshot-grid { grid-template-columns: 1fr; }
-        }
-
-        .snapshot-card {
+        .hub-header-row1-left {
           display: flex;
           align-items: center;
-          gap: 1.25rem;
-          background: #000000 !important;
-          padding: 1.25rem;
-          border-radius: 1.25rem;
-          border: 1px solid rgba(255, 255, 255, 0.03);
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          cursor: pointer;
+          gap: 0.5rem;
+          flex-shrink: 0;
         }
-        .snapshot-card:hover {
-          transform: translateY(-4px);
-          background: #050508 !important;
+        .hub-header-welcome {
+          position: relative;
+          z-index: 1;
+          margin-top: 16px;
+          text-align: left;
+          align-self: stretch;
         }
-
-        .snapshot-icon-container {
-          width: 42px;
-          height: 42px;
+        .hub-welcome-greeting {
+          font-family: 'DM Sans', system-ui, sans-serif;
+          font-size: 13px;
+          font-weight: 400;
+          color: rgba(255, 255, 255, 0.55);
+          margin: 0;
+          line-height: 1.35;
+        }
+        .hub-welcome-motivation {
+          font-family: 'Syne', system-ui, sans-serif;
+          font-size: 26px;
+          font-weight: 900;
+          letter-spacing: 2px;
+          color: #ffffff;
+          margin: 2px 0 0;
+          line-height: 1.15;
+        }
+        .hub-icon-btn {
+          width: 44px;
+          height: 44px;
           border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(0, 0, 0, 0.35);
+          color: #cbd5e1;
           display: flex;
           align-items: center;
           justify-content: center;
+          cursor: pointer;
+          transition: background 0.2s, color 0.2s, transform 0.15s;
+        }
+        .hub-icon-btn:active {
+          transform: scale(0.96);
+        }
+        .hub-icon-btn .material-symbols-outlined {
+          font-size: 22px;
+        }
+        .hub-avatar-btn {
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          border: 2px solid rgba(0, 232, 122, 0.4);
+          overflow: hidden;
+          padding: 0;
+          cursor: pointer;
+          background: linear-gradient(145deg, rgba(16, 185, 129, 0.25), rgba(15, 23, 42, 0.9));
+          color: #ecfdf5;
+          font-weight: 900;
+          font-size: 1rem;
           flex-shrink: 0;
+          box-shadow: 0 0 12px rgba(0, 232, 122, 0.2);
         }
-        .progress-card { border-color: rgba(16, 185, 129, 0.15); }
-        .progress-card:hover { border-color: rgba(16, 185, 129, 0.5); box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1); }
-        
-        .streak-card { border-color: rgba(239, 68, 68, 0.15); }
-        .streak-card:hover { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 4px 20px rgba(239, 68, 68, 0.1); }
-        .streak-card .snapshot-icon-container { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-        .streak-card .snapshot-icon-container .material-symbols-outlined { font-variation-settings: "'FILL' 1"; }
-
-        @keyframes flame-pulse {
-          0% { transform: scale(1); filter: brightness(1); }
-          50% { transform: scale(1.15) translateY(-2px); filter: brightness(1.3) drop-shadow(0 0 10px currentColor); }
-          100% { transform: scale(1); filter: brightness(1); }
-        }
-        .fire-animation {
-          animation: flame-pulse 1s infinite ease-in-out;
+        .hub-avatar-btn img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
         }
 
-        .snapshot-value { font-size: 1.25rem; font-weight: 900; color: #ffffff; }
-        .snapshot-value.highlighted { color: #f87171; }
-        .snapshot-label { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-top: 0.2rem; }
-
-        /* ── Goals Progress Styles ── */
-        .goal-progress-card {
-          background: #000000 !important;
-          padding: 1.25rem;
-          border-radius: 1.25rem;
-          border: 1px solid rgba(255, 255, 255, 0.03);
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .goal-progress-card:hover {
-          transform: translateY(-4px);
-          border-color: rgba(59, 130, 246, 0.4);
-          box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+        .hub-main-scroll {
+          max-width: 720px;
+          margin: 8px auto 0;
+          padding: 0 0.35rem calc(7rem + env(safe-area-inset-bottom, 0px));
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
         }
 
-        /* ── Modern Dashboard Overrides ── */
-        .neon-box {
-          background: rgba(8, 8, 12, 0.5);
-          backdrop-filter: blur(20px) saturate(160%);
-          border-radius: 1.5rem;
-          padding: 1.5rem;
-          margin-bottom: 0.75rem;
+        .hub-card {
+          border-radius: var(--hub-radius);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          padding: 1.05rem 1.05rem;
+          min-height: 0;
           position: relative;
           overflow: hidden;
         }
-        .neon-box::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          border-radius: 1.5rem;
-          padding: 1px;
-          background: linear-gradient(135deg, #00f2fe 0%, #a855f7 50%, #ff4b2b 100%);
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-          opacity: 0.3;
-          transition: opacity 0.3s ease;
+        @media (min-width: 380px) {
+          .hub-card {
+            padding: 1.15rem 1.15rem;
+          }
         }
-
-        .clickable-neon-box {
-          cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        .hub-section-title {
+          margin: 0 0 1rem;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.2em;
+          color: #e2e8f0;
         }
-        .clickable-neon-box:hover {
-          transform: translateY(-4px);
-          background: rgba(12, 12, 18, 0.6) !important;
-        }
-        .clickable-neon-box:hover::before {
-          opacity: 0.6;
-        }
-
-
-        .focus-tile {
+        .hub-section-head {
           display: flex;
           align-items: center;
-          gap: 0.75rem !important;
-          padding: 1rem 1.25rem !important;
-          border-radius: 1.25rem !important;
+          justify-content: space-between;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        .hub-section-head .hub-section-title {
+          margin: 0;
+        }
+        .hub-see-all {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          color: #4ade80;
+          text-decoration: none;
+          border: none;
+          background: none;
+          cursor: pointer;
+          padding: 0.25rem 0;
         }
 
-        @media (max-width: 650px) {
-          .upcoming-goals-grid { grid-template-columns: 1fr !important; }
+        .hub-hero-focus {
+          background: radial-gradient(ellipse 90% 70% at 50% 80%, rgba(16, 185, 129, 0.18), rgba(6, 8, 14, 0.96));
+          box-shadow: 0 0 80px rgba(16, 185, 129, 0.08), inset 0 0 60px rgba(0, 0, 0, 0.35);
+          padding: 1.35rem 1.2rem 1.25rem;
+        }
+        .hub-hero-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 0.75rem;
+          margin-bottom: 0.65rem;
+        }
+        .hub-score-label {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.22em;
+          color: rgba(148, 163, 184, 0.85);
+          margin: 0 0 0.35rem;
+        }
+        .hub-score-pct {
+          font-family: 'Bebas Neue', Impact, sans-serif;
+          font-size: clamp(3.2rem, 16vw, 4.5rem);
+          font-weight: 400;
+          color: #ffffff;
+          line-height: 0.95;
+          letter-spacing: 0.02em;
+          text-shadow: 0 0 40px rgba(255, 255, 255, 0.08);
+        }
+        .hub-hero-quote {
+          margin: 0.55rem 0 0;
+          font-size: 0.82rem;
+          font-style: italic;
+          font-weight: 600;
+          color: rgba(148, 163, 184, 0.92);
+          line-height: 1.45;
+          max-width: 95%;
+        }
+        .hub-status-pill {
+          flex-shrink: 0;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          padding: 0.45rem 0.7rem;
+          border-radius: 999px;
+          border: 1px solid transparent;
+          text-transform: uppercase;
+        }
+        .hub-status-pill--low {
+          color: #fecaca;
+          background: rgba(239, 68, 68, 0.18);
+          border-color: rgba(248, 113, 113, 0.45);
+          box-shadow: 0 0 16px rgba(239, 68, 68, 0.25);
+        }
+        .hub-status-pill--mid {
+          color: #fef08a;
+          background: rgba(234, 179, 8, 0.15);
+          border-color: rgba(250, 204, 21, 0.4);
+          box-shadow: 0 0 14px rgba(250, 204, 21, 0.2);
+        }
+        .hub-status-pill--high {
+          color: #d1fae5;
+          background: rgba(16, 185, 129, 0.2);
+          border-color: rgba(52, 211, 153, 0.45);
+          box-shadow: 0 0 18px rgba(16, 185, 129, 0.3);
         }
 
-        @media (min-width: 769px) {
-          .desktop-split-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
-            align-items: stretch;
-          }
-        .inner-task-row:hover {
-          background: rgba(255, 255, 255, 0.05) !important;
-          border-color: rgba(255, 255, 255, 0.1) !important;
-          transform: translateX(4px);
+        .hub-runner-track {
+          position: relative;
+          height: 22px;
+          margin-top: 1.35rem;
+          border-radius: 999px;
+          background: rgba(0, 0, 0, 0.45);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+          overflow: visible;
+        }
+        .hub-runner-fill {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #ef4444, #facc15, #4ade80);
+          transition: width 1.3s cubic-bezier(0.34, 1.1, 0.64, 1);
+          box-shadow: 0 0 20px rgba(74, 222, 128, 0.25);
+          z-index: 1;
+        }
+        .hub-runner-char {
+          position: absolute;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          font-size: 1.55rem;
+          line-height: 1;
+          z-index: 3;
+          pointer-events: none;
+          filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+          transition: left 1.3s cubic-bezier(0.34, 1.1, 0.64, 1);
+          animation: hubRunnerBob 0.9s ease-in-out infinite;
+        }
+        @keyframes hubRunnerBob {
+          0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+          50% { transform: translate(-50%, -50%) translateY(-3px); }
+        }
+        .hub-runner-char-inner {
+          display: inline-block;
+          transform: scaleX(-1);
+        }
+        .hub-legend-row {
+          display: flex;
+          justify-content: space-between;
+          gap: 0.5rem;
+          margin-top: 1rem;
+          flex-wrap: wrap;
+        }
+        .hub-legend-item {
+          display: flex;
+          align-items: center;
+          gap: 0.35rem;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 8px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          color: rgba(148, 163, 184, 0.95);
+        }
+        .hub-legend-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          box-shadow: 0 0 8px currentColor;
+        }
+
+        .hub-task-row {
+          display: flex;
+          gap: 0.75rem;
+          padding: 0.85rem 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          cursor: pointer;
+          text-align: left;
+          width: 100%;
+          background: none;
+          border-left: none;
+          border-right: none;
+          border-top: none;
+          color: inherit;
+        }
+        .hub-task-row:last-child {
+          border-bottom: none;
+          padding-bottom: 0.25rem;
+        }
+        .hub-task-title {
+          font-family: 'DM Sans', system-ui, sans-serif;
+          font-size: 14px;
+          font-weight: 600;
+          color: #fff;
+          margin: 0;
+          line-height: 1.25;
+        }
+        .hub-task-micro {
+          margin: 0.3rem 0 0;
+          font-size: 11px;
+          color: rgba(148, 163, 184, 0.9);
+          font-weight: 600;
+        }
+
+        .hub-routine-card {
+          position: relative;
+          background: linear-gradient(165deg, rgba(16, 185, 129, 0.08), rgba(8, 10, 18, 0.94));
+          cursor: pointer;
+        }
+        .hub-routine-shimmer {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, rgba(52, 211, 153, 0.65), transparent);
+        }
+        .hub-routine-split {
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: stretch;
+          gap: 0;
+          margin-top: 0.25rem;
+        }
+        .hub-routine-divider {
+          width: 1px;
+          background: linear-gradient(180deg, transparent, rgba(52, 211, 153, 0.25), transparent);
+          margin: 0.5rem 0;
+        }
+        .hub-routine-block {
+          padding: 0.5rem 0.65rem;
+          text-align: center;
+        }
+        .hub-routine-frac {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: clamp(1.75rem, 7vw, 2.25rem);
+          font-weight: 800;
+          color: #fff;
+          line-height: 1;
+        }
+        .hub-routine-frac span {
+          opacity: 0.45;
+          margin: 0 0.08em;
+        }
+        .hub-routine-sublabel {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 8px;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          color: rgba(148, 163, 184, 0.85);
+          margin-top: 0.45rem;
+        }
+        .hub-routine-ring-wrap {
+          position: relative;
+          width: 56px;
+          height: 56px;
+          margin: 0.5rem auto 0;
+        }
+        .hub-routine-ring-icon {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #4ade80;
+        }
+        .hub-routine-ring-icon .material-symbols-outlined {
+          font-size: 22px !important;
+          font-variation-settings: 'FILL' 1;
+        }
+        .hub-streak-num {
+          font-family: 'Bebas Neue', Impact, sans-serif;
+          font-size: clamp(2.5rem, 10vw, 3.25rem);
+          font-weight: 400;
+          color: #facc15;
+          line-height: 1;
+          text-shadow: 0 0 24px rgba(250, 204, 21, 0.25);
+        }
+        .hub-streak-sub {
+          margin-top: 0.45rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: rgba(226, 232, 240, 0.85);
+          line-height: 1.35;
+        }
+
+        .hub-goals-card {
+          background: rgba(10, 12, 20, 0.92);
+        }
+        .hub-goal-row {
+          display: flex;
+          gap: 0.75rem;
+          align-items: flex-start;
+          padding: 1rem 0.85rem;
+          border-radius: 14px;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          margin-bottom: 0.65rem;
+          cursor: pointer;
+          text-align: left;
+          width: 100%;
+          background: rgba(0, 0, 0, 0.25);
+          color: inherit;
+        }
+        .hub-goal-row:last-child {
+          margin-bottom: 0;
+        }
+        .hub-goal-row--soon {
+          border-left: 3px solid rgba(249, 115, 22, 0.65);
+          box-shadow: inset 0 0 40px rgba(249, 115, 22, 0.04);
+        }
+        .hub-goal-row--urgent {
+          border-left: 3px solid rgba(239, 68, 68, 0.75);
+          background: rgba(127, 29, 29, 0.12);
+          box-shadow: inset 0 0 50px rgba(239, 68, 68, 0.06);
+        }
+        .hub-goal-emoji {
+          font-size: 1.5rem;
+          line-height: 1;
+          flex-shrink: 0;
+        }
+        .hub-goal-title {
+          font-size: 0.95rem;
+          font-weight: 800;
+          color: #fff;
+          margin: 0;
+          line-height: 1.25;
+        }
+        .hub-goal-chip {
+          display: inline-block;
+          margin-top: 0.45rem;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          padding: 0.35rem 0.55rem;
+          border-radius: 999px;
+        }
+        .hub-goal-chip--orange {
+          color: #fdba74;
+          background: rgba(234, 88, 12, 0.15);
+          border: 1px solid rgba(251, 146, 60, 0.35);
+        }
+        .hub-goal-chip--red {
+          color: #fecaca;
+          background: rgba(239, 68, 68, 0.2);
+          border: 1px solid rgba(248, 113, 113, 0.45);
+          animation: hubPulseRed 1.8s ease-in-out infinite;
+        }
+        @keyframes hubPulseRed {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+          50% { box-shadow: 0 0 14px 2px rgba(239, 68, 68, 0.25); }
+        }
+
+        .hub-reminders-block {
+          padding-top: 0.25rem;
+        }
+        .hub-reminders-label {
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 0.16em;
+          color: rgba(52, 211, 153, 0.85);
+          margin-bottom: 0.5rem;
         }
         .reminder-row-link {
-          transition: all 0.2s ease;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 0.8rem;
+          color: #e2e8f0;
+          background: rgba(255, 255, 255, 0.03);
+          padding: 0.55rem 0.75rem;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          text-decoration: none;
+          margin-bottom: 0.4rem;
+          transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
         }
-        .reminder-row-link:hover {
-          background: rgba(16, 185, 129, 0.08) !important;
-          border-color: rgba(16, 185, 129, 0.2) !important;
-          transform: translateX(4px);
-        }
-
-        @media (max-width: 768px) {
-          .status-tagline-container {
-            display: none !important;
+        @media (hover: hover) {
+          .reminder-row-link:hover {
+            background: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.2);
+            transform: translateX(4px);
           }
         }
       `}</style>
@@ -652,262 +967,253 @@ const HomeDashboard: React.FC = () => {
         <div className="aurora-gradient-2"></div>
       </div>
       
-      <header className="dashboard-header" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.5rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>
-             {getTimeGreeting()}, {user?.name?.split(' ')[0] || 'User'}
-          </h1>
-          <p style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.05em', marginTop: '0.3rem', textTransform: 'uppercase' }}>
-            {(() => {
-              const now = new Date();
-              const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
-              const month = now.toLocaleDateString('en-US', { month: 'long' });
-              const day = now.getDate();
-              return `Today is ${dayName}, ${month} ${day}`;
-            })()}
-          </p>
-          
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button
-            onClick={toggleSidebar}
-            className="notification-btn desktop-only-btn"
-            title={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar (Focus Mode)"}
-            data-tooltip={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar"}
-            style={{
-              ...(isSidebarHidden ? { background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' } : {}),
-              opacity: 0.5
-            }}
-          >
-            <span className="material-symbols-outlined">
-              {isSidebarHidden ? 'side_navigation' : 'fullscreen'}
-            </span>
+      <header className="hub-page-header">
+        <div className="hub-header-bg" aria-hidden />
+        <div className="hub-header-row1">
+          <div className="hub-header-row1-left">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="hub-icon-btn desktop-only-btn notification-btn"
+              title={isSidebarHidden ? 'Show Sidebar' : 'Hide Sidebar (Focus Mode)'}
+              data-tooltip={isSidebarHidden ? 'Show Sidebar' : 'Hide Sidebar'}
+              style={
+                isSidebarHidden
+                  ? { background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', borderColor: 'rgba(52, 211, 153, 0.35)' }
+                  : undefined
+              }
+            >
+              <span className="material-symbols-outlined">{isSidebarHidden ? 'side_navigation' : 'fullscreen'}</span>
+            </button>
+          </div>
+          <button type="button" className="hub-avatar-btn" title="Profile" onClick={() => navigate('/settings')}>
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt="" />
+            ) : (
+              <span>{firstName.charAt(0).toUpperCase()}</span>
+            )}
           </button>
+        </div>
+        <div className="hub-header-welcome">
+          <p className="hub-welcome-greeting">
+            {getWelcomeGreeting()}, {displayFirstName} 👋
+          </p>
+          <p className="hub-welcome-motivation">{getTimeGreeting()}</p>
         </div>
       </header>
 
-      <main style={{ paddingBottom: '6rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0 0.5rem' }}>
-        
-        {/* 1. Today's Focus Outer Neon Box */}
-        <div className="neon-box">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Today's Focus</h2>
-          </div>
-
-          <div className="productivity-journey-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
-              <div>
-                <span style={{ fontSize: '0.65rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Score</span>
-                <div style={{ fontSize: '2.2rem', fontWeight: 950, color: '#ffffff', lineHeight: 1, marginTop: '0.2rem' }}>
-                   {overallProgress}%
+      <main className="hub-main-scroll">
+        {(() => {
+          const pct = Math.max(0, Math.min(100, overallProgress));
+          const runnerX = Math.max(3, Math.min(97, pct));
+          return (
+            <section className="hub-card hub-hero-focus" aria-label="Today's focus">
+              <div className="hub-hero-top">
+                <div>
+                  <p className="hub-score-label">SCORE</p>
+                  <div className="hub-score-pct">{pct}%</div>
+                  <p className="hub-hero-quote">{getMotivationalTagline()}</p>
                 </div>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, margin: '0.5rem 0 0', fontStyle: 'italic' }}>
-                  {getMotivationalTagline()}
-                </p>
+                <span className={`hub-status-pill ${hubStatusPillClass}`}>{getStatusTagline()}</span>
               </div>
-              <div className="status-tagline-container" style={{ textAlign: 'right' }}>
-                <div style={{ padding: '0.4rem 0.8rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {getStatusTagline()}
-                  </span>
-                </div>
+              <div className="hub-runner-track" aria-hidden>
+                <div className="hub-runner-fill" style={{ width: `${pct}%` }} />
+                <span className="hub-runner-char" style={{ left: `${runnerX}%` }} aria-hidden>
+                  <span className="hub-runner-char-inner">🏃</span>
+                </span>
               </div>
-            </div>
-
-            <div className="journey-track">
-              {/* Milesone indicators for cleaner structure */}
-              <div className="journey-milestone" style={{ left: '25%' }}></div>
-              <div className="journey-milestone" style={{ left: '50%' }}></div>
-              <div className="journey-milestone" style={{ left: '75%' }}></div>
-
-              {/* Runner Character */}
-              <div 
-                className="runner-indicator" 
-                style={{ left: `${overallProgress}%` }} 
-                onClick={handleRunnerAction}
-                onMouseEnter={showQuote}
-                onMouseLeave={() => setActiveQuote(null)}
-                onTouchStart={handleRunnerAction}
-              >
-                {activeQuote && <div className="quote-bubble" style={{ bottom: '130%', marginBottom: '8px' }}>{activeQuote}</div>}
-                <span className="runner-icon">🏃</span>
+              <div className="hub-legend-row">
+                <span className="hub-legend-item">
+                  <span className="hub-legend-dot" style={{ color: '#3b82f6', background: '#3b82f6' }} />
+                  TASKS
+                </span>
+                <span className="hub-legend-item">
+                  <span className="hub-legend-dot" style={{ color: '#4ade80', background: '#4ade80' }} />
+                  ROUTINES
+                </span>
+                <span className="hub-legend-item">
+                  <span className="hub-legend-dot" style={{ color: '#ef4444', background: '#ef4444' }} />
+                  GOALS
+                </span>
               </div>
+            </section>
+          );
+        })()}
 
-              {/* Progress Segments - Weighted Visualization */}
-              <div className="journey-segment" style={{ width: `${tasksProgress * 0.2}%`, background: 'linear-gradient(90deg, #3b82f6, #60a5fa)', borderTopLeftRadius: '20px', borderBottomLeftRadius: '20px', boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }}></div>
-              <div className="journey-segment" style={{ width: `${routinesProgress * 0.6}%`, background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)' }}></div>
-              <div className="journey-segment" style={{ width: `${avgGoalProgress * 0.2}%`, background: 'linear-gradient(90deg, #ef4444, #f87171)', borderTopRightRadius: overallProgress === 100 ? '20px' : 0, borderBottomRightRadius: overallProgress === 100 ? '20px' : 0, boxShadow: '0 0 15px rgba(239, 68, 68, 0.3)' }}></div>
-
-                {overallProgress === 100 && <div className="home-arrival-message" style={{ top: '-40px' }}>You are home</div>}
-              </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginTop: '1.5rem', padding: '0 0.5rem' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }}></div>
-                 <span style={{ color: '#94a3b8', fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tasks</span>
-               </div>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
-                 <span style={{ color: '#94a3b8', fontSize: '0.66rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Routines</span>
-               </div>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }}></div>
-                 <span style={{ color: '#94a3b8', fontSize: '0.66rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Goals</span>
-               </div>
-            </div>
+        <section className="hub-card">
+          <div className="hub-section-head">
+            <h2 className="hub-section-title">TOP 2 PENDING TASKS</h2>
+            <button type="button" className="hub-see-all" onClick={() => navigate('/dashboard')}>
+              SEE ALL
+            </button>
           </div>
-
-          {/* Inner Tasks List Row inside container box row frame */}
-          {topPendingTasks.length > 0 && (
-            <p style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 800, margin: '1rem 0 0.25rem 0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Top 2 Pending Tasks
+          {topPendingTasks.length > 0 ? (
+            topPendingTasks.map((t, index) => {
+              const taglines = ['Still waiting 👀', "Pending — don't ignore 😏", 'Clock is ticking ⏱️'];
+              const dynamicTagline = taglines[(t.id.length + index) % taglines.length];
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="hub-task-row"
+                  onClick={() => navigate('/dashboard')}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <p className="hub-task-title">{t.title}</p>
+                    <p className="hub-task-micro">{dynamicTagline}</p>
+                  </div>
+                </button>
+              );
+            })
+          ) : (
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(148, 163, 184, 0.95)', fontWeight: 600, textAlign: 'center', padding: '0.5rem 0 0.25rem' }}>
+              Clear deck — nothing pending. 🎯
             </p>
           )}
-          <div className="inner-tasks-grid" style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem' }}>
-            {topPendingTasks.length > 0 ? topPendingTasks.map((t, index) => {
-              const taglines = ["Still waiting 👀", "Pending... don't ignore 😏", "This needs your attention"];
-              const taglinePos = (t.id.length + index) % taglines.length;
-              const dynamicTagline = taglines[taglinePos];
-              
-              return (
-                <div key={t.id} className="inner-task-row" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem 0.85rem', borderRadius: '0.85rem', border: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'all 0.2s ease' }} onClick={() => navigate('/dashboard')}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: '#10b981', opacity: 0.7, flexShrink: 0, marginTop: '0.1rem' }}>assignment</span>
-                  <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                    <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, marginTop: '0.15rem' }}>{dynamicTagline}</div>
-                  </div>
-                  {/* Priority is intentionally hidden from this view */}
-                </div>
-              );
-            }) : <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', padding: '0.75rem' }}>No pending actions today.</div>}
-          </div>
 
-          {/* Upcoming Reminders Hook below task list setup grid frame */}
           {upcomingReminders.length > 0 && (
-            <div style={{ marginTop: '0.4rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 900, color: '#10b981', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Upcoming Reminders (3 Days)</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+            <div className="hub-reminders-block" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="hub-reminders-label">UPCOMING REMINDERS</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.5rem' }}>
                 {upcomingReminders.map((r, i) => (
-                  <Link key={i} to="/calendar" className="reminder-row-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.01)', cursor: 'pointer', textDecoration: 'none', width: '100%', boxSizing: 'border-box' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', maxWidth: '75%', overflow: 'hidden' }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: '#10b981', opacity: 0.8 }}>notifications</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>{r.title}</span>
+                  <Link key={i} to="/calendar" className="reminder-row-link">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, maxWidth: '72%' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: '#4ade80', flexShrink: 0 }}>
+                        notifications
+                      </span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>
+                        {r.title}
+                      </span>
                     </div>
-                    <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 800 }}>{r.date.split('-').slice(1).join('/')}</span>
+                    <span style={{ fontSize: '0.65rem', color: '#4ade80', fontWeight: 800, flexShrink: 0 }}>
+                      {r.date.split('-').slice(1).join('/')}
+                    </span>
                   </Link>
                 ))}
               </div>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Desktop Split Grid wrapper starting node down to Goal Snap closes inclusive triggers flawlessly forwards */}
-        <div className="desktop-split-grid">
-
-        {/* 2. Today Routine Neon Box */}
-        <div className="neon-box clickable-neon-box" onClick={() => navigate('/routine')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Today Routine</h2>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-            <div className="neon-inner-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.01)', padding: '0.85rem 1rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)' }}>
-              <div style={{ position: 'relative', width: '40px', height: '40px', flexShrink: 0 }}>
-                <svg width="40" height="40" viewBox="0 0 40 40">
-                  <circle cx="20" cy="20" r="15" fill="transparent" stroke="rgba(255,255,255,0.04)" strokeWidth="3"></circle>
-                  <circle cx="20" cy="20" r="15" fill="transparent" stroke="#10b981" strokeWidth="3" strokeDasharray={`${activeRoutinesTodayCount > 0 ? ((completedRoutinesToday || 0) / activeRoutinesTodayCount) * 100 : 0} ${100 - (activeRoutinesTodayCount > 0 ? ((completedRoutinesToday || 0) / activeRoutinesTodayCount) * 100 : 0)}`} strokeDashoffset="22" strokeLinecap="round" />
+        <section
+          className="hub-card hub-routine-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate(canAccessStatsAndRoutine(user) ? '/routine' : '/lifetime-access')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              navigate(canAccessStatsAndRoutine(user) ? '/routine' : '/lifetime-access');
+            }
+          }}
+        >
+          <div className="hub-routine-shimmer" aria-hidden />
+          <h2 className="hub-section-title" style={{ marginBottom: '1rem' }}>
+            TODAY ROUTINE
+          </h2>
+          <div className="hub-routine-split">
+            <div className="hub-routine-block">
+              <div className="hub-routine-frac">
+                {completedRoutinesToday || 0}
+                <span>/</span>
+                {activeRoutinesTodayCount || 0}
+              </div>
+              <div className="hub-routine-sublabel">COMPLETED</div>
+              <div className="hub-routine-ring-wrap">
+                <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden>
+                  <circle
+                    cx="32"
+                    cy="32"
+                    r={ringR}
+                    fill="none"
+                    stroke="rgba(255,255,255,0.06)"
+                    strokeWidth="4"
+                  />
+                  <circle
+                    cx="32"
+                    cy="32"
+                    r={ringR}
+                    fill="none"
+                    stroke="#4ade80"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray={ringC}
+                    strokeDashoffset={ringOffset}
+                    transform="rotate(-90 32 32)"
+                  />
                 </svg>
-                <span className="material-symbols-outlined" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '1rem', color: '#10b981', fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '1rem', fontWeight: 900, color: '#ffffff' }}>
-                   {completedRoutinesToday || 0} / {activeRoutinesTodayCount || 0}
-                </div>
-                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '0.1rem' }}>
-                   Completed
-                </div>
+                <span className="hub-routine-ring-icon material-symbols-outlined" aria-hidden>
+                  check
+                </span>
               </div>
             </div>
-
-            <div className="neon-inner-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.01)', padding: '0.85rem 1rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)' }}>
-              <div style={{ width: '40px', height: '40px', background: `${getStreakColor(currentStreak)}22`, borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: getStreakColor(currentStreak), boxShadow: currentStreak > 0 ? `0 0 15px ${getStreakColor(currentStreak)}33` : 'none', transition: 'all 0.3s ease' }}>
-                <span className="material-symbols-outlined fire-animation" style={{ fontSize: '1.2rem', fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>{currentStreak} Day Streak</div>
-                <div style={{ fontSize: '0.7rem', color: getStreakColor(currentStreak), fontWeight: 700, marginTop: '0.1rem', transition: 'all 0.3s ease' }}>{getStreakTagline(currentStreak)}</div>
-              </div>
+            <div className="hub-routine-divider" aria-hidden />
+            <div className="hub-routine-block">
+              <div className="hub-streak-num">{currentStreak}</div>
+              <div className="hub-routine-sublabel">DAY STREAK</div>
+              <p className="hub-streak-sub">{streakSubtext}</p>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* 3. Upcoming Goals Snapshot Neon Box */}
-        <div className="neon-box clickable-neon-box" onClick={() => navigate('/goals')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Goals Due Soon</h2>
-
-          </div>
-
-          <div className="upcoming-goals-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-            {([...goals].filter(g => g.status === 'pending').sort((a, b) => {
-               if (!a.targetDate && !b.targetDate) return 0;
-               if (!a.targetDate) return 1;
-               if (!b.targetDate) return -1;
-               return new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime();
-            }).slice(0, 2).map(goal => {
-
-               
-                const calToday = new Date();
-                calToday.setHours(0, 0, 0, 0);
-                const calTarget = new Date(goal.targetDate);
-                calTarget.setHours(0, 0, 0, 0);
-                const diffDays = Math.ceil((calTarget.getTime() - calToday.getTime()) / (1000 * 60 * 60 * 24));
-                const isUrgent = goal.targetDate && diffDays < 10;
-                let daysLeftStr = 'No due date';
-                if (goal.targetDate) {
-                  if (diffDays === 0) daysLeftStr = 'Overdue Today';
-                  else if (diffDays < 0) daysLeftStr = `${Math.abs(diffDays)} Days Overdue`;
-                  else daysLeftStr = `${diffDays} Days Left`;
-                }
-
-               return (
-                  <div key={goal.id} className="neon-inner-card goal-card-inner" style={{ padding: '0.85rem', background: isUrgent ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255,255,255,0.01)', borderRadius: '1.25rem', border: isUrgent ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', gap: '0.75rem', transition: 'all 0.3s ease' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ width: '28px', height: '28px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', flexShrink: 0 }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '1rem', fontVariationSettings: "'FILL' 1" }}>track_changes</span>
-                      </div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{goal.name}</div>
-                    </div>
-
-
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem' }}>
-                      <div style={{ color: isUrgent ? '#ef4444' : '#00f2fe', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '0.75rem' }}>schedule</span>
-                        {daysLeftStr}
-                      </div>
-                    </div>
+        <section className="hub-card hub-goals-card">
+          <h2 className="hub-section-title" style={{ marginBottom: '1rem' }}>
+            GOALS DUE SOON
+          </h2>
+          {pendingGoalsSorted.length > 0 ? (
+            pendingGoalsSorted.map((goal) => {
+              const calToday = new Date();
+              calToday.setHours(0, 0, 0, 0);
+              const calTarget = new Date(goal.targetDate);
+              calTarget.setHours(0, 0, 0, 0);
+              const diffDays = Math.ceil((calTarget.getTime() - calToday.getTime()) / (1000 * 60 * 60 * 24));
+              const overdue = diffDays <= 0;
+              let chipText = 'NO DUE DATE';
+              if (goal.targetDate) {
+                if (diffDays === 0) chipText = 'OVERDUE TODAY';
+                else if (diffDays < 0) chipText = `${Math.abs(diffDays)} DAYS OVERDUE`;
+                else chipText = `${diffDays} DAYS LEFT`;
+              }
+              return (
+                <button
+                  key={goal.id}
+                  type="button"
+                  className={`hub-goal-row ${overdue ? 'hub-goal-row--urgent' : 'hub-goal-row--soon'}`}
+                  onClick={() => navigate('/goals')}
+                >
+                  <span className="hub-goal-emoji" aria-hidden>
+                    🎯
+                  </span>
+                  <div style={{ minWidth: 0, textAlign: 'left' }}>
+                    <p className="hub-goal-title">{goal.name}</p>
+                    <span className={`hub-goal-chip ${overdue ? 'hub-goal-chip--red' : 'hub-goal-chip--orange'}`}>
+                      {chipText}
+                    </span>
                   </div>
-               );
-            }))}
-          </div>
-          {goals.filter(g => g.status === 'pending').length === 0 && <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No active goals. Time to set some!</div>}
-        </div>
-
-        </div>
-
-
-
+                </button>
+              );
+            })
+          ) : (
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(148, 163, 184, 0.95)', fontWeight: 600, textAlign: 'center', padding: '0.35rem 0 0.15rem' }}>
+              No goals on the radar. Set a target. 🎯
+            </p>
+          )}
+        </section>
 
 
 
       </main>
       <BottomNav isHidden={isSidebarHidden} />
-      <WhyStayHardyModal 
-        isOpen={isIntroOpen} 
-        onClose={handleCloseIntro} 
+      <WhyStayHardyModal
+        isOpen={isIntroOpen}
+        onClose={handleCloseIntro}
         isFirstTime={isFirstTime}
+        onOpenSupport={() => {
+          handleCloseIntro();
+          setShowSupportModal(true);
+        }}
       />
+      <SupportModal isOpen={showSupportModal} onClose={() => setShowSupportModal(false)} />
     </div>
   );
 };

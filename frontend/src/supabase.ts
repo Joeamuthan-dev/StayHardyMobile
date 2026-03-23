@@ -7,8 +7,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ DEPLOYMENT ERROR: Supabase URL or Anon Key is missing! Please check your Vercel Environment Variables.');
 }
 
-// Initialize with fallbacks to prevent hard crash, but log the error
+// Persist session in WebView localStorage; disable URL hash parsing on native (avoids stray redirects).
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseAnonKey || 'placeholder'
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+    },
+  }
 );

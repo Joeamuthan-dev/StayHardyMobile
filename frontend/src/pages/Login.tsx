@@ -1,11 +1,29 @@
 import React, { useState } from 'react';
 
 import gsap from 'gsap';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '../supabase';
 
 
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { canAccessStatsAndRoutine } from '../lib/lifetimeAccess';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  readBiometricPayload,
+  loginWithBiometricSession,
+  getWelcomeFirstNameFromPayload,
+  hidePushAndBiometricOnAndroid,
+} from '../lib/biometricAuth';
+import AuthSplash from '../components/AuthSplash';
+import GuestSplash, { GUEST_SPLASH_DURATION_MS } from '../components/GuestSplash';
+import { isOwnerAdminEmail, resolveUserRole, isAdminHubUser } from '../config/adminOwner';
+import { consumeAccountDeletedToastFlag } from '../lib/accountDeletion';
+
+/** Supabase confirmation email redirect — custom scheme on native, same-origin on web. */
+function getEmailConfirmRedirectUrl(): string {
+  if (typeof window === 'undefined') return 'https://stayhardy.com/login';
+  return Capacitor.isNativePlatform() ? 'stayhardy://login' : `${window.location.origin}/login`;
+}
 
 const TreeGraphic = ({ isBloomed }: { isBloomed: boolean }) => {
   return (
@@ -48,9 +66,94 @@ const TreeGraphic = ({ isBloomed }: { isBloomed: boolean }) => {
   );
 };
 
+const LOGIN_QUOTES = [
+  "The only easy day was yesterday. StayHardy.",
+  "Discipline is doing what needs to be done. #StayHardy",
+  "Don't wish for it. Work for it. StayHardy.",
+  "Your future self is thanking you for starting today. StayHardy.",
+  "Consistency is the bridge between goals and accomplishment. StayHardy.",
+  "Excuses don't build empires. Action does. StayHardy.",
+  "Find your limits, then crush them. #StayHardy",
+  "The grind never sleeps. Neither does your potential. StayHardy.",
+  "Motivation gets you started. Discipline keeps you going. StayHardy.",
+  "Success isn't owned, it's leased. And rent is due every day. StayHardy.",
+  "Work while they sleep. Learn while they party. StayHardy.",
+  "A goal without a plan is just a wish. StayHardy.",
+  "Focus on the process, and the results will follow. StayHardy.",
+  "Hard work beats talent when talent doesn't work hard. #StayHardy",
+  "You are one login away from a better day. StayHardy.",
+  "Master your tasks, master your life. StayHardy.",
+  "The best way to predict the future is to create it. StayHardy.",
+  "Don't stop when you're tired. Stop when you're done. StayHardy.",
+  "Small steps lead to big destinations. StayHardy.",
+  "Rise, grind, and StayHardy.",
+  "Your discipline determines your destiny. StayHardy.",
+  "The difference between who you are and what you do. StayHardy.",
+  "Productivity is deliberate. Success is inevitable. StayHardy.",
+  "Make today count. Your tasks are waiting. StayHardy.",
+  "Stay thirsty for progress. #StayHardy",
+  "No shortcuts. No excuses. Just StayHardy.",
+  "Turn your 'shoulds' into 'musts'. StayHardy.",
+  "Win the morning, win the day. StayHardy.",
+  "Your potential is endless. Your time is not. StayHardy.",
+];
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const BLOCKED_EMAIL_DOMAINS = new Set([
+  'mailinator.com',
+  'tempmail.com',
+  'guerrillamail.com',
+  'yopmail.com',
+  'trashmail.com',
+  'maildrop.cc',
+  '10minutemail.com',
+  'temp-mail.org',
+  'fakeinbox.com',
+  'spambox.us',
+  'throwaway.email',
+]);
+
+const WEAK_PINS = new Set([
+  '1234', '2345', '3456', '4567', '5678', '6789', '0123', '9876',
+  '8765', '7654', '6543', '5432', '4321',
+]);
+
+function isUserAlreadyExistsError(err: { message?: string; code?: string }): boolean {
+  if (err.code === 'user_already_exists') return true;
+  const msg = (err.message || '').toLowerCase();
+  if (msg.includes('user already registered')) return true;
+  if (msg.includes('already registered')) return true;
+  if (msg.includes('already been registered')) return true;
+  return false;
+}
+
+function validateSignupEmail(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return 'Please enter your email address';
+  if (!EMAIL_REGEX.test(trimmed)) return 'Please enter a valid email address';
+  const domain = trimmed.split('@')[1]?.toLowerCase();
+  if (domain && BLOCKED_EMAIL_DOMAINS.has(domain)) {
+    return 'Please use a real email address';
+  }
+  return null;
+}
+
+function validateSignupPin(pin: string): string | null {
+  if (!pin || pin.trim() === '') return 'Please create a 4-digit PIN';
+  if (!/^\d{4}$/.test(pin)) return 'PIN must be exactly 4 numbers';
+  if (/^(\d)\1{3}$/.test(pin)) return 'PIN too simple. Avoid 1111, 2222 etc.';
+  if (WEAK_PINS.has(pin)) return 'PIN too simple. Try something stronger';
+  return null;
+}
+
+type SignupSubview = 'form' | 'not_verified' | 'already_active';
+
 const Login: React.FC = () => {
   const { user, loading: authLoading } = useAuth(); // Connect useAuth
   const navigate = useNavigate();
+  const location = useLocation();
+  const [pinUpdatedBanner, setPinUpdatedBanner] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,74 +162,147 @@ const Login: React.FC = () => {
   const [isPulled, setIsPulled] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [rememberMe, setRememberMe] = useState(!!localStorage.getItem('remembered_email'));
+  const [loginQuote, setLoginQuote] = useState('');
+  const [guestSplashDone, setGuestSplashDone] = useState(false);
+  const [showBiometricLogin, setShowBiometricLogin] = useState(false);
+  const [biometricHidden, setBiometricHidden] = useState(false);
+  const [isBiometricSubmitting, setIsBiometricSubmitting] = useState(false);
+  const [bioToast, setBioToast] = useState<string | null>(null);
+  const [signupSubview, setSignupSubview] = useState<SignupSubview>('form');
+  const [pendingSignupEmail, setPendingSignupEmail] = useState('');
+  const [emailFieldError, setEmailFieldError] = useState('');
+  const [pinFieldError, setPinFieldError] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [signupToast, setSignupToast] = useState<string | null>(null);
+  const [goodbyeToast, setGoodbyeToast] = useState<string | null>(null);
+  const [emailVerifiedBanner, setEmailVerifiedBanner] = useState(false);
+
+  const BIO_FAIL_KEY = 'stayhardy_biometric_fail_count';
+  const prevIsLoginRef = React.useRef(true);
+
+  React.useEffect(() => {
+    const st = location.state as {
+      pinUpdated?: boolean;
+      prefilledEmail?: string;
+      emailVerified?: boolean;
+    } | null;
+    if (st?.pinUpdated) setPinUpdatedBanner(true);
+    if (st?.emailVerified) setEmailVerifiedBanner(true);
+
+    if (st?.pinUpdated || st?.emailVerified) {
+      navigate(location.pathname, {
+        replace: true,
+        state: st.prefilledEmail ? { prefilledEmail: st.prefilledEmail } : {},
+      });
+      return;
+    }
+    if (st?.prefilledEmail && isLogin) {
+      setEmail(st.prefilledEmail);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate, isLogin]);
+
+  React.useEffect(() => {
+    if (!emailVerifiedBanner) return;
+    const t = window.setTimeout(() => setEmailVerifiedBanner(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [emailVerifiedBanner]);
+
   // Redirect instantly if user is already logged in
   React.useEffect(() => {
     if (user && !authLoading) {
-      if (user.role === 'admin') navigate('/admin');
-      else navigate('/home');
+      if (isAdminHubUser(user)) navigate('/admin');
+      else if (canAccessStatsAndRoutine(user)) navigate('/home');
+      else navigate('/lifetime-access');
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, navigate]);
 
-
-  if (user && !authLoading) {
-    return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#020617', flexDirection: 'column', gap: '1rem' }}>
-        <div className="spinner" style={{
-          width: '40px',
-          height: '40px',
-          border: '3px solid rgba(16, 185, 129, 0.1)',
-          borderTopColor: '#10b981',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
-        <div style={{ color: '#10b981', fontWeight: 900, fontSize: '1.1rem', letterSpacing: '-0.02em' }}>
-          StayHard — Grinding…
-        </div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
-
-  const [rememberMe, setRememberMe] = useState(localStorage.getItem('remembered_email') ? true : false);
-
-  const [loginQuote, setLoginQuote] = useState('');
-
-  const loginQuotes = [
-    "The only easy day was yesterday. StayHardy.",
-    "Discipline is doing what needs to be done. #StayHardy",
-    "Don't wish for it. Work for it. StayHardy.",
-    "Your future self is thanking you for starting today. StayHardy.",
-    "Consistency is the bridge between goals and accomplishment. StayHardy.",
-    "Excuses don't build empires. Action does. StayHardy.",
-    "Find your limits, then crush them. #StayHardy",
-    "The grind never sleeps. Neither does your potential. StayHardy.",
-    "Motivation gets you started. Discipline keeps you going. StayHardy.",
-    "Success isn't owned, it's leased. And rent is due every day. StayHardy.",
-    "Work while they sleep. Learn while they party. StayHardy.",
-    "A goal without a plan is just a wish. StayHardy.",
-    "Focus on the process, and the results will follow. StayHardy.",
-    "Hard work beats talent when talent doesn't work hard. #StayHardy",
-    "You are one login away from a better day. StayHardy.",
-    "Master your tasks, master your life. StayHardy.",
-    "The best way to predict the future is to create it. StayHardy.",
-    "Don't stop when you're tired. Stop when you're done. StayHardy.",
-    "Small steps lead to big destinations. StayHardy.",
-    "Rise, grind, and StayHardy.",
-    "Your discipline determines your destiny. StayHardy.",
-    "The difference between who you are and what you do. StayHardy.",
-    "Productivity is deliberate. Success is inevitable. StayHardy.",
-    "Make today count. Your tasks are waiting. StayHardy.",
-    "Stay thirsty for progress. #StayHardy",
-    "No shortcuts. No excuses. Just StayHardy.",
-    "Turn your 'shoulds' into 'musts'. StayHardy.",
-    "Win the morning, win the day. StayHardy.",
-    "Your potential is endless. Your time is not. StayHardy."
-  ];
+  // About-app splash → login form (auto-advance matches GuestSplash progress bar)
+  React.useEffect(() => {
+    if (authLoading || user) return undefined;
+    const t = window.setTimeout(() => setGuestSplashDone(true), GUEST_SPLASH_DURATION_MS);
+    return () => window.clearTimeout(t);
+  }, [authLoading, user]);
 
   React.useEffect(() => {
-    // Force dark mode for login page
+    if (!bioToast) return;
+    const t = window.setTimeout(() => setBioToast(null), 3200);
+    return () => window.clearTimeout(t);
+  }, [bioToast]);
+
+  React.useEffect(() => {
+    if (!signupToast) return;
+    const t = window.setTimeout(() => setSignupToast(null), 4200);
+    return () => window.clearTimeout(t);
+  }, [signupToast]);
+
+  React.useEffect(() => {
+    if (consumeAccountDeletedToastFlag()) {
+      setGoodbyeToast('Your account has been permanently deleted. We\'re sorry to see you go. 👋');
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!goodbyeToast) return;
+    const t = window.setTimeout(() => setGoodbyeToast(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [goodbyeToast]);
+
+  React.useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = window.setInterval(() => setResendCooldown((c) => (c <= 1 ? 0 : c - 1)), 1000);
+    return () => window.clearInterval(t);
+  }, [resendCooldown]);
+
+  React.useEffect(() => {
+    if (!isLogin && prevIsLoginRef.current) {
+      setEmail('');
+      setPassword('');
+      setName('');
+      setSignupSubview('form');
+      setEmailFieldError('');
+      setPinFieldError('');
+      setError('');
+    }
+    prevIsLoginRef.current = isLogin;
+  }, [isLogin]);
+
+  React.useEffect(() => {
+    if (!isLogin || !guestSplashDone || !isPulled) {
+      setShowBiometricLogin(false);
+      return;
+    }
+    if (hidePushAndBiometricOnAndroid()) {
+      setShowBiometricLogin(false);
+      return;
+    }
+    if (!Capacitor.isNativePlatform()) {
+      setShowBiometricLogin(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const fails = parseInt(sessionStorage.getItem(BIO_FAIL_KEY) || '0', 10);
+      if (fails >= 5) {
+        if (!cancelled) {
+          setBiometricHidden(true);
+          setShowBiometricLogin(false);
+        }
+        return;
+      }
+      const payload = await readBiometricPayload();
+      if (!cancelled) {
+        setShowBiometricLogin(!!payload && payload.biometric_login_enabled === true);
+        setBiometricHidden(fails >= 5);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLogin, guestSplashDone, isPulled]);
+
+  React.useEffect(() => {
     const hadLightMode = document.documentElement.classList.contains('light-mode');
     if (hadLightMode) {
       document.documentElement.classList.remove('light-mode');
@@ -136,17 +312,23 @@ const Login: React.FC = () => {
     const savedPin = localStorage.getItem('remembered_pin');
     if (savedEmail) setEmail(savedEmail);
     if (savedPin) setPassword(savedPin);
-    
-    // Pick a random quote
-    setLoginQuote(loginQuotes[Math.floor(Math.random() * loginQuotes.length)]);
+
+    setLoginQuote(LOGIN_QUOTES[Math.floor(Math.random() * LOGIN_QUOTES.length)]);
 
     return () => {
-      // Restore light mode on exit if it was active
       if (hadLightMode) {
         document.documentElement.classList.add('light-mode');
       }
     };
   }, []);
+
+  if (user && !authLoading) {
+    return <AuthSplash />;
+  }
+
+  if (!guestSplashDone) {
+    return <GuestSplash onContinue={() => setGuestSplashDone(true)} />;
+  }
 
   const handlePullRope = () => {
     if (isAnimating) return;
@@ -157,7 +339,7 @@ const Login: React.FC = () => {
     if (nextIsOn) {
       // Pick a new random quote that isn't the same as the current one
       setLoginQuote(prev => {
-        const otherQuotes = loginQuotes.filter(q => q !== prev);
+        const otherQuotes = LOGIN_QUOTES.filter((q) => q !== prev);
         return otherQuotes[Math.floor(Math.random() * otherQuotes.length)];
       });
       gsap.to('.login-page-root', { backgroundColor: "#09090b", duration: 0.6 });
@@ -175,6 +357,7 @@ const Login: React.FC = () => {
   };
 
   const handlePinChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    setPinFieldError('');
     const value = e.target.value;
     
     if (value.length > 1) {
@@ -209,53 +392,112 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setIsSubmitting(true); // START SUBMISSION
+    setEmailFieldError('');
+    setPinFieldError('');
+
+    if (!isLogin) {
+      const ve = validateSignupEmail(email);
+      if (ve) {
+        setEmailFieldError(ve);
+        return;
+      }
+      const vp = validateSignupPin(password);
+      if (vp) {
+        setPinFieldError(vp);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
 
     const supabasePassword = password + "_secure_pin";
+    const trimmedEmail = email.trim();
 
     try {
       if (isLogin) {
         const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
+          email: trimmedEmail,
           password: supabasePassword,
         });
 
         if (signInError) throw signInError;
 
+        sessionStorage.removeItem(BIO_FAIL_KEY);
+
         if (rememberMe) {
-          localStorage.setItem('remembered_email', email);
+          localStorage.setItem('remembered_email', trimmedEmail);
           localStorage.setItem('remembered_pin', password);
         } else {
           localStorage.removeItem('remembered_email');
           localStorage.removeItem('remembered_pin');
         }
 
-        const role = email.toLowerCase().trim() === 'joe@gmail.com' ? 'admin' : 'user';
-        if (role === 'admin') {
+        if (isOwnerAdminEmail(trimmedEmail)) {
           navigate('/admin');
         } else {
           navigate('/home');
         }
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
+          email: trimmedEmail,
           password: supabasePassword,
           options: {
             data: {
               name: name,
-            }
-          }
+            },
+            emailRedirectTo: getEmailConfirmRedirectUrl(),
+          },
         });
 
-        if (signUpError) throw signUpError;
+        if (signUpError) {
+          if (isUserAlreadyExistsError(signUpError)) {
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+              email: trimmedEmail,
+              password: supabasePassword,
+            });
+
+            if (!signInError) {
+              await supabase.auth.signOut();
+              setPendingSignupEmail(trimmedEmail);
+              setSignupSubview('already_active');
+              setIsSubmitting(false);
+              return;
+            }
+
+            const sim = (signInError.message || '').toLowerCase();
+            if (
+              sim.includes('email not confirmed') ||
+              sim.includes('not confirmed')
+            ) {
+              setPendingSignupEmail(trimmedEmail);
+              setSignupSubview('not_verified');
+              setIsSubmitting(false);
+              return;
+            }
+
+            if (
+              sim.includes('invalid login') ||
+              sim.includes('invalid credentials')
+            ) {
+              setError('An account with this email already exists. Please log in instead.');
+              setIsSubmitting(false);
+              return;
+            }
+
+            setError(signInError.message || 'Could not verify account status.');
+            setIsSubmitting(false);
+            return;
+          }
+          throw signUpError;
+        }
 
         if (data.user) {
           const { error: syncError } = await supabase.from('users').upsert({
             id: data.user.id,
             name,
-            email,
+            email: trimmedEmail,
             pin: password,
-            role: email.toLowerCase().trim() === 'joe@gmail.com' ? 'admin' : 'user',
+            role: resolveUserRole(trimmedEmail),
             created_at: new Date().toISOString()
           });
           
@@ -263,24 +505,105 @@ const Login: React.FC = () => {
         }
 
         if (data.session) {
-          navigate('/home');
+          if (isOwnerAdminEmail(trimmedEmail)) {
+            navigate('/admin');
+          } else {
+            navigate('/lifetime-access');
+          }
         } else {
           setError('Signup successful! Please check your email to confirm your account and then Log In.');
-          setIsLogin(true); // Switch to login view
-          setIsSubmitting(false); // Enable manual retry on signup wait screen
+          setIsLogin(true);
+          setIsSubmitting(false);
         }
       }
     } catch (err: any) {
       console.error('Auth Error Details:', err);
-      setIsSubmitting(false); // RESET ON ERROR
+      setIsSubmitting(false);
       if (err.message === 'Invalid login credentials') {
-        setError('Invalid email or PIN. Please try again.');
+        setError('Email or PIN is incorrect. Please check and try again.');
       } else if (err.message.includes('rate limit')) {
         setError('Too many attempts. Please wait a few minutes.');
       } else {
         const msg = err.message || err.error_description;
         setError(typeof msg === 'string' && msg.trim() !== '{}' && msg.trim() !== '' ? msg : 'Authentication failed');
       }
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (resendCooldown > 0) return;
+    const em = pendingSignupEmail.trim();
+    if (!em) return;
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: em,
+      options: { emailRedirectTo: getEmailConfirmRedirectUrl() },
+    });
+    if (!error) {
+      setSignupToast('Verification email sent! Check your inbox. 📬');
+      setResendCooldown(60);
+    } else {
+      setError(error.message);
+    }
+  };
+
+  const backToSignupForm = () => {
+    setSignupSubview('form');
+    setEmail('');
+    setPassword('');
+    setName('');
+    setEmailFieldError('');
+    setPinFieldError('');
+    setError('');
+  };
+
+  const goToLoginFromSignupExist = () => {
+    const em = pendingSignupEmail;
+    setIsLogin(true);
+    setEmail(em);
+    setPassword('');
+    setName('');
+    setSignupSubview('form');
+    setError('');
+    navigate('/login', { replace: true, state: { prefilledEmail: em } });
+  };
+
+  const handleBiometricLogin = async () => {
+    if (isBiometricSubmitting || !isPulled) return;
+    setIsBiometricSubmitting(true);
+    setBioToast(null);
+    const payload = await readBiometricPayload();
+    const welcomeName = getWelcomeFirstNameFromPayload(payload);
+
+    try {
+      const result = await loginWithBiometricSession();
+      if (!result.ok) {
+        const fails = parseInt(sessionStorage.getItem(BIO_FAIL_KEY) || '0', 10) + 1;
+        sessionStorage.setItem(BIO_FAIL_KEY, String(fails));
+        if (fails >= 5) {
+          setBiometricHidden(true);
+          setShowBiometricLogin(false);
+          setBioToast('Too many attempts. Please use your PIN.');
+        } else if (result.reason === 'verify_failed') {
+          setBioToast('Biometric failed. Use your PIN to log in.');
+        } else {
+          setBioToast('Biometric failed. Use your PIN to log in.');
+        }
+        return;
+      }
+
+      sessionStorage.removeItem(BIO_FAIL_KEY);
+      setBioToast(`Welcome back, ${welcomeName}!`);
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const em = session?.user?.email ?? '';
+      if (isOwnerAdminEmail(em)) {
+        navigate('/admin');
+      } else {
+        navigate('/home');
+      }
+    } finally {
+      setIsBiometricSubmitting(false);
     }
   };
 
@@ -376,6 +699,60 @@ const Login: React.FC = () => {
           </p>
         </div>
 
+        {pinUpdatedBanner && (
+          <div
+            className={`slide-up-fade ${isPulled ? 'visible' : ''}`}
+            role="status"
+            style={{
+              background: 'rgba(16, 185, 129, 0.12)',
+              color: '#6ee7b7',
+              padding: '0.75rem 1rem',
+              borderRadius: '0.75rem',
+              marginBottom: '1rem',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              width: '100%',
+              flexShrink: 0,
+            }}
+          >
+            PIN updated successfully. Please log in with your new PIN.
+          </div>
+        )}
+
+        {emailVerifiedBanner && (
+          <div
+            className={`slide-up-fade ${isPulled ? 'visible' : ''}`}
+            role="status"
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.5rem',
+              background: 'rgba(0,232,122,0.1)',
+              border: '1px solid rgba(0,232,122,0.25)',
+              borderRadius: '12px',
+              padding: '12px 16px',
+              marginBottom: '16px',
+              width: '100%',
+              flexShrink: 0,
+            }}
+          >
+            <span aria-hidden style={{ fontSize: '16px', lineHeight: 1.2 }}>
+              ✅
+            </span>
+            <span
+              style={{
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                fontSize: '13px',
+                color: '#00E87A',
+                lineHeight: 1.45,
+              }}
+            >
+              Email verified successfully! Log in with your email and PIN.
+            </span>
+          </div>
+        )}
+
         {error && (
           <div 
             className={`slide-up-fade ${isPulled ? 'visible' : ''}`} 
@@ -395,12 +772,13 @@ const Login: React.FC = () => {
           </div>
         )}
 
+        {(isLogin || signupSubview === 'form') && (
         <form 
           className={`slide-up-fade ${isPulled ? 'visible' : ''}`} 
           style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.75rem', flexShrink: 0 }} 
           onSubmit={handleSubmit}
         >
-          {!isLogin && (
+          {!isLogin && signupSubview === 'form' && (
             <div className="input-group" style={{ marginBottom: 0 }}>
               <label style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', letterSpacing: '0.05em' }}>FULL NAME</label>
               <div style={{ position: 'relative' }}>
@@ -426,14 +804,34 @@ const Login: React.FC = () => {
               <input 
                 type="email" 
                 className="form-input" 
-                placeholder="alex@example.com" 
+                placeholder={isLogin ? 'alex@example.com' : 'Enter your email address'}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEmailFieldError('');
+                }}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoComplete="email"
                 required={isPulled}
                 disabled={!isPulled}
                 style={{ paddingLeft: '3rem', height: '3rem', borderRadius: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.9rem' }}
               />
             </div>
+            {emailFieldError && (
+              <p
+                style={{
+                  color: '#EF4444',
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  fontSize: '11px',
+                  margin: '4px 0 0 0',
+                  animation: 'fadeIn 0.2s ease-out',
+                }}
+              >
+                {emailFieldError}
+              </p>
+            )}
           </div>
           
           <div className="input-group" style={{ marginBottom: 0 }}>
@@ -446,7 +844,8 @@ const Login: React.FC = () => {
                   type="password"
                   inputMode="numeric"
                   className="form-input pin-box"
-                  maxLength={4}
+                  maxLength={1}
+                  placeholder=""
                   value={password[index] || ''}
                   onChange={(e) => handlePinChange(index, e)}
                   onKeyDown={(e) => handleKeyDown(index, e)}
@@ -466,6 +865,19 @@ const Login: React.FC = () => {
                 />
               ))}
             </div>
+            {pinFieldError && (
+              <p
+                style={{
+                  color: '#EF4444',
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                  fontSize: '11px',
+                  margin: '4px 0 0 0',
+                  animation: 'fadeIn 0.2s ease-out',
+                }}
+              >
+                {pinFieldError}
+              </p>
+            )}
           </div>
 
           {isLogin && (
@@ -521,18 +933,376 @@ const Login: React.FC = () => {
               borderRadius: '1rem', 
               minHeight: '3.5rem', 
               fontSize: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
               opacity: isSubmitting || !isPulled ? 0.6 : 1,
               cursor: isSubmitting || !isPulled ? 'not-allowed' : 'pointer'
             }} 
             disabled={!isPulled || isSubmitting}
           >
-            <span>{isSubmitting ? 'Syncing...' : isLogin ? 'Log In' : 'Sign Up'}</span>
-            {!isSubmitting && <span className="material-symbols-outlined">arrow_forward</span>}
+            {isSubmitting && !isLogin ? (
+              <>
+                <span
+                  aria-hidden
+                  style={{
+                    width: 16,
+                    height: 16,
+                    border: '2px solid rgba(255,255,255,0.25)',
+                    borderTopColor: '#ffffff',
+                    borderRadius: '50%',
+                    animation: 'spin 0.8s linear infinite',
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ fontFamily: "'DM Sans', system-ui, sans-serif", fontWeight: 600 }}>
+                  Creating account...
+                </span>
+              </>
+            ) : (
+              <>
+                <span>{isSubmitting ? 'Syncing...' : isLogin ? 'Log In' : 'Sign Up'}</span>
+                {!isSubmitting && <span className="material-symbols-outlined">arrow_forward</span>}
+              </>
+            )}
           </button>
         </form>
+        )}
+
+        {!isLogin && signupSubview === 'not_verified' && isPulled && (
+          <div
+            className={`slide-up-fade ${isPulled ? 'visible' : ''}`}
+            style={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              gap: '1rem',
+              flexShrink: 0,
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: '48px', color: '#00E87A' }}
+              aria-hidden
+            >
+              mail
+            </span>
+            <h2
+              style={{
+                fontFamily: "'Syne', system-ui, sans-serif",
+                fontWeight: 700,
+                fontSize: '20px',
+                color: '#ffffff',
+                margin: 0,
+              }}
+            >
+              Account not activated yet
+            </h2>
+            <p
+              style={{
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                fontSize: '13px',
+                lineHeight: 1.7,
+                color: 'rgba(255,255,255,0.6)',
+                margin: 0,
+                maxWidth: '320px',
+              }}
+            >
+              You signed up with {pendingSignupEmail} but haven&apos;t verified it yet. Check your inbox for the activation email or resend it below.
+            </p>
+            <span
+              style={{
+                background: 'rgba(0,232,122,0.08)',
+                border: '1px solid rgba(0,232,122,0.2)',
+                color: '#00E87A',
+                fontSize: '12px',
+                padding: '6px 14px',
+                borderRadius: '10px',
+                wordBreak: 'break-all',
+              }}
+            >
+              {pendingSignupEmail}
+            </span>
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={resendCooldown > 0 || !isPulled}
+              style={{
+                width: '100%',
+                height: '52px',
+                borderRadius: '14px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #00E87A, #00C563)',
+                color: '#000000',
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                fontWeight: 600,
+                fontSize: '15px',
+                cursor: resendCooldown > 0 || !isPulled ? 'not-allowed' : 'pointer',
+                opacity: resendCooldown > 0 || !isPulled ? 0.55 : 1,
+              }}
+            >
+              {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Verification Email'}
+            </button>
+            <button
+              type="button"
+              onClick={backToSignupForm}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255,255,255,0.35)',
+                fontSize: '12px',
+                cursor: 'pointer',
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+              }}
+            >
+              Try a different email → Back to Sign Up
+            </button>
+          </div>
+        )}
+
+        {!isLogin && signupSubview === 'already_active' && isPulled && (
+          <div
+            className={`slide-up-fade ${isPulled ? 'visible' : ''}`}
+            style={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center',
+              gap: '1rem',
+              flexShrink: 0,
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: '48px', color: '#00E87A' }}
+              aria-hidden
+            >
+              check_circle
+            </span>
+            <h2
+              style={{
+                fontFamily: "'Syne', system-ui, sans-serif",
+                fontWeight: 700,
+                fontSize: '20px',
+                color: '#ffffff',
+                margin: 0,
+              }}
+            >
+              Account already exists!
+            </h2>
+            <p
+              style={{
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                fontSize: '13px',
+                lineHeight: 1.7,
+                color: 'rgba(255,255,255,0.6)',
+                margin: 0,
+                maxWidth: '320px',
+              }}
+            >
+              Great news — you already have an active StayHardy account with this email. Just head to login and sign in with your PIN.
+            </p>
+            <span
+              style={{
+                background: 'rgba(0,232,122,0.08)',
+                border: '1px solid rgba(0,232,122,0.2)',
+                color: '#00E87A',
+                fontSize: '12px',
+                padding: '6px 14px',
+                borderRadius: '10px',
+                wordBreak: 'break-all',
+              }}
+            >
+              {pendingSignupEmail}
+            </span>
+            <button
+              type="button"
+              onClick={goToLoginFromSignupExist}
+              disabled={!isPulled}
+              style={{
+                width: '100%',
+                height: '52px',
+                borderRadius: '14px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #00E87A, #00C563)',
+                color: '#000000',
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+                fontWeight: 600,
+                fontSize: '15px',
+                cursor: !isPulled ? 'not-allowed' : 'pointer',
+                opacity: !isPulled ? 0.55 : 1,
+              }}
+            >
+              Go to Login →
+            </button>
+            <button
+              type="button"
+              onClick={backToSignupForm}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255,255,255,0.35)',
+                fontSize: '12px',
+                cursor: 'pointer',
+                fontFamily: "'DM Sans', system-ui, sans-serif",
+              }}
+            >
+              Use a different email → Back to Sign Up
+            </button>
+          </div>
+        )}
+
+        {isLogin && showBiometricLogin && !biometricHidden && (
+          <div
+            className={`slide-up-fade ${isPulled ? 'visible' : ''} biometric-login-block`}
+            style={{
+              width: '100%',
+              marginTop: '1.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.5rem',
+              flexShrink: 0,
+              animation: 'biometricFadeIn 0.45s ease-out',
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleBiometricLogin}
+              disabled={!isPulled || isBiometricSubmitting}
+              style={{
+                width: '100%',
+                maxWidth: '280px',
+                padding: '1rem 1.25rem',
+                borderRadius: '1rem',
+                border: '2px solid rgba(0, 232, 122, 0.45)',
+                background: 'rgba(8, 12, 10, 0.95)',
+                color: '#e2e8f0',
+                cursor: !isPulled || isBiometricSubmitting ? 'not-allowed' : 'pointer',
+                opacity: !isPulled || isBiometricSubmitting ? 0.55 : 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.35rem',
+                boxShadow: '0 0 28px rgba(0, 232, 122, 0.12)',
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: '48px',
+                  color: '#00E87A',
+                  filter: 'drop-shadow(0 0 12px rgba(0, 232, 122, 0.35))',
+                }}
+              >
+                fingerprint
+              </span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'rgba(148, 163, 184, 0.95)', letterSpacing: '0.04em' }}>
+                Use Biometric
+              </span>
+            </button>
+          </div>
+        )}
+
+        {isLogin && biometricHidden && isPulled && Capacitor.isNativePlatform() && !hidePushAndBiometricOnAndroid() && (
+          <p
+            className={`slide-up-fade ${isPulled ? 'visible' : ''}`}
+            style={{
+              width: '100%',
+              marginTop: '0.75rem',
+              fontSize: '0.75rem',
+              color: '#94a3b8',
+              textAlign: 'center',
+              flexShrink: 0,
+            }}
+          >
+            Too many attempts. Please use your PIN.
+          </p>
+        )}
 
         {/* ── Submission Loading Overlay ── */}
-        {isSubmitting && (
+        {bioToast && (
+          <div
+            role="status"
+            style={{
+              position: 'fixed',
+              left: '50%',
+              bottom: 'max(1rem, env(safe-area-inset-bottom))',
+              transform: 'translateX(-50%)',
+              zIndex: 1100,
+              padding: '0.5rem 1rem',
+              borderRadius: '999px',
+              background: 'rgba(15, 23, 42, 0.92)',
+              color: '#e2e8f0',
+              fontSize: '13px',
+              fontWeight: 600,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+              maxWidth: 'min(90vw, 320px)',
+              textAlign: 'center',
+              pointerEvents: 'none',
+            }}
+          >
+            {bioToast}
+          </div>
+        )}
+
+        {signupToast && (
+          <div
+            role="status"
+            style={{
+              position: 'fixed',
+              left: '50%',
+              bottom: 'max(4.5rem, calc(env(safe-area-inset-bottom) + 3rem))',
+              transform: 'translateX(-50%)',
+              zIndex: 1100,
+              padding: '0.5rem 1rem',
+              borderRadius: '999px',
+              background: 'rgba(15, 23, 42, 0.92)',
+              color: '#e2e8f0',
+              fontSize: '13px',
+              fontWeight: 600,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+              maxWidth: 'min(90vw, 320px)',
+              textAlign: 'center',
+              pointerEvents: 'none',
+            }}
+          >
+            {signupToast}
+          </div>
+        )}
+
+        {goodbyeToast && (
+          <div
+            role="status"
+            style={{
+              position: 'fixed',
+              left: '50%',
+              bottom: 'max(1rem, env(safe-area-inset-bottom))',
+              transform: 'translateX(-50%)',
+              zIndex: 1100,
+              padding: '0.65rem 1.1rem',
+              borderRadius: '12px',
+              background: 'rgba(71, 85, 105, 0.92)',
+              color: '#e2e8f0',
+              fontSize: '13px',
+              fontWeight: 500,
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+              maxWidth: 'min(92vw, 340px)',
+              textAlign: 'center',
+              pointerEvents: 'none',
+              lineHeight: 1.45,
+            }}
+          >
+            {goodbyeToast}
+          </div>
+        )}
+
+        {isSubmitting && isLogin && (
           <div style={{
             position: 'fixed',
             inset: 0,
@@ -566,9 +1336,27 @@ const Login: React.FC = () => {
 
 
         <div className={`auth-links slide-up-fade ${isPulled ? 'visible' : ''}`} style={{ width: '100%', marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
-          <a 
-            href="#" 
-            onClick={(e) => { e.preventDefault(); setIsLogin(!isLogin); setError(''); }}
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              if (!isLogin && signupSubview !== 'form') {
+                setIsLogin(true);
+                setEmail(pendingSignupEmail);
+                setPassword('');
+                setName('');
+                setSignupSubview('form');
+                setEmailFieldError('');
+                setPinFieldError('');
+                setError('');
+                return;
+              }
+              if (!isLogin) {
+                setSignupSubview('form');
+              }
+              setIsLogin(!isLogin);
+              setError('');
+            }}
             style={{ color: 'white', fontSize: '0.9rem', fontWeight: 600, textDecoration: 'none', opacity: 0.8 }}
           >
             {isLogin ? "Don't have an account? " : "Already have an account? "}
@@ -587,6 +1375,15 @@ const Login: React.FC = () => {
           )}
           */}
         </div>
+        <style>{`
+          @keyframes biometricFadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     </div>
   );

@@ -81,7 +81,14 @@ const Tips: React.FC = () => {
         <div className="aurora-gradient-2"></div>
       </div>
 
-      <header className="p-6 pt-12 flex items-center gap-4 relative z-10">
+      <header
+        className="px-6 pb-6 flex items-center gap-4 relative z-10"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)',
+          paddingLeft: 'max(1.5rem, env(safe-area-inset-left, 0px))',
+          paddingRight: 'max(1.5rem, env(safe-area-inset-right, 0px))',
+        }}
+      >
         <button
           onClick={() => navigate('/settings')}
           className="size-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
