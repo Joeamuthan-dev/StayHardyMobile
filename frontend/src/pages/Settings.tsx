@@ -3,12 +3,15 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
+import { Preferences } from '@capacitor/preferences';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import BottomNav from '../components/BottomNav';
 import { supabase } from '../supabase';
 import { saveUserProfileCache } from '../lib/userProfileCache';
+import { ProductivityService } from '../lib/ProductivityService';
 import SupportModal from '../components/SupportModal';
 import { shouldShowLifetimeUpsell } from '../lib/lifetimeAccess';
-import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
+// import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
 import { isAdminProfileUser } from '../config/adminOwner';
 import {
   isPushSupportedNative,
@@ -30,6 +33,7 @@ import {
   setAccountDeletedToastFlag,
   wipeLocalDataAfterAccountDeletion,
 } from '../lib/accountDeletion';
+import { CacheManager } from '../lib/smartCacheManager';
 
 const SESS_START_KEY = 'stayhardy_sess_started';
 
@@ -49,46 +53,88 @@ function writeCachedBool(key: string, on: boolean) {
   localStorage.setItem(key, on ? '1' : '0');
 }
 
+function _getAnnouncementCategoryStyle(_category: string) {
+  switch (_category) {
+    case 'update':
+      return { bg: '#007AFF22', border: '#007AFF44', color: '#007AFF', icon: '🔄' };
+    case 'feature':
+      return { bg: '#00E87A22', border: '#00E87A44', color: '#00E87A', icon: '✨' };
+    case 'maintenance':
+      return { bg: '#FF950022', border: '#FF950044', color: '#FF9500', icon: '🔧' };
+    case 'urgent':
+      return { bg: '#FF3B3022', border: '#FF3B3044', color: '#FF3B30', icon: '🚨' };
+    default:
+      return { bg: '#1A1A1A', border: '#333', color: '#888', icon: '📢' };
+  }
+}
+void _getAnnouncementCategoryStyle;
+
 const Settings: React.FC = () => {
   const [isSidebarHidden, setIsSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
-  const toggleSidebar = () => { setIsSidebarHidden(prev => { const next = !prev; localStorage.setItem('sidebarHidden', next.toString()); return next; }); };
-  const { user, logout, updateUserMetadata } = useAuth();
+  const _toggleSidebar = () => { setIsSidebarHidden(prev => { const next = !prev; localStorage.setItem('sidebarHidden', next.toString()); return next; }); }; void _toggleSidebar;
+  const { user, logout, setCurrentUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const profileCardVariant = useMemo<'regular' | 'pro' | 'admin'>(() => {
+  const _profileCardVariant = useMemo<'regular' | 'pro' | 'admin'>(() => {
     if (!user) return 'regular';
     if (isAdminProfileUser(user)) return 'admin';
     if (user.isPro) return 'pro';
     return 'regular';
   }, [user]);
+  void _profileCardVariant;
 
-  const avatarInitial = useMemo(() => {
-    const n = user?.name?.trim();
-    if (n) return n.charAt(0).toUpperCase();
-    return (user?.email?.charAt(0) || 'U').toUpperCase();
-  }, [user]);
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [showPinModal, setShowPinModal] = useState(false);
+  const [_showPinModal, setShowPinModal] = useState(false); void _showPinModal;
   const [currentPin, setCurrentPin] = useState(['', '', '', '']);
   const [newPin, setNewPin] = useState(['', '', '', '']);
   const [confirmPin, setConfirmPin] = useState(['', '', '', '']);
-  const [isUpdatingPin, setIsUpdatingPin] = useState(false);
-  const [pinError, setPinError] = useState('');
+  const [_isUpdatingPin, setIsUpdatingPin] = useState(false); void _isUpdatingPin;
+  const [_pinError, setPinError] = useState(''); void _pinError;
   const [isUploading, setIsUploading] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   // const [snapshotStats, setSnapshotStats] = useState({ completedTasks: 0, routineStreak: 0, activeGoals: 0 });
 
-  const [showConfirmReset, setShowConfirmReset] = useState<{ show: boolean; type: 'tasks' | 'routines' | 'stats' | '' }>({ show: false, type: '' });
+  const [showConfirmReset, setShowConfirmReset] = useState<{ show: boolean; type: 'tasks' | 'habits' | 'goals' | '' }>({ show: false, type: '' });
 
   const [showDeleteStep1Modal, setShowDeleteStep1Modal] = useState(false);
-  const [showDeletePinSheet, setShowDeletePinSheet] = useState(false);
-  const [showDeleteFinalModal, setShowDeleteFinalModal] = useState(false);
+  const [_showDeletePinSheet, setShowDeletePinSheet] = useState(false); void _showDeletePinSheet;
+  const [_showDeleteFinalModal, setShowDeleteFinalModal] = useState(false); void _showDeleteFinalModal;
   const [deletePinDigits, setDeletePinDigits] = useState(['', '', '', '']);
-  const [deletePinError, setDeletePinError] = useState('');
+  const [_deletePinError, setDeletePinError] = useState(''); void _deletePinError;
   const [deletePinAttempts, setDeletePinAttempts] = useState(0);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  const [proPrice, setProPrice] = useState(199);
+  const [originalPrice, setOriginalPrice] = useState(999);
+
+  const fetchProPrice = async () => {
+    try {
+      const { value } = await Preferences.get({ key: 'app_settings' });
+      if (value) {
+        const cached = JSON.parse(value);
+        const data = cached?.data;
+        if (data?.pro_price) {
+          setProPrice(data.pro_price);
+          setOriginalPrice(data.pro_original_price || 999);
+          return;
+        }
+      }
+      const { data } = await supabase.from('app_settings').select('pro_price, pro_original_price').single();
+      if (data) {
+        setProPrice(data.pro_price || 199);
+        setOriginalPrice(data.pro_original_price || 999);
+      }
+    } catch (e) {
+      setProPrice(199);
+      setOriginalPrice(999);
+    }
+  };
+
+  useEffect(() => {
+    fetchProPrice();
+  }, []);
 
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
   const [biometricLoginEnabled, setBiometricLoginEnabled] = useState(false);
@@ -97,6 +143,9 @@ const Settings: React.FC = () => {
   const [pushToggleBusy, setPushToggleBusy] = useState(false);
   const [biometricToggleBusy, setBiometricToggleBusy] = useState(false);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   /** Bumps when user mutates push prefs so stale profile fetch cannot overwrite toggle state. */
   const pushFetchSeqRef = useRef(0);
   const [prefsResumeTick, setPrefsResumeTick] = useState(0);
@@ -125,6 +174,33 @@ const Settings: React.FC = () => {
     const t = setTimeout(() => setNotificationToast(null), 3200);
     return () => clearTimeout(t);
   }, [notificationToast]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchAnnouncements = async () => {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (cancelled || error || !data) return;
+      setAnnouncements(data);
+      const { value: lastSeen } = await Preferences.get({ key: 'announcements_last_seen' });
+      if (cancelled) return;
+      if (lastSeen) {
+        const lastSeenTs = Number.parseInt(lastSeen, 10);
+        const unread = data.filter((a) => new Date(a.created_at).getTime() > lastSeenTs).length;
+        setUnreadCount(unread);
+      } else {
+        setUnreadCount(data.length);
+      }
+    };
+    void fetchAnnouncements();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!user?.id) {
@@ -386,20 +462,41 @@ const Settings: React.FC = () => {
 
   const handleResetData = async () => {
     if (!user?.id || !showConfirmReset.type) return;
+    const uid = user.id;
     try {
-      if (showConfirmReset.type === 'tasks') { await supabase.from('tasks').delete().eq('userId', user.id); }
-      else if (showConfirmReset.type === 'routines') { await supabase.from('routines').delete().eq('user_id', user.id); }
-      else if (showConfirmReset.type === 'stats') { await supabase.from('routine_logs').delete().eq('user_id', user.id); }
-      alert('Action completed successfully!');
+      if (showConfirmReset.type === 'tasks') {
+        await supabase.from('tasks').delete().eq('userId', uid);
+        // Clear local cache
+        localStorage.removeItem(`stayhardy_tasks_${uid}`);
+      } else if (showConfirmReset.type === 'habits') {
+        await supabase.from('routines').delete().eq('user_id', uid);
+        await supabase.from('routine_logs').delete().eq('user_id', uid);
+        // Clear local cache
+        localStorage.removeItem(`stayhardy_routines_${uid}`);
+      } else if (showConfirmReset.type === 'goals') {
+        await supabase.from('goals').delete().eq('userId', uid);
+        // Clear local cache
+        localStorage.removeItem(`stayhardy_goals_${uid}`);
+      }
+      // Recalculate productivity score & refresh all pages
+      await ProductivityService.recalculate(uid);
+      window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
       setShowConfirmReset({ show: false, type: '' });
-    } catch (err) { console.error('Reset failed:', err); }
+      setNotificationToast(`${showConfirmReset.type.charAt(0).toUpperCase() + showConfirmReset.type.slice(1)} reset successfully.`);
+    } catch (err) {
+      console.error('Reset failed:', err);
+      setNotificationToast('Reset failed. Please try again.');
+    }
   };
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
+      await Preferences.remove({ key: 'save_login_enabled' });
+      await Preferences.remove({ key: 'saved_email' });
+      await Preferences.remove({ key: 'saved_pin' });
       await logout();
-      navigate('/login');
+      window.location.href = '/';
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
@@ -416,7 +513,7 @@ const Settings: React.FC = () => {
     setDeletePinAttempts(0);
   };
 
-  const handleConfirmDeletePin = async (e?: React.FormEvent) => {
+  const _handleConfirmDeletePin = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setDeletePinError('');
     const pin = deletePinDigits.join('');
@@ -447,8 +544,9 @@ const Settings: React.FC = () => {
     setShowDeletePinSheet(false);
     setShowDeleteFinalModal(true);
   };
+  void _handleConfirmDeletePin;
 
-  const handleDeleteAccountForever = async () => {
+  const _handleDeleteAccountForever = async () => {
     if (!user?.id) return;
     setShowDeleteFinalModal(false);
     setIsDeletingAccount(true);
@@ -469,6 +567,7 @@ const Settings: React.FC = () => {
       );
     }
   };
+  void _handleDeleteAccountForever;
 
   const resetPinModalFields = () => {
     setCurrentPin(['', '', '', '']);
@@ -477,7 +576,43 @@ const Settings: React.FC = () => {
     setPinError('');
   };
 
-  const handleUpdatePin = async (e?: React.FormEvent) => {
+  const forceLogoutAfterPinChange = async () => {
+    try {
+      console.log('Force logout after PIN change');
+      const keysToRemove = [
+        'user_profile',
+        'user_pin',
+        'app_pin',
+        'stayhardy_last_login_at',
+        'remembered_email',
+        'login_timestamp',
+        'supabase.auth.token',
+        'sb-tiavhmbpplerffdjmodw-auth-token',
+      ];
+      for (const key of keysToRemove) {
+        try {
+          await Preferences.remove({ key });
+        } catch {
+          // ignore preference removal issues
+        }
+      }
+      try {
+        await CacheManager.clearAll();
+      } catch {
+        // ignore cache clear issues
+      }
+      await supabase.auth.signOut();
+      await logout();
+      navigate('/login', { replace: true, state: { pinUpdated: true } });
+      console.log('Logged out after PIN change ✅');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown force logout error';
+      console.error('Force logout error:', msg);
+      navigate('/login', { replace: true, state: { pinUpdated: true } });
+    }
+  };
+
+  const _handleUpdatePin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setPinError('');
 
@@ -514,186 +649,162 @@ const Settings: React.FC = () => {
 
     setIsUpdatingPin(true);
     try {
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPinStr + '_secure_pin',
-      });
-      if (reauthError) {
+      const { data: dbUser, error: fetchError } = await supabase
+        .from('users')
+        .select('id, pin, email')
+        .eq('id', user.id)
+        .single();
+      console.log('DB PIN check:', dbUser?.pin, 'entered:', currentPinStr);
+      if (fetchError || !dbUser) {
+        setPinError('Could not verify identity.');
+        return;
+      }
+
+      if ((dbUser.pin || '').trim() !== currentPinStr.trim()) {
         setPinError('Current PIN is incorrect.');
         return;
       }
 
-      const newSecure = pinStr + '_secure_pin';
-      const { error: authError } = await supabase.auth.updateUser({
-        password: newSecure,
-      });
-      if (authError) throw authError;
-
-      const { error: dbError } = await supabase
+      const { error: updateError } = await supabase
         .from('users')
-        .update({
-          pin: pinStr,
-          updatedAt: new Date().toISOString(),
-        })
+        .update({ pin: pinStr.trim() })
         .eq('id', user.id);
-
-      if (dbError) {
-        console.error('DB update error:', dbError);
-        const { error: rollbackErr } = await supabase.auth.updateUser({
-          password: currentPinStr + '_secure_pin',
-        });
-        if (rollbackErr) console.error('PIN rollback failed:', rollbackErr);
+      if (updateError) {
+        console.error('PIN update error:', updateError.message);
         setPinError('Failed to update PIN. Please try again.');
+        return;
+      }
+
+      const { data: verifyUser, error: verifyError } = await supabase
+        .from('users')
+        .select('pin')
+        .eq('id', user.id)
+        .single();
+      console.log(
+        'Verified new PIN in DB:',
+        verifyUser?.pin === pinStr.trim() ? '✅ SAVED' : '❌ NOT SAVED',
+      );
+      if (verifyError || verifyUser?.pin !== pinStr.trim()) {
+        setPinError('PIN update failed. Please try again.');
         return;
       }
 
       await clearBiometricOnPinChange(user.id);
       writeCachedBool(prefsCacheBiometricKey(user.id), false);
-
       localStorage.removeItem('remembered_pin');
+
+      setNotificationToast('PIN updated successfully! Please login with your new PIN.');
       setShowPinModal(false);
       resetPinModalFields();
-
-      await logout();
-      navigate('/login', { replace: true, state: { pinUpdated: true } });
-    } catch (err: unknown) {
-      console.error('PIN update error:', err);
-      const msg = err instanceof Error ? err.message : '';
-      setPinError(msg.trim() ? msg : 'Failed to update PIN. Please try again.');
-    } finally {
       setIsUpdatingPin(false);
+
+      setTimeout(() => {
+        void forceLogoutAfterPinChange();
+      }, 1500);
+      return;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('PIN update exception:', msg);
+      setPinError('Something went wrong. Please try again.');
     }
+    setIsUpdatingPin(false);
   };
+  void _handleUpdatePin;
 
-  const compressImage = (file: File): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          // Standard profile pic size (400x400 max)
-          const MAX_SIZE = 400;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_SIZE) {
-              height *= MAX_SIZE / width;
-              width = MAX_SIZE;
-            }
-          } else {
-            if (height > MAX_SIZE) {
-              width *= MAX_SIZE / height;
-              height = MAX_SIZE;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-
-          canvas.toBlob(
-            (blob) => {
-              if (blob) resolve(blob);
-              else reject(new Error('Image processing failed'));
-            },
-            'image/jpeg',
-            0.85 // 85% quality - sweet spot for weight vs quality
-          );
-        };
-        img.onerror = (err) => reject(err);
-      };
-      reader.onerror = (err) => reject(err);
-    });
-  };
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user?.id) return;
-
-    // 1. Instant Optimistic UI Update
-    const localPreviewUrl = URL.createObjectURL(file);
-    updateUserMetadata({ avatarUrl: localPreviewUrl });
-
-    setIsUploading(true);
-    console.log('Starting profile sync for:', user.email);
-
+  const handleAvatarUpload = async () => {
     try {
-      // 2. Background Compression
-      const compressedBlob = await compressImage(file);
-      const filename = `${user.email.replace(/@/g, '_at_')}.jpg`;
-      const compressedFile = new File([compressedBlob], filename, { type: 'image/jpeg' });
+      if (!user?.id) return;
 
-      // 3. Verify Bucket and Upload
-      // We'll try to list one file just to check if the bucket is reachable
-      const { error: bucketError } = await supabase.storage.from('avatars').list('', { limit: 1 });
-      if (bucketError) {
-        console.error('Bucket "avatars" check failed. Error:', bucketError.message);
-        throw new Error(`Storage bucket error: ${bucketError.message}`);
+      const image = await Camera.getPhoto({
+        quality: 80,
+        allowEditing: true,
+        resultType: CameraResultType.Base64,
+        source: CameraSource.Prompt,
+        width: 400,
+        height: 400
+      });
+
+      if (!image.base64String) return;
+      setIsUploading(true);
+
+      // Convert base64 to blob:
+      const base64 = image.base64String;
+      const byteCharacters = atob(base64);
+      const byteArray = new Uint8Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteArray[i] = byteCharacters.charCodeAt(i);
       }
+      const blob = new Blob([byteArray], { type: 'image/jpeg' });
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filename, compressedFile, { upsert: true });
+      // Folder-based path required for RLS: {userId}/avatar.jpg
+      const filePath = `${user.id}/avatar.jpg`;
+
+      console.log('Uploading avatar to profile-images/', filePath);
+
+      // Upload to Supabase storage:
+      const { data: _uploadData, error: uploadError } = await supabase.storage
+        .from('profile-images')
+        .upload(filePath, blob, {
+          contentType: 'image/jpeg',
+          upsert: true
+        });
+
+      console.log('Upload error:', JSON.stringify(uploadError));
 
       if (uploadError) {
-        console.error('Supabase Storage Upload Error:', uploadError);
-        throw uploadError;
+        console.error('Upload failed:', JSON.stringify(uploadError));
+        setNotificationToast('Upload failed: ' + uploadError.message);
+        setIsUploading(false);
+        return;
       }
 
-      console.log('Upload successful:', uploadData);
+      // Get public URL:
+      const { data: urlData } = supabase.storage
+        .from('profile-images')
+        .getPublicUrl(filePath);
 
-      // 4. Get Public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filename);
+      // Add cache-busting timestamp:
+      const avatarUrl = urlData.publicUrl + '?t=' + Date.now();
 
-      const finalUrl = `${publicUrl}?t=${Date.now()}`;
-      console.log('Syncing URL to profiles:', finalUrl);
+      console.log('Avatar URL:', avatarUrl);
 
-      // 5. Sync with Auth Metadata
-      const { error: updateAuthError } = await supabase.auth.updateUser({
-        data: { 
-          avatar_url: finalUrl,
-          avatarUrl: finalUrl
-        }
-      });
-      if (updateAuthError) console.error('Auth metadata sync failed:', updateAuthError.message);
-
-      // 6. Sync with Database Table
-      const { error: dbUpdateError } = await supabase
+      // Save to users table:
+      const { error: updateError } = await supabase
         .from('users')
-        .update({ avatar_url: finalUrl })
+        .update({
+          avatar_url: avatarUrl
+        })
         .eq('id', user.id);
-      
-      if (dbUpdateError) {
-        console.warn('Database table sync failed (might be missing avatar_url column):', dbUpdateError.message);
+
+      console.log('Update error:', JSON.stringify(updateError));
+
+      if (updateError) {
+        console.error('Save failed:', JSON.stringify(updateError));
+        setNotificationToast('Save failed: ' + updateError.message);
+        setIsUploading(false);
+        return;
       }
 
-      // 7. Final Local Sync
-      updateUserMetadata({ avatarUrl: finalUrl });
-      void saveUserProfileCache(
-        { ...user, avatarUrl: finalUrl },
-        {
-          push_notifications_enabled: pushNotificationsEnabled,
-          biometric_enabled: biometricLoginEnabled,
-        },
-      );
-      console.log('Profile sync complete!');
+      // Update local currentUser state:
+      setCurrentUser({
+        ...user,
+        avatarUrl: avatarUrl
+      });
+
+      setNotificationToast('Profile photo updated ✅');
+      console.log('Avatar saved ✅');
 
     } catch (err: any) {
-      console.error('Critical Sync Failure:', err);
-      // We don't alert the user as requested, but the logs will show the truth.
+      if (err.message?.includes('cancelled') || err.message?.includes('cancel'))
+        return;
+      console.error('Avatar error:', err.message);
+      alert('Error: ' + err.message);
     } finally {
       setIsUploading(false);
     }
   };
 
-  const sessionSinceLabel = (() => {
+  const _sessionSinceLabel = (() => {
     const raw = sessionStorage.getItem(SESS_START_KEY);
     if (!raw) return 'this session';
     try {
@@ -702,6 +813,7 @@ const Settings: React.FC = () => {
       return 'this session';
     }
   })();
+  void _sessionSinceLabel;
 
   const pushSwitch = (
     <button
@@ -747,1332 +859,523 @@ const Settings: React.FC = () => {
     <div className={`page-shell set-premium-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
       <style>{`
         .set-premium-page {
-          padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
-        }
-        @media (max-width: 767px) {
-          .set-premium-page.page-shell {
-            padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
-          }
-        }
-        @media (min-width: 768px) {
-          .set-premium-page .set-header {
-            padding-top: 12px;
-          }
-        }
-        .page-shell.set-premium-page .set-header {
-          padding-left: 16px;
-          padding-right: 16px;
-        }
-        .set-aurora { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
-        .set-wrap {
-          position: relative;
-          z-index: 1;
-          max-width: 720px;
-          margin: 0 auto;
-          padding: 0 0.45rem;
-        }
-        .set-header {
-          position: relative;
-          padding: 0 0 0.5rem;
-          margin: 0;
-          overflow: visible;
-        }
-        .set-header-row {
-          position: relative;
-          display: flex;
-          flex-direction: row;
-          align-items: center;
-          justify-content: center;
-          min-height: 52px;
-          width: 100%;
-          box-sizing: border-box;
-        }
-        .set-header-center {
-          flex: 1;
-          min-width: 0;
-          text-align: center;
-          padding: 0 48px;
-          box-sizing: border-box;
-        }
-        .set-header-sidebar-btn {
-          position: absolute;
-          left: 16px;
-          top: 50%;
-          transform: translateY(-50%);
-          z-index: 2;
-          opacity: 0.55;
-        }
-        .set-focus-toggle {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          background: rgba(0, 0, 0, 0.35);
-          color: #e2e8f0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          flex-shrink: 0;
-        }
-        .set-title {
-          font-family: 'Syne', system-ui, sans-serif;
-          font-size: 26px;
-          font-weight: 800;
-          letter-spacing: 2px;
-          color: #ffffff;
-          margin: 0;
-          line-height: 1.1;
-          text-align: center;
-          text-transform: uppercase;
-        }
-        .set-tagline {
+          background: #080C0A;
+          min-height: 100dvh;
           font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: #00e87a;
-          text-align: center;
-          margin: 4px 0 0;
-          line-height: 1.35;
-        }
-        .set-welcome-line {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 13px;
-          font-weight: 500;
-          color: rgba(255, 255, 255, 0.45);
-          text-align: center;
-          margin: 12px 0 8px;
-          line-height: 1.35;
+          padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+          overflow-y: auto;
         }
 
-        .set-profile-card {
-          position: relative;
-          width: 100%;
-          border-radius: 20px;
-          padding: 24px 20px 20px;
-          margin-bottom: 1.35rem;
-          overflow: hidden;
-          text-align: center;
-          box-sizing: border-box;
-        }
-        .set-profile-card--regular {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .set-profile-card--pro {
-          background: linear-gradient(
-            135deg,
-            rgba(0, 232, 122, 0.08) 0%,
-            rgba(0, 0, 0, 0) 60%,
-            rgba(0, 232, 122, 0.04) 100%
-          );
-          border: 1px solid rgba(0, 232, 122, 0.25);
-          box-shadow:
-            0 0 0 1px rgba(0, 232, 122, 0.05),
-            0 8px 24px rgba(0, 232, 122, 0.1);
-        }
-        .set-profile-card--admin {
-          background: linear-gradient(
-            135deg,
-            rgba(245, 158, 11, 0.1) 0%,
-            rgba(0, 0, 0, 0) 60%,
-            rgba(245, 158, 11, 0.05) 100%
-          );
-          border: 1px solid rgba(245, 158, 11, 0.35);
-          box-shadow: 0 8px 32px rgba(245, 158, 11, 0.12);
-        }
-        .set-profile-admin-shimmer {
-          position: absolute;
-          inset: 0;
-          border-radius: 20px;
-          pointer-events: none;
-          z-index: 0;
-          overflow: hidden;
-        }
-        .set-profile-admin-shimmer__inner {
-          position: absolute;
-          inset: -40%;
-          background: conic-gradient(
-            from 0deg,
-            transparent 0deg,
-            rgba(251, 191, 36, 0.12) 45deg,
-            transparent 90deg,
-            transparent 360deg
-          );
-          animation: setAdminShimmerSpin 5s linear infinite;
-          opacity: 0.45;
-        }
-        @keyframes setAdminShimmerSpin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        .set-profile-role-icon {
-          position: absolute;
-          top: 12px;
-          right: 48px;
-          z-index: 2;
-          font-size: 16px;
-          line-height: 1;
-          color: #00e87a;
-          pointer-events: none;
-        }
-        .set-profile-role-icon--admin {
-          font-size: 18px;
-          color: #f59e0b;
-        }
-        .set-profile-edit-btn {
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          border-radius: 10px;
-          padding: 6px 8px;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          transition: background 0.2s, border-color 0.2s;
-        }
-        .set-profile-edit-btn--corner {
-          position: absolute;
-          top: 12px;
-          right: 12px;
-          z-index: 2;
-        }
-        .set-profile-edit-btn .material-symbols-outlined {
-          font-size: 14px !important;
-        }
-        .set-profile-edit-btn:active {
-          background: rgba(255, 255, 255, 0.12);
-        }
-        .set-profile-stack {
-          position: relative;
-          z-index: 1;
+        /* ── Hero ── */
+        .sp-hero {
           display: flex;
           flex-direction: column;
           align-items: center;
-          padding-top: 20px;
+          padding: 52px 20px 28px;
+          gap: 0;
         }
-        .set-avatar-wrap {
+        .sp-avatar-ring {
+          width: 88px;
+          height: 88px;
+          border-radius: 50%;
+          border: 2px solid #00E87A;
+          overflow: hidden;
           position: relative;
-          width: 80px;
-          height: 80px;
-          margin: 0 auto;
+          margin-bottom: 16px;
+          box-shadow: 0 0 20px rgba(0,232,122,0.22);
+          cursor: pointer;
           flex-shrink: 0;
         }
-        .set-avatar {
-          position: relative;
-          width: 80px;
-          height: 80px;
-          border-radius: 50%;
-          overflow: hidden;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-sizing: border-box;
+        .sp-avatar-ring img { width: 100%; height: 100%; object-fit: cover; }
+        .sp-avatar-initial {
+          width: 100%; height: 100%;
+          display: flex; align-items: center; justify-content: center;
+          background: linear-gradient(135deg, #1a2e1a, #0d1f0d);
+          font-size: 32px; font-weight: 800; color: #00E87A;
         }
-        .set-avatar--regular {
-          border: 2px solid rgba(255, 255, 255, 0.2);
-          background: transparent;
-        }
-        .set-avatar--pro {
-          border: 2px solid #00e87a;
-          box-shadow: 0 0 16px rgba(0, 232, 122, 0.3);
-        }
-        .set-avatar--admin {
-          border: 2px solid #f59e0b;
-          box-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
-        }
-        .set-avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-        .set-avatar-initial {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-family: 'Syne', system-ui, sans-serif;
-          font-weight: 700;
-          font-size: 28px;
-          color: #00e87a;
-          background: linear-gradient(135deg, #1c2b24, #0d1a13);
-        }
-        .set-avatar-initial--regular,
-        .set-avatar-initial--pro,
-        .set-avatar-initial--admin {
-          background: linear-gradient(135deg, #1c2b24, #0d1a13);
-          color: #00e87a;
-        }
-        .set-online-dot {
+        .sp-pro-pill {
           position: absolute;
-          bottom: 4px;
-          right: 4px;
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background: #00e87a;
-          border: 2px solid #080c0a;
-          box-shadow: 0 0 6px rgba(0, 232, 122, 0.65);
+          bottom: 2px; left: 50%; transform: translateX(-50%);
+          background: #00E87A; color: #000;
+          font-size: 9px; font-weight: 800;
+          padding: 2px 8px; border-radius: 10px;
+          letter-spacing: 0.06em; white-space: nowrap;
+          pointer-events: none;
         }
-        .set-name-row {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          flex-wrap: wrap;
-          margin-top: 12px;
+        .sp-uploading-overlay {
+          position: absolute; inset: 0;
+          background: rgba(0,0,0,0.75);
+          display: flex; align-items: center; justify-content: center;
         }
-        .set-display-name {
-          margin: 0;
-          font-family: 'Syne', system-ui, sans-serif;
-          font-size: 18px;
-          font-weight: 700;
-          color: #fff;
-          letter-spacing: -0.3px;
+        .sp-name {
+          font-family: system-ui, -apple-system, 'Inter', sans-serif;
+          font-size: 22px; font-weight: 800;
+          color: #FFFFFF; letter-spacing: -0.3px;
+          margin: 0 0 4px; text-align: center;
         }
-        .set-pro-badge {
-          display: inline-flex;
-          align-items: center;
-          padding: 3px 8px;
-          border-radius: 20px;
-          background: linear-gradient(135deg, #00e87a, #00c563);
-          color: #000000;
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 9px;
-          font-weight: 700;
+        .sp-email {
+          font-size: 13px; color: rgba(255,255,255,0.4);
+          margin: 0 0 16px; text-align: center;
         }
-        .set-admin-inline-badge {
-          display: inline-flex;
-          align-items: center;
-          padding: 3px 8px;
-          border-radius: 20px;
-          background: rgba(245, 158, 11, 0.15);
-          border: 1px solid rgba(245, 158, 11, 0.35);
-          color: #f59e0b;
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 9px;
-          font-weight: 700;
-        }
-        .set-email {
-          margin: 4px 0 0;
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 12px;
-          color: rgba(255, 255, 255, 0.45);
-          text-align: center;
-        }
-        .set-email--pro {
-          color: rgba(255, 255, 255, 0.5);
-        }
-        .set-pro-lifetime-line {
-          margin: 6px 0 0;
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 10px;
-          font-weight: 500;
-          letter-spacing: 0.5px;
-          color: #00e87a;
-          text-align: center;
-        }
-        .set-lifetime-upsell-btn {
-          margin-top: 10px;
-          padding: 0.4rem 0.75rem;
-          border-radius: 999px;
-          border: 1px solid rgba(251, 191, 36, 0.45);
-          background: rgba(251, 191, 36, 0.08);
-          color: #fbbf24;
-          font-size: 0.65rem;
-          font-weight: 900;
+        .sp-edit-btn {
+          display: inline-flex; align-items: center; gap: 6px;
+          background: rgba(255,255,255,0.05);
+          border: 0.5px solid rgba(255,255,255,0.12);
+          border-radius: 20px; padding: 8px 20px;
+          font-size: 13px; font-weight: 600;
+          color: rgba(255,255,255,0.75);
           cursor: pointer;
-          letter-spacing: 0.1em;
-          font-family: 'JetBrains Mono', monospace;
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          transition: background 0.2s ease;
         }
+        .sp-edit-btn:active { background: rgba(255,255,255,0.09); }
 
-        .set-sec-label {
-          display: flex;
-          align-items: center;
-          gap: 0.45rem;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 9px;
-          font-weight: 800;
-          letter-spacing: 0.22em;
-          text-transform: uppercase;
-          margin: 1.35rem 0 0.55rem 0.15rem;
-          color: rgba(226, 232, 240, 0.88);
+        /* ── Groups ── */
+        .sp-group { margin: 0 16px 8px; }
+        .sp-group-label {
+          font-size: 11px; font-weight: 700;
+          letter-spacing: 0.1em; text-transform: uppercase;
+          color: rgba(255,255,255,0.25);
+          padding: 0 4px; margin-bottom: 8px;
         }
-        .set-sec-label::before {
-          content: '';
-          width: 3px;
-          height: 14px;
-          border-radius: 2px;
+        .sp-group-label--danger { color: rgba(239,68,68,0.5); }
+        .sp-group-card {
+          background: #0A0A0A;
+          border: 0.5px solid #2A2A2A;
+          border-radius: 18px; overflow: hidden;
+        }
+        .sp-group-card--danger {
+          background: #0A0A0A;
+          border-color: rgba(239,68,68,0.12);
+        }
+        .sp-row {
+          width: 100%; display: flex; align-items: center;
+          gap: 14px; padding: 14px 16px;
+          border: none; background: none; color: inherit;
+          cursor: pointer; text-align: left;
+          transition: background 0.15s;
+        }
+        .sp-row:active { background: rgba(255,255,255,0.04); }
+        .sp-row--static { cursor: default; }
+        .sp-row--static:active { background: none; }
+        .sp-divider { height: 1px; background: rgba(255,255,255,0.05); margin: 0 16px; }
+        .sp-ic {
+          width: 34px; height: 34px; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
           flex-shrink: 0;
+          background: #1A1A1A;
+          border: 0.5px solid rgba(255,255,255,0.08);
         }
-        .set-sec-label--green::before { background: #4ade80; box-shadow: 0 0 10px rgba(74, 222, 128, 0.45); }
-        .set-sec-label--orange::before { background: #fb923c; box-shadow: 0 0 10px rgba(251, 146, 60, 0.35); }
-        .set-sec-label--red::before { background: #f87171; }
-        .set-sec-label--danger {
-          color: rgba(252, 165, 165, 0.95);
-        }
-        .set-sec-label--danger::before {
-          display: none;
-        }
+        .sp-row-body { flex: 1; min-width: 0; }
+        .sp-row-title { font-size: 14px; font-weight: 600; color: #FFFFFF; display: block; }
+        .sp-row-title--danger { color: #EF4444; }
+        .sp-row-sub { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 1px; display: block; }
+        .sp-chev { color: rgba(255,255,255,0.25); font-size: 18px !important; flex-shrink: 0; }
 
-        .set-card {
-          border-radius: 16px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          background: rgba(8, 10, 18, 0.72);
-          overflow: hidden;
-          margin-bottom: 0.15rem;
-        }
-        .set-card--danger {
-          border-color: rgba(248, 113, 113, 0.35);
-          background: rgba(127, 29, 29, 0.12);
-        }
-        .set-card--danger .set-row:active {
-          background: rgba(239, 68, 68, 0.12);
-          box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.2);
-        }
-
-        .set-row {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.9rem 1rem;
-          border: none;
-          background: none;
-          color: inherit;
-          cursor: pointer;
-          text-align: left;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.045);
-          transition: background 0.15s ease, box-shadow 0.15s ease;
-        }
-        .set-row:last-child { border-bottom: none; }
-        .set-row:active {
-          background: rgba(16, 185, 129, 0.1);
-          box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.15);
-        }
-        .set-row--static {
-          cursor: default;
-        }
-        .set-row--static:active {
-          background: none;
-          box-shadow: none;
-        }
-        .set-ic {
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .set-ic .material-symbols-outlined { font-size: 20px; }
-        .set-ic--blue { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(96, 165, 250, 0.25); }
-        .set-ic--pink { background: rgba(236, 72, 153, 0.12); color: #f9a8d4; border: 1px solid rgba(244, 114, 182, 0.28); }
-        .set-ic--green { background: rgba(16, 185, 129, 0.12); color: #4ade80; border: 1px solid rgba(52, 211, 153, 0.25); }
-        .set-ic--orange { background: rgba(249, 115, 22, 0.12); color: #fdba74; border: 1px solid rgba(251, 146, 60, 0.3); }
-        .set-ic--red { background: rgba(239, 68, 68, 0.12); color: #fca5a5; border: 1px solid rgba(248, 113, 113, 0.28); }
-        .set-row-body { flex: 1; min-width: 0; }
-        .set-row-title { font-weight: 800; font-size: 0.9rem; color: #f1f5f9; display: block; }
-        .set-row-sub { font-size: 0.65rem; color: rgba(248, 113, 113, 0.85); margin-top: 0.2rem; display: block; font-weight: 600; }
-        .set-row-sub--muted { color: rgba(148, 163, 184, 0.9); }
-        .set-row-sub--love { font-size: 0.58rem; font-weight: 800; letter-spacing: 0.12em; color: #f9a8d4; margin-top: 0.15rem; }
-        .set-chev { color: rgba(100, 116, 139, 0.85); flex-shrink: 0; font-size: 22px !important; }
-        .set-row--data { color: rgba(252, 165, 165, 0.95); }
-        .set-row--data .set-row-title { color: rgba(254, 202, 202, 0.95); }
-        .set-row--data:active {
-          background: rgba(239, 68, 68, 0.1);
-          box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.18);
-        }
-
+        /* ── Switch ── */
         .set-switch {
-          position: relative;
-          width: 52px;
-          height: 30px;
-          flex-shrink: 0;
-          border-radius: 999px;
-          border: none;
-          cursor: pointer;
-          padding: 0;
-          transition: background 0.2s;
-          background: rgba(148, 163, 184, 0.35);
+          position: relative; width: 52px; height: 30px;
+          flex-shrink: 0; border-radius: 999px; border: none;
+          cursor: pointer; padding: 0; transition: background 0.2s;
+          background: rgba(148,163,184,0.35);
         }
         .set-switch[data-on="1"] { background: #10b981; }
         .set-switch:disabled { cursor: wait; opacity: 0.65; }
         .set-switch-knob {
-          position: absolute;
-          top: 3px;
-          left: 3px;
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: #fff;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+          position: absolute; top: 3px; left: 3px;
+          width: 24px; height: 24px; border-radius: 50%;
+          background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
           transition: left 0.2s ease;
         }
         .set-switch[data-on="1"] .set-switch-knob { left: 26px; }
         .set-switch-spin {
-          position: absolute;
-          inset: 0;
-          margin: auto;
+          position: absolute; inset: 0; margin: auto;
           font-size: 16px !important;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: rgba(255, 255, 255, 0.9);
+          display: flex; align-items: center; justify-content: center;
+          color: rgba(255,255,255,0.9);
         }
+        @keyframes rotating { to { transform: rotate(360deg); } }
+        .rotating { animation: rotating 0.9s linear infinite; }
 
-        .set-logout {
-          width: 100%;
-          margin-top: 1.25rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.6rem;
-          padding: 0.95rem 1rem;
+        /* ── Logout ── */
+        .sp-logout {
+          width: 100%; margin: 8px 0 0;
+          display: flex; align-items: center; justify-content: center;
+          gap: 8px; padding: 15px;
           border-radius: 14px;
-          border: 2px solid rgba(248, 113, 113, 0.55);
-          background: transparent;
-          color: #fecaca;
-          font-weight: 900;
-          font-size: 0.82rem;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          cursor: pointer;
-          transition: box-shadow 0.2s, background 0.2s;
+          border: 1px solid rgba(248,113,113,0.4);
+          background: rgba(239,68,68,0.06);
+          color: #fecaca; font-weight: 700;
+          font-size: 13px; letter-spacing: 0.06em;
+          text-transform: uppercase; cursor: pointer;
+          transition: background 0.2s;
         }
-        .set-logout:active {
-          box-shadow: 0 0 24px rgba(239, 68, 68, 0.35);
-          background: rgba(239, 68, 68, 0.08);
-        }
-        .set-logout:disabled { opacity: 0.55; cursor: wait; }
-        .set-session-hint {
-          text-align: center;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 9px;
-          font-weight: 600;
-          letter-spacing: 0.06em;
-          color: rgba(100, 116, 139, 0.95);
-          margin: 0.65rem 0 0;
-        }
+        .sp-logout:active { background: rgba(239,68,68,0.12); }
+        .sp-logout:disabled { opacity: 0.55; cursor: wait; }
 
-        .set-footer {
-          margin-top: 2.25rem;
-          padding-top: 1.25rem;
-          border-top: 1px solid rgba(255, 255, 255, 0.06);
-          text-align: center;
-        }
-        .set-footer-logo {
-          width: 40px;
-          height: 40px;
-          margin: 0 auto 0.65rem;
-          border-radius: 12px;
-          background: rgba(16, 185, 129, 0.12);
-          border: 1px solid rgba(52, 211, 153, 0.25);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #4ade80;
-        }
-        .set-footer-logo .material-symbols-outlined { font-size: 22px; }
-        .set-footer-ver {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 0.08em;
-          color: rgba(100, 116, 139, 0.95);
-          margin: 0;
-        }
-
-        .avatar-hover-overlay {
-          position: absolute;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.45);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-          backdrop-filter: blur(2px);
-          border-radius: 50%;
-        }
-        .set-avatar:hover .avatar-hover-overlay,
-        .set-avatar:focus-visible .avatar-hover-overlay {
-          opacity: 1;
-        }
-        @media (max-width: 768px) {
-          .desktop-only { display: none !important; }
+        /* ── Toast ── */
+        .sp-toast {
+          position: fixed; left: 50%; bottom: max(1rem, env(safe-area-inset-bottom));
+          transform: translateX(-50%); z-index: 1100;
+          padding: 0.5rem 1.1rem; border-radius: 999px;
+          background: rgba(15,23,42,0.92); color: #e2e8f0;
+          font-size: 13px; font-weight: 600;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+          max-width: min(90vw, 320px); text-align: center;
+          pointer-events: none;
         }
       `}</style>
 
-      <div className="aurora-bg set-aurora">
-        <div className="aurora-gradient-1" />
-        <div className="aurora-gradient-2" />
-      </div>
-
-      <div className="set-wrap">
-        <header className="set-header">
-          <div className="set-header-row">
-            <button
-              type="button"
-              className="set-focus-toggle set-header-sidebar-btn notification-btn desktop-only-btn"
-              title={isSidebarHidden ? 'Show Sidebar' : 'Focus mode'}
-              aria-label={isSidebarHidden ? 'Show sidebar' : 'Hide sidebar (focus mode)'}
-              onClick={toggleSidebar}
-            >
-              <span className="material-symbols-outlined">
-                {isSidebarHidden ? 'side_navigation' : 'fullscreen'}
-              </span>
-            </button>
-            <div className="set-header-center">
-              <h1 className="set-title">SETTINGS</h1>
-            </div>
-          </div>
-          <p className="set-tagline">ACCOUNT · PRIVACY · CONTROL · PREFERENCE</p>
-          <p className="set-welcome-line">
-            Welcome back,{' '}
-            {(user?.name && user.name.trim()) ||
-              (user?.email ? user.email.split('@')[0] : null) ||
-              'there'}
-            {' '}
-            👋
-          </p>
-        </header>
-
-        <main style={{ display: 'flex', flexDirection: 'column' }}>
-          <div className={`set-profile-card set-profile-card--${profileCardVariant}`}>
-            {profileCardVariant === 'admin' && (
-              <div className="set-profile-admin-shimmer" aria-hidden>
-                <div className="set-profile-admin-shimmer__inner" />
-              </div>
-            )}
-            {profileCardVariant === 'pro' && (
-              <span className="set-profile-role-icon" aria-hidden>
-                ⚡
-              </span>
-            )}
-            {profileCardVariant === 'admin' && (
-              <span className="set-profile-role-icon set-profile-role-icon--admin" aria-hidden>
-                👑
-              </span>
-            )}
-            <button
-              type="button"
-              className="set-profile-edit-btn set-profile-edit-btn--corner"
-              aria-label="Edit profile photo"
-              onClick={() => document.getElementById('avatar-input')?.click()}
-            >
-              <span className="material-symbols-outlined">edit</span>
-            </button>
-            <div className="set-profile-stack">
-              <div className="set-avatar-wrap">
-                <div
-                  className={`set-avatar set-avatar--${profileCardVariant}`}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => document.getElementById('avatar-input')?.click()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      document.getElementById('avatar-input')?.click();
-                    }
-                  }}
-                >
-                  {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="" />
-                  ) : (
-                    <span className={`set-avatar-initial set-avatar-initial--${profileCardVariant}`}>{avatarInitial}</span>
-                  )}
-                  {isUploading && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        background: 'rgba(0,0,0,0.75)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <span className="material-symbols-outlined rotating" style={{ color: '#4ade80' }}>
-                        sync
-                      </span>
-                    </div>
-                  )}
-                  <div className="avatar-hover-overlay">
-                    <span className="material-symbols-outlined" style={{ color: '#fff', fontSize: 22 }}>
-                      add_a_photo
-                    </span>
-                  </div>
-                </div>
-                <span className="set-online-dot" title="Active" aria-hidden />
-              </div>
-              <div className="set-name-row">
-                <p className="set-display-name">{user?.name || 'Operator'}</p>
-                {profileCardVariant === 'admin' && (
-                  <span className="set-admin-inline-badge">👑 ADMIN</span>
-                )}
-                {profileCardVariant === 'pro' && <span className="set-pro-badge">PRO</span>}
-              </div>
-              <p className={`set-email ${profileCardVariant === 'pro' ? 'set-email--pro' : ''}`}>
-                {user?.email || 'No email on file'}
-              </p>
-              {profileCardVariant === 'pro' && (
-                <p className="set-pro-lifetime-line">✦ Lifetime Access · No Subscription</p>
-              )}
-              {shouldShowLifetimeUpsell(user) && profileCardVariant === 'regular' && (
-                <button
-                  type="button"
-                  className="set-lifetime-upsell-btn"
-                  onClick={() => navigate('/lifetime-access')}
-                >
-                  {`LIFETIME ₹${LIFETIME_PRICE_INR}`}
-                </button>
-              )}
-            </div>
-          </div>
-          <input
-            id="avatar-input"
-            type="file"
-            accept="image/*"
-            onChange={handleAvatarUpload}
-            style={{ display: 'none' }}
-          />
-
-
-
-          {!isAdminProfileUser(user) && (
-            <>
-              <div className="set-sec-label set-sec-label--green">GROWTH AND FEEDBACK</div>
-              <div className="set-card">
-                <button type="button" className="set-row" onClick={() => navigate('/feedback')}>
-                  <span className="set-ic set-ic--blue">
-                    <span className="material-symbols-outlined">chat</span>
-                  </span>
-                  <span className="set-row-body">
-                    <span className="set-row-title">Send Feedback</span>
-                  </span>
-                  <span className="material-symbols-outlined set-chev">chevron_right</span>
-                </button>
-                <button
-                  type="button"
-                  className="set-row"
-                  onClick={() => {
-                    setShowSupportModal(true);
-                  }}
-                >
-                  <span className="set-ic set-ic--pink">
-                    <span className="material-symbols-outlined">favorite</span>
-                  </span>
-                  <span className="set-row-body">
-                    <span className="set-row-title">Support This App</span>
-                    <span className="set-row-sub--love">SHOW LOVE</span>
-                  </span>
-                  <span className="material-symbols-outlined set-chev">chevron_right</span>
-                </button>
-              </div>
-            </>
-          )}
-
-          {!hidePushAndBiometricOnAndroid() && (
-            <>
-              <div className="set-sec-label set-sec-label--green">NOTIFICATIONS</div>
-              <div className="set-card" style={{ opacity: pushPrefsLoading ? 0.7 : 1 }}>
-                <div className="set-row set-row--static">
-                  <span className="set-ic set-ic--green">
-                    <span className="material-symbols-outlined">notifications_active</span>
-                  </span>
-                  <span className="set-row-body">
-                    <span className="set-row-title">Push Notifications</span>
-                    <span className="set-row-sub--muted">Daily morning &amp; evening motivation reminders</span>
-                  </span>
-                  {pushSwitch}
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="set-sec-label set-sec-label--green">SECURITY</div>
-          <div className="set-card">
-            {!hidePushAndBiometricOnAndroid() && biometricRowVisible && (
-              <div className="set-row set-row--static" style={{ opacity: pushPrefsLoading ? 0.7 : 1 }}>
-                <span className="set-ic set-ic--orange">
-                  <span className="material-symbols-outlined">fingerprint</span>
-                </span>
-                <span className="set-row-body">
-                  <span className="set-row-title">Face ID / Biometric Login</span>
-                  <span className="set-row-sub--muted">Faster sign-in on this device</span>
-                </span>
-                {bioSwitch}
-              </div>
-            )}
-            <button
-              type="button"
-              className="set-row"
-              onClick={() => {
-                resetPinModalFields();
-                setShowPinModal(true);
-              }}
-            >
-              <span className="set-ic set-ic--orange">
-                <span className="material-symbols-outlined">lock</span>
-              </span>
-              <span className="set-row-body">
-                <span className="set-row-title">Change Access PIN</span>
-              </span>
-              <span className="material-symbols-outlined set-chev">chevron_right</span>
-            </button>
-          </div>
-
-          <div className="set-sec-label set-sec-label--red set-sec-label--danger">
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#f87171' }}>
-              warning
-            </span>
-            DANGER ZONE
-          </div>
-          <div className="set-card set-card--danger">
-            {(['tasks', 'routines', 'stats'] as const).map((type) => (
-              <button
-                key={type}
-                type="button"
-                className="set-row"
-                style={{ color: '#fecaca' }}
-                onClick={() => setShowConfirmReset({ show: true, type })}
-              >
-                <span className="set-ic set-ic--red">
-                  <span className="material-symbols-outlined">restart_alt</span>
-                </span>
-                <span className="set-row-body">
-                  <span className="set-row-title" style={{ color: '#fecdd3' }}>
-                    Reset {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </span>
-                  <span className="set-row-sub">This cannot be undone</span>
-                </span>
-                <span className="material-symbols-outlined set-chev">chevron_right</span>
-              </button>
-            ))}
-          </div>
-
-        {/* Reset Confirmation Modal Info */}
-        {showConfirmReset.show && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1.5rem' }}>
-            <div className="glass-card" style={{ padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
-              <span className="material-symbols-outlined" style={{ fontSize: '3rem', color: '#ef4444', marginBottom: '1rem' }}>warning</span>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '0.5rem', color: '#fff' }}>Are you absolutely sure?</h2>
-              <p style={{ fontSize: '0.81rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '1.5rem' }}>This action cannot be undone. All your {showConfirmReset.type} will be permanently erased.</p>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button onClick={() => setShowConfirmReset({ show: false, type: '' })} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.1)', background: 'none', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                <button onClick={handleResetData} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: 'none', background: '#ef4444', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Confirm</button>
-              </div>
-            </div>
-          </div>
-        )}
-        <button type="button" className="set-logout" onClick={handleLogout} disabled={isLoggingOut}>
-          <span className={`material-symbols-outlined${isLoggingOut ? ' rotating' : ''}`}>
-            {isLoggingOut ? 'sync' : 'logout'}
-          </span>
-          {isLoggingOut ? 'Signing out…' : 'Log out'}
-        </button>
-        <p className="set-session-hint">Session active since {sessionSinceLabel}</p>
-
+      {/* ── SECTION 1: PROFILE HERO ── */}
+      <div className="sp-hero">
         <div
-          className="set-sec-label"
-          style={{
-            fontSize: '10px',
-            color: '#EF4444',
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-            marginTop: '1.5rem',
-            marginBottom: '0.5rem',
-            fontFamily: "'DM Sans', system-ui, sans-serif",
-            fontWeight: 600,
-          }}
+          className="sp-avatar-ring"
+          role="button"
+          tabIndex={0}
+          onClick={() => handleAvatarUpload()}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAvatarUpload(); } }}
         >
-          DANGER ZONE
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt=""
+              style={{
+                width: '88px',
+                height: '88px',
+                minWidth: '88px',
+                minHeight: '88px',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: '2px solid #00E87A',
+                display: 'block',
+                boxShadow: '0 0 20px rgba(0,232,122,0.2)'
+              }}
+              onError={(e: any) => {
+                e.target.style.display = 'none';
+              }}
+            />
+          ) : (
+            <div style={{
+              width: '88px',
+              height: '88px',
+              minWidth: '88px',
+              minHeight: '88px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #1a2e1a, #0d1f0d)',
+              border: '2px solid #00E87A',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '32px',
+              fontWeight: '800',
+              color: '#00E87A'
+            }}>
+              {user?.name?.charAt(0)?.toUpperCase()}
+            </div>
+          )}
+          {isUploading && (
+            <div className="sp-uploading-overlay">
+              <span className="material-symbols-outlined rotating" style={{ color: '#4ade80', fontSize: 22 }}>sync</span>
+            </div>
+          )}
+          {/* Camera badge overlay */}
+          {!isUploading && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: '26px',
+              height: '26px',
+              borderRadius: '50%',
+              background: '#00E87A',
+              border: '2px solid #000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+            }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 13, color: '#000' }}>photo_camera</span>
+            </div>
+          )}
+          {user?.isPro && <span className="sp-pro-pill">PRO</span>}
         </div>
+
+        <h1 className="sp-name">{user?.name || 'Operator'}</h1>
+        <p className="sp-email">{user?.email || ''}</p>
+
         <button
           type="button"
-          onClick={() => {
-            resetDeleteAccountFlow();
-            setShowDeleteStep1Modal(true);
-          }}
-          style={{
-            width: '100%',
-            height: '48px',
-            borderRadius: '12px',
-            border: '1px solid rgba(239,68,68,0.2)',
-            background: 'rgba(239,68,68,0.08)',
-            color: '#EF4444',
-            fontFamily: "'DM Sans', system-ui, sans-serif",
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.5rem',
-          }}
+          className="sp-edit-btn"
+          onClick={() => handleAvatarUpload()}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#EF4444' }}>
-            delete
+          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+            {user?.avatarUrl ? 'edit' : 'add_a_photo'}
           </span>
-          Delete My Account
+          {user?.avatarUrl ? 'Update Photo' : 'Add Photo'}
         </button>
-
-        <footer className="set-footer">
-          <div className="set-footer-logo" aria-hidden>
-            <span className="material-symbols-outlined">fitness_center</span>
-          </div>
-          <p className="set-footer-ver">STAYHARDY v1.2.0 · BUILD 2026.03.13</p>
-        </footer>
-
-        {notificationToast && (
-          <div
-            role="status"
-            className="task-save-toast"
-            style={{
-              position: 'fixed',
-              left: '50%',
-              bottom: 'max(1rem, env(safe-area-inset-bottom))',
-              transform: 'translateX(-50%)',
-              zIndex: 1100,
-              padding: '0.5rem 1rem',
-              borderRadius: '999px',
-              background: 'rgba(15, 23, 42, 0.92)',
-              color: '#e2e8f0',
-              fontSize: '13px',
-              fontWeight: 600,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-              maxWidth: 'min(90vw, 320px)',
-              textAlign: 'center',
-              pointerEvents: 'none',
-            }}
-          >
-            {notificationToast}
-          </div>
-        )}
-      </main>
       </div>
 
-      <BottomNav isHidden={isSidebarHidden} />
+      {/* Input removed as we use Camera plugin */}
 
-      <SupportModal isOpen={showSupportModal} onClose={() => setShowSupportModal(false)} />
-
-      {showDeleteStep1Modal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(10px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10000,
-            padding: '1.5rem',
-          }}
-          onClick={() => setShowDeleteStep1Modal(false)}
-        >
-          <div
-            className="glass-card"
-            style={{ padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '0.75rem', color: '#fff' }}>
-              Delete Account?
-            </h2>
-            <p
-              style={{
-                fontSize: '0.81rem',
-                color: '#94a3b8',
-                lineHeight: 1.5,
-                marginBottom: '1.5rem',
-                fontFamily: "'DM Sans', system-ui, sans-serif",
+      {/* ── SECTION 2: NEWS AND UPDATES ── */}
+      {!isAdminProfileUser(user) && (
+        <div className="sp-group">
+          <div className="sp-group-label">NEWS AND UPDATES</div>
+          <div className="sp-group-card">
+            <button
+              type="button"
+              className="sp-row"
+              onClick={() => {
+                navigate('/updates');
+                void Preferences.set({ key: 'announcements_last_seen', value: Date.now().toString() });
+                setUnreadCount(0);
               }}
             >
-              This will permanently delete your account and ALL your data including tasks, goals, routines, stats and
-              history. This cannot be undone.
+              <div className="sp-ic">
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>campaign</span>
+              </div>
+              <div className="sp-row-body">
+                <span className="sp-row-title">StayHardy Updates</span>
+                <span className="sp-row-sub">
+                  {announcements.length > 0 ? `${announcements.length} announcements` : 'No updates yet'}
+                </span>
+              </div>
+              {unreadCount > 0 && (
+                <div style={{ background: '#00E87A', color: '#000', borderRadius: '12px', padding: '2px 8px', fontSize: '11px', fontWeight: 800, marginRight: 4 }}>
+                  {unreadCount} NEW
+                </div>
+              )}
+              <span className="material-symbols-outlined sp-chev">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── SECTION 3: SUPPORT ── */}
+      {!isAdminProfileUser(user) && (
+        <div className="sp-group">
+          <div className="sp-group-label">SUPPORT</div>
+          <div className="sp-group-card">
+            <button type="button" className="sp-row" onClick={() => navigate('/feedback')}>
+              <div className="sp-ic">
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>chat</span>
+              </div>
+              <div className="sp-row-body">
+                <span className="sp-row-title">Support &amp; Feedback</span>
+                <span className="sp-row-sub">Report issues or suggest features</span>
+              </div>
+              <span className="material-symbols-outlined sp-chev">chevron_right</span>
+            </button>
+            <div className="sp-divider" />
+            <button type="button" className="sp-row" onClick={() => setShowSupportModal(true)}>
+              <div className="sp-ic">
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>favorite</span>
+              </div>
+              <div className="sp-row-body">
+                <span className="sp-row-title">Support This App</span>
+                <span className="sp-row-sub">Buy me a tea ☕</span>
+              </div>
+              <span className="material-symbols-outlined sp-chev">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── NOTIFICATIONS (non-Android) ── */}
+      {!hidePushAndBiometricOnAndroid() && (
+        <div className="sp-group">
+          <div className="sp-group-label">NOTIFICATIONS</div>
+          <div className="sp-group-card" style={{ opacity: pushPrefsLoading ? 0.7 : 1 }}>
+            <div className="sp-row sp-row--static">
+              <div className="sp-ic">
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>notifications_active</span>
+              </div>
+              <div className="sp-row-body">
+                <span className="sp-row-title">Push Notifications</span>
+                <span className="sp-row-sub">Daily morning &amp; evening reminders</span>
+              </div>
+              {pushSwitch}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SECTION 4: SECURITY ── */}
+      <div className="sp-group">
+        <div className="sp-group-label">SECURITY</div>
+        <div className="sp-group-card">
+          {!hidePushAndBiometricOnAndroid() && biometricRowVisible && (
+            <>
+              <div className="sp-row sp-row--static" style={{ opacity: pushPrefsLoading ? 0.7 : 1 }}>
+                <div className="sp-ic">
+                  <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>fingerprint</span>
+                </div>
+                <div className="sp-row-body">
+                  <span className="sp-row-title">Face ID / Biometric Login</span>
+                  <span className="sp-row-sub">Faster sign-in on this device</span>
+                </div>
+                {bioSwitch}
+              </div>
+              <div className="sp-divider" />
+            </>
+          )}
+          <button type="button" className="sp-row" onClick={() => { resetPinModalFields(); setShowPinModal(true); }}>
+            <div className="sp-ic">
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>lock</span>
+            </div>
+            <div className="sp-row-body">
+              <span className="sp-row-title">Change Access PIN</span>
+              <span className="sp-row-sub">Update your 4-digit PIN</span>
+            </div>
+            <span className="material-symbols-outlined sp-chev">chevron_right</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── SECTION 5: DANGER ZONE ── */}
+      <div className="sp-group">
+        <div className="sp-group-label sp-group-label--danger">DANGER ZONE</div>
+        <div className="sp-group-card sp-group-card--danger">
+          {(['tasks', 'habits', 'goals'] as const).map((t, i) => (
+            <React.Fragment key={t}>
+              {i > 0 && <div className="sp-divider" />}
+              <button type="button" className="sp-row" onClick={() => setShowConfirmReset({ show: true, type: t })}>
+                <div className="sp-ic" style={{ background: 'rgba(239,68,68,0.1)' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#EF4444' }}>restart_alt</span>
+                </div>
+                <div className="sp-row-body">
+                  <span className="sp-row-title sp-row-title--danger">
+                    Reset {t === 'habits' ? 'Habits' : t.charAt(0).toUpperCase() + t.slice(1)}
+                  </span>
+                  <span className="sp-row-sub">This cannot be undone</span>
+                </div>
+                <span className="material-symbols-outlined sp-chev">chevron_right</span>
+              </button>
+            </React.Fragment>
+          ))}
+          <div className="sp-divider" />
+          <button
+            type="button"
+            className="sp-row"
+            onClick={() => { resetDeleteAccountFlow(); setShowDeleteStep1Modal(true); }}
+          >
+            <div className="sp-ic" style={{ background: 'rgba(239,68,68,0.1)' }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#EF4444' }}>delete</span>
+            </div>
+            <div className="sp-row-body">
+              <span className="sp-row-title sp-row-title--danger">Delete My Account</span>
+              <span className="sp-row-sub">Permanently remove all data</span>
+            </div>
+            <span className="material-symbols-outlined sp-chev">chevron_right</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── LOGOUT ── */}
+      <div className="sp-group" style={{ marginTop: 8 }}>
+        <div className="sp-group-card">
+          <button type="button" className="sp-logout" onClick={handleLogout} disabled={isLoggingOut}>
+            <span className={`material-symbols-outlined${isLoggingOut ? ' rotating' : ''}`} style={{ fontSize: 18 }}>
+              {isLoggingOut ? 'sync' : 'logout'}
+            </span>
+            {isLoggingOut ? 'Signing out…' : 'Log out'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── UPSELL ── */}
+      {shouldShowLifetimeUpsell(user) && (
+        <div className="sp-group" style={{ marginTop: 8 }}>
+          <div className="sp-group-card">
+            <button type="button" className="sp-row" onClick={() => navigate('/lifetime-access')}>
+              <div className="sp-ic" style={{ background: 'rgba(251,191,36,0.1)' }}>
+                <span style={{ fontSize: 16 }}>⚡</span>
+              </div>
+              <div className="sp-row-body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', textDecoration: 'line-through', fontWeight: '500' }}>
+                  ₹{originalPrice}
+                </span>
+                <span style={{ fontSize: '13px', color: '#00E87A', fontWeight: '700' }}>
+                  Lifetime · ₹{proPrice}
+                </span>
+              </div>
+              <span className="material-symbols-outlined sp-chev">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADMIN HUB ── */}
+      {isAdminProfileUser(user) && (
+        <div className="sp-group" style={{ marginTop: 8 }}>
+          <div className="sp-group-label">ADMIN</div>
+          <div className="sp-group-card">
+            <button type="button" className="sp-row" onClick={() => navigate('/admin')}>
+              <div className="sp-ic" style={{ background: 'rgba(245,158,11,0.1)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#f59e0b' }}>admin_panel_settings</span>
+              </div>
+              <div className="sp-row-body">
+                <span className="sp-row-title">Admin Hub</span>
+                <span className="sp-row-sub">System overview &amp; management</span>
+              </div>
+              <span className="material-symbols-outlined sp-chev">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODALS ── */}
+
+      {/* Reset Confirmation */}
+      {showConfirmReset.show && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1.5rem' }}>
+          <div className="glass-card" style={{ padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '3rem', color: '#ef4444', marginBottom: '1rem' }}>warning</span>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '0.5rem', color: '#fff' }}>Are you absolutely sure?</h2>
+            <p style={{ fontSize: '0.81rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '1.5rem' }}>
+              Are you sure you want to delete all {showConfirmReset.type}? This action cannot be undone.
             </p>
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <button
-                type="button"
-                onClick={() => setShowDeleteStep1Modal(false)}
-                style={{
-                  flex: 1,
-                  padding: '0.75rem',
-                  borderRadius: '0.75rem',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  background: 'none',
-                  color: '#fff',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDeleteStep1Modal(false);
-                  setDeletePinDigits(['', '', '', '']);
-                  setDeletePinError('');
-                  setDeletePinAttempts(0);
-                  setShowDeletePinSheet(true);
-                }}
-                style={{
-                  flex: 1,
-                  padding: '0.75rem',
-                  borderRadius: '0.75rem',
-                  border: 'none',
-                  background: '#ef4444',
-                  color: '#fff',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
-                }}
-              >
-                Yes, Delete
-              </button>
+              <button onClick={() => setShowConfirmReset({ show: false, type: '' })} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.1)', background: 'none', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleResetData} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: 'none', background: '#ef4444', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Confirm</button>
             </div>
           </div>
         </div>
       )}
 
-      {showDeletePinSheet && (
-        <div
-          className="premium-modal-overlay"
-          style={{ zIndex: 10001 }}
-          onClick={() => {
-            resetDeleteAccountFlow();
-          }}
-        >
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-handle"></div>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 900, color: 'var(--text-main)', margin: '0 0 0.35rem 0' }}>
-              Enter your PIN to confirm
-            </h2>
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '1.25rem' }}>
-              This confirms it&apos;s really you
+      <BottomNav isHidden={isSidebarHidden} />
+      <SupportModal isOpen={showSupportModal} onClose={() => setShowSupportModal(false)} />
+
+      {/* Delete Step 1 Modal */}
+      {showDeleteStep1Modal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1.5rem' }} onClick={() => setShowDeleteStep1Modal(false)}>
+          <div className="glass-card" style={{ padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '0.75rem', color: '#fff' }}>Delete Account?</h2>
+            <p style={{ fontSize: '0.81rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '1.5rem', fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+              This will permanently delete your account and ALL your data including tasks, goals, routines, stats and history. This cannot be undone.
             </p>
-            <form onSubmit={handleConfirmDeletePin}>
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginBottom: '1rem' }}>
-                {[0, 1, 2, 3].map((i) => (
-                  <input
-                    key={i}
-                    id={`del-pin-${i}`}
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={1}
-                    className="form-input"
-                    value={deletePinDigits[i]}
-                    onChange={(e) => {
-                      setDeletePinError('');
-                      const val = e.target.value.replace(/\D/g, '');
-                      const next = [...deletePinDigits];
-                      next[i] = val.slice(-1);
-                      setDeletePinDigits(next);
-                      if (val && i < 3) document.getElementById(`del-pin-${i + 1}`)?.focus();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Backspace' && !deletePinDigits[i] && i > 0) {
-                        document.getElementById(`del-pin-${i - 1}`)?.focus();
-                      }
-                    }}
-                    style={{
-                      width: '3.5rem',
-                      height: '3.5rem',
-                      textAlign: 'center',
-                      fontSize: '1.25rem',
-                      fontWeight: 900,
-                      borderRadius: '0.75rem',
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.05)',
-                    }}
-                  />
-                ))}
-              </div>
-              {deletePinError && (
-                <p style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 700, margin: '0 0 1rem', textAlign: 'center' }}>
-                  {deletePinError}
-                </p>
-              )}
-              <button
-                type="submit"
-                style={{
-                  width: '100%',
-                  height: '3rem',
-                  borderRadius: '0.75rem',
-                  border: 'none',
-                  background: '#ef4444',
-                  color: '#fff',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
-                }}
-              >
-                Confirm Deletion
-              </button>
-            </form>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button type="button" onClick={() => setShowDeleteStep1Modal(false)} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.1)', background: 'none', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans', system-ui, sans-serif" }}>Cancel</button>
+              <button type="button" onClick={() => { setShowDeleteStep1Modal(false); setDeletePinDigits(['', '', '', '']); setDeletePinError(''); setDeletePinAttempts(0); setShowDeletePinSheet(true); }} style={{ flex: 1, padding: '0.75rem', borderRadius: '0.75rem', border: 'none', background: '#ef4444', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans', system-ui, sans-serif" }}>Yes, Delete</button>
+            </div>
           </div>
         </div>
       )}
 
-      {showDeleteFinalModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.85)',
-            backdropFilter: 'blur(10px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10002,
-            padding: '1.5rem',
-          }}
-          onClick={() => resetDeleteAccountFlow()}
-        >
-          <div
-            className="glass-card"
-            style={{ padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 900, marginBottom: '0.75rem', color: '#fff' }}>
-              ⚠️ Last Warning
-            </h2>
-            <p
-              style={{
-                fontSize: '0.81rem',
-                color: '#94a3b8',
-                lineHeight: 1.5,
-                marginBottom: '1.5rem',
-                fontFamily: "'DM Sans', system-ui, sans-serif",
-              }}
-            >
-              You are about to permanently delete your StayHardy account. All your tasks, goals, routines, streaks and
-              history will be gone forever. There is no way back.
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => resetDeleteAccountFlow()}
-                style={{
-                  flex: 1,
-                  minWidth: '120px',
-                  padding: '0.85rem',
-                  borderRadius: '0.75rem',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: '#fff',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
-                }}
-              >
-                Keep My Account
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteAccountForever}
-                style={{
-                  flex: 1,
-                  minWidth: '120px',
-                  padding: '0.65rem',
-                  borderRadius: '0.75rem',
-                  border: '1px solid rgba(239,68,68,0.4)',
-                  background: 'rgba(239,68,68,0.15)',
-                  color: '#fecaca',
-                  fontWeight: 700,
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  fontFamily: "'DM Sans', system-ui, sans-serif",
-                }}
-              >
-                Delete Forever
-              </button>
-            </div>
-          </div>
-        </div>
+      {notificationToast && (
+        <div role="status" className="sp-toast">{notificationToast}</div>
       )}
 
       {isDeletingAccount && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.85)',
-            zIndex: 99999,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '1rem',
-            pointerEvents: 'all',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              border: '3px solid rgba(16, 185, 129, 0.2)',
-              borderTopColor: '#10b981',
-              borderRadius: '50%',
-              animation: 'spin 0.9s linear infinite',
-            }}
-          />
-          <p style={{ fontFamily: "'DM Sans', system-ui, sans-serif", fontSize: '14px', color: '#fff', margin: 0 }}>
-            Deleting your account...
-          </p>
-          <p style={{ fontFamily: "'DM Sans', system-ui, sans-serif", fontSize: '12px', color: 'rgba(255,255,255,0.65)', margin: 0 }}>
-            Please wait, do not close the app
-          </p>
-          <style>{`
-            @keyframes spin { to { transform: rotate(360deg); } }
-          `}</style>
-        </div>
-      )}
-
-      {/* PIN Change Modal */}
-      {showPinModal && (
-        <div
-          className="premium-modal-overlay"
-          onClick={() => {
-            if (isUpdatingPin) return;
-            resetPinModalFields();
-            setShowPinModal(false);
-          }}
-        >
-          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-            <div className="sheet-handle"></div>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>Update Access PIN</h2>
-              <button
-                type="button"
-                disabled={isUpdatingPin}
-                onClick={() => {
-                  if (isUpdatingPin) return;
-                  resetPinModalFields();
-                  setShowPinModal(false);
-                }}
-                className="notification-btn"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-              <form onSubmit={handleUpdatePin} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div className="input-group">
-                  <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>Current PIN</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                    {[0, 1, 2, 3].map(i => (
-                      <input
-                        key={i}
-                        id={`cur-pin-${i}`}
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={1}
-                        className="form-input"
-                        value={currentPin[i]}
-                        onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          const nextPin = [...currentPin];
-                          nextPin[i] = val.slice(-1);
-                          setCurrentPin(nextPin);
-                          if (val && i < 3) document.getElementById(`cur-pin-${i + 1}`)?.focus();
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Backspace' && !currentPin[i] && i > 0) document.getElementById(`cur-pin-${i - 1}`)?.focus();
-                        }}
-                        style={{ width: '3.5rem', height: '3.5rem', textAlign: 'center', fontSize: '1.25rem', fontWeight: 900, borderRadius: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="input-group">
-                  <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>New 4-Digit PIN</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                    {[0, 1, 2, 3].map(i => (
-                      <input 
-                        key={i}
-                        id={`new-pin-${i}`}
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={1}
-                        className="form-input"
-                        value={newPin[i]}
-                        onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          const nextPin = [...newPin];
-                          nextPin[i] = val.slice(-1);
-                          setNewPin(nextPin);
-                          if (val && i < 3) document.getElementById(`new-pin-${i+1}`)?.focus();
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Backspace' && !newPin[i] && i > 0) document.getElementById(`new-pin-${i-1}`)?.focus();
-                        }}
-                        style={{ width: '3.5rem', height: '3.5rem', textAlign: 'center', fontSize: '1.25rem', fontWeight: 900, borderRadius: '0.75rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="input-group">
-                  <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>Confirm New PIN</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-                    {[0, 1, 2, 3].map(i => (
-                      <input 
-                        key={i}
-                        id={`conf-pin-${i}`}
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={1}
-                        className="form-input"
-                        value={confirmPin[i]}
-                        onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          const nextPin = [...confirmPin];
-                          nextPin[i] = val.slice(-1);
-                          setConfirmPin(nextPin);
-                          if (val && i < 3) document.getElementById(`conf-pin-${i+1}`)?.focus();
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Backspace' && !confirmPin[i] && i > 0) document.getElementById(`conf-pin-${i-1}`)?.focus();
-                        }}
-                        style={{ width: '3.5rem', height: '3.5rem', textAlign: 'center', fontSize: '1.25rem', fontWeight: 900, borderRadius: '0.75rem', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-main)' }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {pinError && (
-                  <p style={{ color: '#ef4444', fontSize: '0.8rem', fontWeight: 700, margin: 0, textAlign: 'center' }}>{pinError}</p>
-                )}
-
-                <button 
-                  type="submit" 
-                  disabled={isUpdatingPin}
-                  className="glow-btn-primary" 
-                  style={{ width: '100%', height: '4rem', borderRadius: '1.25rem', fontSize: '0.9rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', gap: '0.75rem', marginTop: '1rem' }}
-                >
-                  <span className="material-symbols-outlined">{isUpdatingPin ? 'sync' : 'save'}</span>
-                  <span>{isUpdatingPin ? 'Saving...' : 'Update PIN'}</span>
-                </button>
-              </form>
-          </div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10001, gap: '1rem' }}>
+          <span className="material-symbols-outlined rotating" style={{ fontSize: '2.5rem', color: '#f87171' }}>sync</span>
+          <p style={{ color: '#f87171', fontWeight: 700 }}>Deleting account…</p>
         </div>
       )}
     </div>
   );
-};
 
+};
 
 export default Settings;

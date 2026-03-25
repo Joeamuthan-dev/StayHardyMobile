@@ -2325,3 +2325,53 @@ textarea.form-input.task-create-textarea {
     padding-left: calc(42px + 1rem);
   }
 }
+
+/* Smooth scroll for all scrollable containers */
+* {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Main scroll container */
+.home-dashboard, 
+ion-content,
+.scroll-container {
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y proximity;
+  will-change: scroll-position;
+}
+
+/* Prevent jank on animated elements */
+.card, 
+.habit-card,
+.dashboard-card {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
+}
+
+/* --- GLOBAL SCROLL FADE & BOUNCING PHYSICS --- */
+.bouncing-scroll {
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  scroll-behavior: smooth;
+}
+
+
+
+/* Ensure parents don't clip the mask in unexpected ways */
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Update general scrollbar for better look */
+.bouncing-scroll::-webkit-scrollbar {
+  display: none;
+}

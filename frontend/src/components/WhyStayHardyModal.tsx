@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { openExternalUrl } from '../lib/openExternalUrl';
+import { useNavigate } from 'react-router-dom';
+
 
 interface WhyStayHardyModalProps {
   isOpen: boolean;
@@ -10,67 +11,19 @@ interface WhyStayHardyModalProps {
 }
 
 /** Env override optional default below. Use `#` or empty to disable. */
-const DEFAULT_DEV_LINKEDIN = 'https://www.linkedin.com/in/joeamuthan/';
-const DEV_LINKEDIN_URL =
-  (import.meta.env.VITE_DEV_LINKEDIN_URL as string | undefined)?.trim() ||
-  DEFAULT_DEV_LINKEDIN;
-const DEV_WEBSITE_URL = '#';
 const DEFAULT_DEV_AVATAR =
   'https://tiavhmbpplerffdjmodw.supabase.co/storage/v1/object/public/avatars/B7DB02BF-B1EE-4934-A5C0-6F45F22D9F70.JPG';
 const DEV_AVATAR_SRC =
   (import.meta.env.VITE_DEV_AVATAR_URL as string | undefined)?.trim() || DEFAULT_DEV_AVATAR;
 
-const TRUST_PILLS = ['No Subscription Fees', 'Zero Ads', 'Private & Secure'] as const;
 
-const features = [
-  {
-    id: 'tasks',
-    title: 'Tasks',
-    icon: 'checklist',
-    iconBg: 'rgba(59,130,246,0.15)',
-    iconColor: '#3B82F6',
-    desc: 'Capture, prioritize & complete',
-  },
-  {
-    id: 'goals',
-    title: 'Goals',
-    icon: 'star',
-    iconBg: 'rgba(245,158,11,0.15)',
-    iconColor: '#F59E0B',
-    desc: 'Set targets, track days left',
-  },
-  {
-    id: 'routine',
-    title: 'Routines',
-    icon: 'event_repeat',
-    iconBg: 'rgba(0,232,122,0.12)',
-    iconColor: '#00E87A',
-    desc: 'Build habits that compound',
-  },
-  {
-    id: 'stats',
-    title: 'Stats',
-    icon: 'bar_chart',
-    iconBg: 'rgba(168,85,247,0.12)',
-    iconColor: '#A855F7',
-    desc: 'See your grind pay off',
-  },
-] as const;
 
-function IconLinkedIn() {
-  return (
-    <svg className="why-dev-soc-svg" viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="currentColor"
-        d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
-      />
-    </svg>
-  );
-}
-
-const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, isFirstTime, onOpenSupport }) => {
+const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose }) => {
+  const navigate = useNavigate();
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [devAvatarFailed, setDevAvatarFailed] = useState(false);
+
+
 
   useEffect(() => {
     if (isOpen) setShouldRender(true);
@@ -84,9 +37,7 @@ const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, 
     onClose();
   };
 
-  const handleSupportPress = () => {
-    onOpenSupport?.();
-  };
+
 
   if (!shouldRender) return null;
 
@@ -96,787 +47,188 @@ const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, 
     <div
       className={`why-modal-overlay ${isOpen ? 'open' : ''}`}
       onClick={handleDismiss}
-      onTransitionEnd={(e) => {
-        if (e.target === e.currentTarget && e.propertyName === 'opacity' && !isOpen) {
-          setShouldRender(false);
-        }
+      style={{
+        transition: 'opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s',
       }}
     >
-      <div className="why-modal-content" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="why-modal-close" onClick={handleDismiss} aria-label="Close">
-          <span className="material-symbols-outlined">close</span>
-        </button>
+      <div
+        className="why-modal-content"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#080C0A',
+          width: '100%',
+          maxWidth: '500px',
+          height: '100%',
+          maxHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          padding: 0,
+          overflow: 'hidden',
+          borderRadius: 0,
+        }}
+      >
+        <style>{`
+          @keyframes borderGlow {
+            0%,100% { box-shadow: 0 0 12px rgba(0,232,122,0.2), inset 0 0 12px rgba(0,232,122,0.05); }
+            50% { box-shadow: 0 0 24px rgba(0,232,122,0.4), inset 0 0 20px rgba(0,232,122,0.08); }
+          }
+          @keyframes dataStream {
+            0% { transform: translateY(0) }
+            100% { transform: translateY(-50%) }
+          }
+          @keyframes swipeHint {
+            0%,100% { transform: translateX(0) }
+            50% { transform: translateX(8px) }
+          }
+          @keyframes pulseGeometric {
+            0%,100% { opacity: 0.3 }
+            50% { opacity: 0.6 }
+          }
+        `}</style>
 
-        <div className="why-modal-ambient" aria-hidden="true" />
+        {/* Outer scrolling container */}
+        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '40px', position: 'relative' }}>
+          
+          {/* Close button */}
+          <div style={{ position: 'absolute', top: '16px', right: '16px', width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }} onClick={handleDismiss}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round">
+              <line x1="1" y1="1" x2="13" y2="13"/>
+              <line x1="13" y1="1" x2="1" y2="13"/>
+            </svg>
+          </div>
 
-        <div className="why-modal-body">
-          <div className="why-hero-block">
-            <div className="why-tick-icon-wrap why-tick-icon-wrap--3d" aria-hidden="true">
-              <div className="why-tick-glow-disc" />
-              <div className="why-tick-svg-scale">
-                <svg className="why-tick-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    className="why-tick-path"
-                    d="M 6 12 L 10.5 16.5 L 18 7"
-                    pathLength={100}
-                    stroke="#00E87A"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                  />
-                </svg>
-              </div>
+          <div style={{ padding: '48px 24px 32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+            {/* App icon */}
+            <div style={{ width: '72px', height: '72px', borderRadius: '20px', background: 'linear-gradient(135deg, #0d2018, #1a3d28)', border: '1.5px solid rgba(0,232,122,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', boxShadow: '0 0 24px rgba(0,232,122,0.2)', animation: 'borderGlow 3s ease-in-out infinite' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
             </div>
 
-            <h1 className="why-display-title">STAY HARDY</h1>
-            <p className="why-tagline">Your personal productivity assistant</p>
+            <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '0.1em', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
+              STAY HARDY
+            </h1>
+
+            <p style={{ fontSize: '14px', color: '#00E87A', fontWeight: '500', fontStyle: 'italic', margin: 0, lineHeight: 1.5 }}>
+              The 1% starts here.
+            </p>
           </div>
 
-          <div className="why-section-head">
-            <span className="why-section-label">What you get</span>
-          </div>
+          {/* SECTION 2 — WHAT YOU GET */}
+          <div style={{ padding: '0 16px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.15em', textAlign: 'center', marginBottom: '14px' }}>
+              WHAT YOU GET
+            </p>
 
-          <div className="why-feature-grid">
-            {features.map((f, index) => (
-              <div
-                key={f.id}
-                className="why-feature-card"
-                style={
-                  {
-                    '--why-card-delay': `${0.5 + index * 0.15}s`,
-                    '--why-icon-bg': f.iconBg,
-                    '--why-icon-color': f.iconColor,
-                  } as React.CSSProperties
-                }
-              >
-                <div className="why-feature-iconbox">
-                  <span className="material-symbols-outlined">{f.icon}</span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              {/* Tasks card */}
+              <div style={{ background: 'rgba(0,232,122,0.04)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: '20px', padding: '16px', position: 'relative', overflow: 'hidden', animation: 'borderGlow 4s ease-in-out infinite' }}>
+                <div style={{ position: 'absolute', top: 0, right: 0, width: '60px', height: '200%', background: 'repeating-linear-gradient(transparent, transparent 8px, rgba(0,232,122,0.03) 8px, rgba(0,232,122,0.03) 9px)', animation: 'dataStream 4s linear infinite', pointerEvents: 'none' }}/>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(0,232,122,0.1)', border: '1px solid rgba(0,232,122,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                  </svg>
                 </div>
-                <h3 className="why-feature-title">{f.title}</h3>
-                <p className="why-feature-text">{f.desc}</p>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 4px 0' }}>Tasks</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>Define, track, and master every project.</p>
               </div>
-            ))}
+
+              {/* Goals card */}
+              <div style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '20px', padding: '16px', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                  </svg>
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 4px 0' }}>Goals</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>Chart your long-term success with clear milestones.</p>
+              </div>
+
+              {/* Habits card */}
+              <div style={{ background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '20px', padding: '16px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                  </svg>
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 4px 0' }}>Habits</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>Build unbreakable daily routines that compound.</p>
+              </div>
+
+              {/* Stats card */}
+              <div style={{ background: 'rgba(6,182,212,0.04)', border: '1px solid rgba(6,182,212,0.2)', borderRadius: '20px', padding: '16px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                  </svg>
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 4px 0' }}>Stats</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>See your grind pay off with deep insights.</p>
+              </div>
+            </div>
           </div>
 
-          <button type="button" className="why-support-btn" onClick={handleSupportPress}>
-            <span className="why-support-btn__heart" aria-hidden>
-              ♥
-            </span>
-            <span className="why-support-btn__label">Support This App</span>
-            <span className="why-support-btn__arrow" aria-hidden>
-              →
-            </span>
-          </button>
-          <p className="why-support-hint">Even ₹1 keeps this app alive 🙏</p>
-
-          <div className="why-trust-pills-row" role="list" aria-label="No subscription fees, zero ads, private and secure">
-            {TRUST_PILLS.map((label) => (
-              <span key={label} className="why-trust-pill" role="listitem">
-                {label}
+          {/* SECTION 4 — DEVELOPER CARD */}
+          <div style={{ margin: '0 16px 24px 16px', background: '#111814', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '24px', padding: '20px' }}>
+            <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: '0 0 16px 0' }}>BEHIND THE APP</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', border: '2px solid rgba(0,232,122,0.3)', overflow: 'hidden', flexShrink: 0, background: '#1a2e1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>
+                {showPhoto ? <img src={DEV_AVATAR_SRC} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setDevAvatarFailed(true)} /> : '👨💻'}
+              </div>
+              <div>
+                <p style={{ fontSize: '15px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 3px 0' }}>Joe Amuthan</p>
+                <p style={{ fontSize: '11px', color: '#00E87A', fontWeight: '600', margin: 0 }}>Founder & Lead Architect</p>
+              </div>
+            </div>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, margin: '0 0 16px 0' }}>
+              Building the tools I always wanted for myself, one line of code at a time. This app is born from a desire to make productivity truly impactful and accessible. <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '600' }}>Stay focused, stay hardy.</span>
+            </p>
+            <div
+              onClick={() => window.open('https://linkedin.com/in/joeamuthan', '_blank')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                background: 'rgba(0,119,181,0.12)',
+                border: '1px solid rgba(0,119,181,0.3)',
+                borderRadius: '12px',
+                padding: '10px 18px',
+                cursor: 'pointer',
+                marginTop: '12px'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0077B5" style={{ flexShrink: 0 }}>
+                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/>
+                <circle cx="4" cy="4" r="2" fill="#0077B5"/>
+              </svg>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: '#0077B5', lineHeight: 1 }}>
+                Connect on LinkedIn
               </span>
-            ))}
-          </div>
-
-          <div className="why-dev-section">
-            <p className="why-dev-section-label">About the developer</p>
-            <div className="why-dev-card">
-              <div className="why-dev-avatar-wrap">
-                {showPhoto ? (
-                  <img
-                    className="why-dev-avatar-img"
-                    src={DEV_AVATAR_SRC}
-                    alt=""
-                    onError={() => setDevAvatarFailed(true)}
-                  />
-                ) : (
-                  <span className="why-dev-avatar-fallback" aria-hidden>
-                    JA
-                  </span>
-                )}
-              </div>
-              <div className="why-dev-info">
-                <div className="why-dev-name-row">
-                  <span className="why-dev-name">Joe Amuthan</span>
-                  <span className="why-dev-verified" title="Verified" aria-label="Verified">
-                    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                      <circle cx="7" cy="7" r="7" fill="#00E87A" />
-                      <path
-                        d="M4 7.2 L6.2 9.4 L10 4.8"
-                        stroke="#fff"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        fill="none"
-                      />
-                    </svg>
-                  </span>
-                  <button
-                    type="button"
-                    className="why-dev-ext"
-                    aria-label="Open developer website"
-                    disabled={DEV_WEBSITE_URL === '#'}
-                    onClick={() => void openExternalUrl(DEV_WEBSITE_URL)}
-                  >
-                    <span className="material-symbols-outlined">open_in_new</span>
-                  </button>
-                </div>
-                <p className="why-dev-tagline">Building What I Wish Existed</p>
-                <div className="why-dev-socials">
-                  <button
-                    type="button"
-                    className="why-dev-social-btn"
-                    aria-label="LinkedIn"
-                    disabled={!DEV_LINKEDIN_URL.startsWith('http')}
-                    onClick={() => void openExternalUrl(DEV_LINKEDIN_URL)}
-                  >
-                    <IconLinkedIn />
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
 
-          <button type="button" className="why-cta-primary" onClick={handleDismiss}>
-            {isFirstTime ? "Get Started — It's Free" : "Let's Go 💪"}
-          </button>
+          {/* SECTION 5 — CTA BUTTON */}
+          <div style={{ padding: '0 16px' }}>
+            <button onClick={() => { navigate('/home'); onClose(); }} style={{ width: '100%', height: '58px', background: '#00E87A', border: 'none', borderRadius: '18px', fontSize: '16px', fontWeight: '900', color: '#000000', cursor: 'pointer', letterSpacing: '0.06em', boxShadow: '0 0 28px rgba(0,232,122,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '16px' }}>
+              LET'S GET STARTED
+              <span style={{ animation: 'swipeHint 1.5s ease-in-out infinite', display: 'inline-block' }}>→</span>
+            </button>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {['No Subscription', 'Zero Ads', 'Private & Secure'].map(p => (
+                <span key={p} style={{ background: 'rgba(0,232,122,0.08)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: '20px', padding: '4px 12px', fontSize: '10px', fontWeight: '700', color: '#00E87A', letterSpacing: '0.06em' }}>
+                  ✦ {p}
+                </span>
+              ))}
+            </div>
+          </div>
 
-          {isFirstTime && <p className="why-signup-hint">No account? Sign up in seconds</p>}
         </div>
       </div>
-
-      <style>{`
-        .why-modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: #080c0a;
-          z-index: 2000;
-          display: flex;
-          align-items: stretch;
-          justify-content: center;
-          padding: 0;
-          padding-top: env(safe-area-inset-top, 0);
-          padding-bottom: env(safe-area-inset-bottom, 0);
-          opacity: 0;
-          visibility: hidden;
-          pointer-events: none;
-          transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s;
-        }
-        .why-modal-overlay.open {
-          opacity: 1;
-          visibility: visible;
-          pointer-events: auto;
-        }
-
-        .why-modal-content {
-          background: #080c0a;
-          width: 100%;
-          max-width: 720px;
-          margin: 0 auto;
-          height: 100%;
-          max-height: 100%;
-          min-height: 0;
-          border-radius: 0;
-          border: none;
-          position: relative;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          padding: 16px 18px 16px;
-          padding-top: calc(16px + env(safe-area-inset-top, 0));
-          padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
-          box-sizing: border-box;
-          transform: translateY(100%);
-          opacity: 0;
-          transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease;
-        }
-        .why-modal-overlay.open .why-modal-content {
-          transform: translateY(0);
-          opacity: 1;
-        }
-        .why-modal-overlay:not(.open) .why-modal-content {
-          transform: translateY(100%);
-          opacity: 0;
-          transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.35s ease;
-        }
-
-        .why-modal-ambient {
-          position: absolute;
-          top: 0;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 120%;
-          max-width: 480px;
-          height: 160px;
-          pointer-events: none;
-          background: radial-gradient(ellipse at top center, rgba(0, 232, 122, 0.08) 0%, transparent 65%);
-        }
-
-        .why-modal-body {
-          position: relative;
-          z-index: 1;
-          display: flex;
-          flex-direction: column;
-          flex: 1;
-          min-height: 0;
-          overflow: hidden;
-          justify-content: flex-start;
-        }
-
-        .why-modal-close {
-          position: absolute;
-          top: calc(12px + env(safe-area-inset-top, 0));
-          right: 16px;
-          z-index: 5;
-          background: rgba(26, 26, 46, 0.85);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          color: rgba(255, 255, 255, 0.75);
-          width: 30px;
-          height: 30px;
-          border-radius: 10px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-        }
-        .why-modal-close:hover {
-          background: rgba(40, 40, 60, 0.95);
-          border-color: rgba(0, 232, 122, 0.35);
-          color: #fff;
-        }
-        .why-modal-close .material-symbols-outlined {
-          font-size: 18px;
-        }
-
-        .why-hero-block {
-          text-align: center;
-          flex-shrink: 0;
-        }
-
-        .why-tick-icon-wrap {
-          width: 64px;
-          height: 64px;
-          margin: 0 auto 10px;
-          border-radius: 18px;
-          background: linear-gradient(145deg, #1a1a2e, #0d0d1a);
-          border: 1px solid rgba(0, 232, 122, 0.2);
-          box-shadow:
-            0 8px 32px rgba(0, 232, 122, 0.25),
-            0 2px 8px rgba(0, 0, 0, 0.6),
-            inset 0 1px 0 rgba(255, 255, 255, 0.05);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          position: relative;
-          overflow: visible;
-        }
-
-        .why-tick-icon-wrap--3d {
-          transform-style: preserve-3d;
-          transform: perspective(220px) rotateX(8deg);
-          box-shadow:
-            0 8px 32px rgba(0, 232, 122, 0.25),
-            0 2px 8px rgba(0, 0, 0, 0.6),
-            0 12px 24px rgba(0, 0, 0, 0.45),
-            inset 0 1px 0 rgba(255, 255, 255, 0.08),
-            inset 0 -2px 6px rgba(0, 0, 0, 0.35);
-        }
-
-        .why-tick-glow-disc {
-          position: absolute;
-          width: 44px;
-          height: 44px;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(0, 232, 122, 0.15) 0%, transparent 70%);
-          pointer-events: none;
-          animation: why-tick-glow-pulse 2.5s ease-in-out infinite;
-          animation-delay: 0.9s;
-          opacity: 0.4;
-        }
-
-        .why-tick-svg-scale {
-          position: relative;
-          z-index: 1;
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transform: translateZ(12px);
-          animation: why-tick-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s both;
-        }
-
-        .why-tick-svg {
-          width: 100%;
-          height: 100%;
-          display: block;
-          filter: drop-shadow(0 0 6px rgba(0, 232, 122, 0.35)) drop-shadow(0 4px 2px rgba(0, 0, 0, 0.5));
-        }
-
-        .why-tick-path {
-          stroke-dasharray: 100;
-          stroke-dashoffset: 100;
-          animation: why-tick-draw 0.6s ease-out forwards;
-        }
-
-        @keyframes why-tick-draw {
-          to {
-            stroke-dashoffset: 0;
-          }
-        }
-
-        @keyframes why-tick-pop {
-          0% {
-            transform: translateZ(12px) scale(1);
-          }
-          50% {
-            transform: translateZ(12px) scale(1.15);
-          }
-          100% {
-            transform: translateZ(12px) scale(1);
-          }
-        }
-
-        @keyframes why-tick-glow-pulse {
-          0%,
-          100% {
-            opacity: 0.4;
-          }
-          50% {
-            opacity: 1;
-          }
-        }
-
-        .why-display-title {
-          font-family: 'Syne', system-ui, sans-serif;
-          font-weight: 800;
-          font-size: 28px;
-          color: #ffffff;
-          letter-spacing: 2px;
-          margin: 8px 0 2px;
-          line-height: 1.1;
-        }
-
-        .why-tagline {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 12px;
-          font-weight: 300;
-          font-style: italic;
-          color: #00e87a;
-          margin: 0 0 8px;
-          line-height: 1.3;
-        }
-
-        .why-section-head {
-          margin-top: 0;
-          margin-bottom: 8px;
-          text-align: center;
-        }
-
-        .why-section-label {
-          font-size: 9px;
-          font-weight: 700;
-          letter-spacing: 1.5px;
-          text-transform: uppercase;
-          color: rgba(0, 232, 122, 0.55);
-        }
-
-        .why-feature-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          width: 100%;
-          margin-top: 0;
-          flex-shrink: 0;
-        }
-
-        .why-feature-card {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          border-radius: 12px;
-          padding: 10px 10px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          text-align: left;
-          min-height: 0;
-          opacity: 0;
-          transform: translateY(16px);
-          animation: why-card-in 0.5s ease-out forwards;
-          animation-delay: var(--why-card-delay, 0.5s);
-          animation-fill-mode: forwards;
-          transition: background 0.15s ease, transform 0.15s ease;
-          cursor: default;
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        .why-feature-card:hover {
-          background: rgba(255, 255, 255, 0.07);
-        }
-
-        .why-feature-card:active {
-          background: rgba(255, 255, 255, 0.07);
-          transform: translateY(0) scale(0.98);
-        }
-
-        @keyframes why-card-in {
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .why-feature-iconbox {
-          width: 28px;
-          height: 28px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: var(--why-icon-bg);
-          color: var(--why-icon-color);
-        }
-
-        .why-feature-iconbox .material-symbols-outlined {
-          font-size: 16px;
-        }
-
-        .why-feature-title {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 12px;
-          font-weight: 600;
-          color: #fff;
-          margin: 6px 0 0;
-          line-height: 1.2;
-        }
-
-        .why-feature-text {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 10px;
-          line-height: 1.35;
-          color: rgba(255, 255, 255, 0.5);
-          margin: 3px 0 0;
-        }
-
-        .why-trust-pills-row {
-          display: flex;
-          flex-direction: row;
-          justify-content: center;
-          align-items: center;
-          gap: 6px;
-          width: 100%;
-          overflow: visible;
-          margin: 6px 0;
-          flex-shrink: 0;
-        }
-
-        .why-trust-pill {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 9px;
-          font-weight: 500;
-          color: rgba(0, 232, 122, 0.75);
-          background: rgba(0, 232, 122, 0.08);
-          border: 1px solid rgba(0, 232, 122, 0.18);
-          border-radius: 20px;
-          padding: 4px 8px;
-          white-space: nowrap;
-          flex-shrink: 0;
-          line-height: 1.2;
-        }
-
-        @media (max-width: 400px) {
-          .why-trust-pill {
-            font-size: 8px;
-            padding: 3px 6px;
-          }
-        }
-
-        .why-support-btn {
-          width: 100%;
-          height: 42px;
-          padding: 0 14px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          border-radius: 12px;
-          border: 1px solid rgba(0, 232, 122, 0.25);
-          background: rgba(0, 232, 122, 0.08);
-          cursor: pointer;
-          flex-shrink: 0;
-          margin-top: 10px;
-          transition: background 0.15s ease, transform 0.15s ease;
-          -webkit-tap-highlight-color: transparent;
-        }
-        .why-support-btn:active {
-          transform: scale(0.99);
-          background: rgba(0, 232, 122, 0.12);
-        }
-        .why-support-btn__heart {
-          font-size: 14px;
-          line-height: 1;
-          color: #00e87a;
-          flex-shrink: 0;
-        }
-        .why-support-btn__label {
-          flex: 1;
-          text-align: left;
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          color: #00e87a;
-        }
-        .why-support-btn__arrow {
-          font-size: 13px;
-          color: rgba(0, 232, 122, 0.45);
-          flex-shrink: 0;
-        }
-
-        .why-support-hint {
-          font-size: 9px;
-          color: rgba(255, 255, 255, 0.3);
-          text-align: center;
-          margin: 4px 0;
-          flex-shrink: 0;
-          line-height: 1.3;
-        }
-
-        .why-dev-section {
-          margin-top: 0;
-          flex-shrink: 0;
-        }
-        .why-dev-section-label {
-          font-size: 9px;
-          font-weight: 600;
-          letter-spacing: 1.2px;
-          text-transform: uppercase;
-          color: rgba(255, 255, 255, 0.4);
-          margin: 0 0 6px;
-          text-align: center;
-        }
-        .why-dev-card {
-          display: flex;
-          flex-direction: row;
-          align-items: flex-start;
-          gap: 10px;
-          padding: 10px 12px;
-          border-radius: 14px;
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .why-dev-avatar-wrap {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          border: 2px solid rgba(0, 232, 122, 0.4);
-          overflow: hidden;
-          flex-shrink: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: linear-gradient(135deg, rgba(0, 232, 122, 0.3), rgba(0, 232, 122, 0.1));
-        }
-        .why-dev-avatar-img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .why-dev-avatar-fallback {
-          font-family: 'Syne', system-ui, sans-serif;
-          font-size: 16px;
-          font-weight: 700;
-          color: #00e87a;
-        }
-        .why-dev-info {
-          min-width: 0;
-          flex: 1;
-        }
-        .why-dev-name-row {
-          display: flex;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 0 4px;
-        }
-        .why-dev-name {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          color: #fff;
-        }
-        .why-dev-verified {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 14px;
-          height: 14px;
-          margin-left: 2px;
-          flex-shrink: 0;
-        }
-        .why-dev-ext {
-          background: none;
-          border: none;
-          padding: 0;
-          margin-left: 4px;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          color: rgba(255, 255, 255, 0.45);
-          transition: color 0.15s ease;
-          -webkit-tap-highlight-color: transparent;
-        }
-        .why-dev-ext .material-symbols-outlined {
-          font-size: 14px;
-        }
-        .why-dev-ext:hover:not(:disabled) {
-          color: rgba(255, 255, 255, 0.75);
-        }
-        .why-dev-ext:disabled {
-          opacity: 0.35;
-          cursor: default;
-        }
-        .why-dev-tagline {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 11px;
-          font-style: italic;
-          color: #00e87a;
-          margin: 2px 0 0;
-          line-height: 1.3;
-        }
-        .why-dev-socials {
-          display: flex;
-          align-items: center;
-          justify-content: flex-start;
-          gap: 6px;
-          margin-top: 6px;
-        }
-        .why-dev-social-btn {
-          width: 26px;
-          height: 26px;
-          border-radius: 7px;
-          border: none;
-          background: rgba(255, 255, 255, 0.07);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          cursor: pointer;
-          padding: 0;
-          transition: background 0.15s ease, transform 0.15s ease;
-          -webkit-tap-highlight-color: transparent;
-        }
-        .why-dev-social-btn:active:not(:disabled) {
-          transform: scale(0.96);
-        }
-        .why-dev-social-btn:disabled {
-          opacity: 0.35;
-          cursor: default;
-        }
-        .why-dev-soc-svg {
-          width: 13px;
-          height: 13px;
-          display: block;
-        }
-
-        .why-cta-primary {
-          position: relative;
-          width: 100%;
-          height: 46px;
-          margin-top: 10px;
-          border: none;
-          border-radius: 14px;
-          cursor: pointer;
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 14px;
-          font-weight: 600;
-          color: #000000;
-          background: linear-gradient(135deg, #00e87a, #00c563);
-          box-shadow: 0 6px 20px rgba(0, 232, 122, 0.28);
-          overflow: hidden;
-          flex-shrink: 0;
-          transition: transform 0.15s ease, box-shadow 0.2s ease;
-        }
-
-        .why-cta-primary::after {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 45%;
-          height: 100%;
-          background: linear-gradient(
-            105deg,
-            transparent 0%,
-            rgba(255, 255, 255, 0.35) 45%,
-            transparent 90%
-          );
-          transform: translateX(-120%);
-          animation: why-cta-shimmer 3s ease-in-out infinite;
-          animation-delay: 2s;
-          pointer-events: none;
-        }
-
-        @keyframes why-cta-shimmer {
-          0%,
-          66% {
-            transform: translateX(-120%);
-            opacity: 0;
-          }
-          67% {
-            opacity: 1;
-          }
-          85% {
-            transform: translateX(280%);
-            opacity: 1;
-          }
-          86%,
-          100% {
-            transform: translateX(280%);
-            opacity: 0;
-          }
-        }
-
-        .why-cta-primary:hover {
-          box-shadow: 0 8px 24px rgba(0, 232, 122, 0.35);
-        }
-
-        .why-cta-primary:active {
-          transform: scale(0.99);
-        }
-
-        .why-signup-hint {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 9px;
-          color: rgba(255, 255, 255, 0.35);
-          text-align: center;
-          margin: 4px 0 0;
-          flex-shrink: 0;
-          line-height: 1.25;
-        }
-
-        @media (min-width: 600px) {
-          .why-modal-content {
-            border-radius: 1.75rem;
-            margin: 1.5rem auto;
-            height: auto;
-            max-height: min(92vh, 860px);
-            padding: 1.25rem 1.5rem 1.25rem;
-            padding-top: calc(1.25rem + env(safe-area-inset-top, 0));
-          }
-          .why-modal-close {
-            top: calc(1rem + env(safe-area-inset-top, 0));
-            right: 1.5rem;
-          }
-        }
-      `}</style>
     </div>
   );
+
 };
 
 export default WhyStayHardyModal;

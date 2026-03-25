@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 import gsap from 'gsap';
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 import { supabase } from '../supabase';
 
 
 import { useAuth } from '../context/AuthContext';
-import { canAccessStatsAndRoutine } from '../lib/lifetimeAccess';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   readBiometricPayload,
@@ -15,7 +15,7 @@ import {
   hidePushAndBiometricOnAndroid,
 } from '../lib/biometricAuth';
 import AuthSplash from '../components/AuthSplash';
-import GuestSplash, { GUEST_SPLASH_DURATION_MS } from '../components/GuestSplash';
+
 import { isOwnerAdminEmail, resolveUserRole, isAdminHubUser } from '../config/adminOwner';
 import { consumeAccountDeletedToastFlag } from '../lib/accountDeletion';
 
@@ -147,10 +147,68 @@ function validateSignupPin(pin: string): string | null {
   return null;
 }
 
+/** Login must send exactly 4 digits; Auth password is `${pin}_secure_pin`. */
+function validateLoginPin(pin: string): string | null {
+  if (!pin || pin.trim() === '') return 'Please enter your 4-digit PIN';
+  if (!/^\d{4}$/.test(pin)) return 'PIN must be exactly 4 numbers';
+  return null;
+}
+
+function isInvalidCredentialsAuthError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { message?: string; code?: string };
+  if (e.code === 'invalid_credentials') return true;
+  const m = (e.message || '').toLowerCase();
+  return m.includes('invalid login') || m.includes('invalid credentials');
+}
+
+const NETWORK_UNREACHABLE_MSG =
+  "Can't reach the server. Check Wi‑Fi or mobile data and try again.";
+
+/** True transport/DNS failures — not wrong password (those rarely include these substrings). */
+function isLikelyNetworkError(err: unknown): boolean {
+  const m = String((err as Error)?.message ?? err ?? '').toLowerCase();
+  return (
+    m.includes('fetch') ||
+    m.includes('network') ||
+    m.includes('connect') ||
+    m.includes('failed to fetch') ||
+    m.includes('networkerror') ||
+    m.includes('load failed') ||
+    m.includes('internet') ||
+    m.includes('offline') ||
+    m.includes('timeout') ||
+    m.includes('aborted') ||
+    m.includes('econnrefused') ||
+    m.includes('name not resolved')
+  );
+}
+
+function loginCatchMessage(err: unknown): string {
+  if (isLikelyNetworkError(err)) {
+    return NETWORK_UNREACHABLE_MSG;
+  }
+  if (isInvalidCredentialsAuthError(err)) {
+    return 'Email or PIN is incorrect. Please check and try again.';
+  }
+  const m = String((err as { message?: string })?.message ?? '').toLowerCase();
+  if (m.includes('rate limit')) {
+    return 'Too many attempts. Please wait a few minutes.';
+  }
+  if (m.includes('not confirmed') || m.includes('email not confirmed')) {
+    return 'Please confirm your email before logging in. Check your inbox.';
+  }
+  return 'Email or PIN is incorrect. Please check and try again.';
+}
+
 type SignupSubview = 'form' | 'not_verified' | 'already_active';
 
-const Login: React.FC = () => {
-  const { user, loading: authLoading } = useAuth(); // Connect useAuth
+interface LoginProps {
+  onBack?: () => void;
+}
+
+const Login: React.FC<LoginProps> = ({ onBack }) => {
+  const { user, loading: authLoading, setCurrentUser, markLoginComplete } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [pinUpdatedBanner, setPinUpdatedBanner] = useState(false);
@@ -159,12 +217,12 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState('');
-  const [isPulled, setIsPulled] = useState(false);
+  const [isPulled, setIsPulled] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rememberMe, setRememberMe] = useState(!!localStorage.getItem('remembered_email'));
   const [loginQuote, setLoginQuote] = useState('');
-  const [guestSplashDone, setGuestSplashDone] = useState(false);
+
   const [showBiometricLogin, setShowBiometricLogin] = useState(false);
   const [biometricHidden, setBiometricHidden] = useState(false);
   const [isBiometricSubmitting, setIsBiometricSubmitting] = useState(false);
@@ -174,6 +232,36 @@ const Login: React.FC = () => {
   const [emailFieldError, setEmailFieldError] = useState('');
   const [pinFieldError, setPinFieldError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+  
+  const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+  const pin0Ref = useRef<any>(null);
+  const pin1Ref = useRef<any>(null);
+  const pin2Ref = useRef<any>(null);
+  const pin3Ref = useRef<any>(null);
+  const pinRefs = [pin0Ref, pin1Ref, pin2Ref, pin3Ref];
+
+  const handlePinChange = (index: number, value: string) => {
+    const digit = value.replace(/\D/g, '').slice(-1);
+    const newDigits = [...pinDigits];
+    newDigits[index] = digit;
+    setPinDigits(newDigits);
+
+    if (digit && index < 3) {
+      pinRefs[index + 1].current?.focus();
+    }
+    if (digit && index === 3) {
+      pinRefs[3].current?.blur();
+    }
+  };
+
+  const handlePinKeyDown = (index: number, e: any) => {
+    if (e.key === 'Backspace' && !pinDigits[index] && index > 0) {
+      pinRefs[index - 1].current?.focus();
+      const newDigits = [...pinDigits];
+      newDigits[index - 1] = '';
+      setPinDigits(newDigits);
+    }
+  };
   const [signupToast, setSignupToast] = useState<string | null>(null);
   const [goodbyeToast, setGoodbyeToast] = useState<string | null>(null);
   const [emailVerifiedBanner, setEmailVerifiedBanner] = useState(false);
@@ -213,17 +301,11 @@ const Login: React.FC = () => {
   React.useEffect(() => {
     if (user && !authLoading) {
       if (isAdminHubUser(user)) navigate('/admin');
-      else if (canAccessStatsAndRoutine(user)) navigate('/home');
-      else navigate('/lifetime-access');
+      else navigate('/home');
     }
   }, [user, authLoading, navigate]);
 
-  // About-app splash → login form (auto-advance matches GuestSplash progress bar)
-  React.useEffect(() => {
-    if (authLoading || user) return undefined;
-    const t = window.setTimeout(() => setGuestSplashDone(true), GUEST_SPLASH_DURATION_MS);
-    return () => window.clearTimeout(t);
-  }, [authLoading, user]);
+
 
   React.useEffect(() => {
     if (!bioToast) return;
@@ -269,7 +351,7 @@ const Login: React.FC = () => {
   }, [isLogin]);
 
   React.useEffect(() => {
-    if (!isLogin || !guestSplashDone || !isPulled) {
+    if (!isLogin || !isPulled) {
       setShowBiometricLogin(false);
       return;
     }
@@ -300,7 +382,7 @@ const Login: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isLogin, guestSplashDone, isPulled]);
+  }, [isLogin, isPulled]);
 
   React.useEffect(() => {
     const hadLightMode = document.documentElement.classList.contains('light-mode');
@@ -326,9 +408,7 @@ const Login: React.FC = () => {
     return <AuthSplash />;
   }
 
-  if (!guestSplashDone) {
-    return <GuestSplash onContinue={() => setGuestSplashDone(true)} />;
-  }
+
 
   const handlePullRope = () => {
     if (isAnimating) return;
@@ -356,38 +436,7 @@ const Login: React.FC = () => {
     }, 400);
   };
 
-  const handlePinChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    setPinFieldError('');
-    const value = e.target.value;
-    
-    if (value.length > 1) {
-      const pasted = value.replace(/[^0-9]/g, '').slice(0, 4);
-      setPassword(pasted);
-      if (pasted.length === 4) {
-        document.getElementById(`pin-3`)?.focus();
-      } else if (pasted.length > 0) {
-        document.getElementById(`pin-${pasted.length}`)?.focus();
-      }
-      return;
-    }
 
-    if (!/^[0-9]*$/.test(value)) return;
-
-    const newPassword = password.split('');
-    newPassword[index] = value;
-    const finalPassword = newPassword.join('');
-    setPassword(finalPassword);
-
-    if (value !== '' && index < 3) {
-      document.getElementById(`pin-${index + 1}`)?.focus();
-    }
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !password[index] && index > 0) {
-      document.getElementById(`pin-${index - 1}`)?.focus();
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,41 +455,31 @@ const Login: React.FC = () => {
         setPinFieldError(vp);
         return;
       }
+    } else {
+      const ve = validateSignupEmail(email);
+      if (ve) {
+        setEmailFieldError(ve);
+        return;
+      }
+      const vp = validateLoginPin(password);
+      if (vp) {
+        setPinFieldError(vp);
+        return;
+      }
     }
 
     setIsSubmitting(true);
 
-    const supabasePassword = password + "_secure_pin";
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
 
     try {
       if (isLogin) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password: supabasePassword,
-        });
-
-        if (signInError) throw signInError;
-
-        sessionStorage.removeItem(BIO_FAIL_KEY);
-
-        if (rememberMe) {
-          localStorage.setItem('remembered_email', trimmedEmail);
-          localStorage.setItem('remembered_pin', password);
-        } else {
-          localStorage.removeItem('remembered_email');
-          localStorage.removeItem('remembered_pin');
-        }
-
-        if (isOwnerAdminEmail(trimmedEmail)) {
-          navigate('/admin');
-        } else {
-          navigate('/home');
-        }
+        await handleLogin();
+        return;
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: trimmedEmail,
-          password: supabasePassword,
+          password: trimmedEmail,
           options: {
             data: {
               name: name,
@@ -453,7 +492,7 @@ const Login: React.FC = () => {
           if (isUserAlreadyExistsError(signUpError)) {
             const { error: signInError } = await supabase.auth.signInWithPassword({
               email: trimmedEmail,
-              password: supabasePassword,
+              password: trimmedEmail,
             });
 
             if (!signInError) {
@@ -516,17 +555,136 @@ const Login: React.FC = () => {
           setIsSubmitting(false);
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Auth Error Details:', err);
       setIsSubmitting(false);
-      if (err.message === 'Invalid login credentials') {
-        setError('Email or PIN is incorrect. Please check and try again.');
-      } else if (err.message.includes('rate limit')) {
-        setError('Too many attempts. Please wait a few minutes.');
-      } else {
-        const msg = err.message || err.error_description;
-        setError(typeof msg === 'string' && msg.trim() !== '{}' && msg.trim() !== '' ? msg : 'Authentication failed');
+      setError(loginCatchMessage(err));
+    }
+  };
+
+  const handleLogin = async () => {
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const cleanEmail = email?.trim()?.toLowerCase();
+      const cleanPIN = pinDigits.join('').trim();
+
+      if (!cleanEmail) {
+        setError('Please enter your email');
+        return;
       }
+      if (!cleanPIN || cleanPIN.length !== 4) {
+        setError('Please enter your 4-digit PIN');
+        return;
+      }
+
+      console.log('LOGIN ATTEMPT:', cleanEmail);
+
+      const { data: dbUser, error: dbError } = await supabase
+        .from('users')
+        .select('id, name, email, pin, role, is_pro, avatar_url, email_confirmed, status, pro_purchase_date')
+        .ilike('email', cleanEmail)
+        .maybeSingle();
+
+      console.log('=== DB QUERY RESULT ===');
+      console.log('Error:', dbError);
+      console.log('Error message:', dbError?.message);
+      console.log('Error code:', dbError?.code);
+      console.log('Error details:', dbError?.details);
+      console.log('Error hint:', dbError?.hint);
+      console.log('Data:', dbUser);
+      console.log('======================');
+      console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL ? 'EXISTS ✅' : 'MISSING ❌');
+      console.log('Supabase Key:', import.meta.env.VITE_SUPABASE_ANON_KEY ? 'EXISTS ✅' : 'MISSING ❌');
+
+      console.log('Email entered:', cleanEmail);
+      console.log('DB user found:', !!dbUser);
+      console.log('DB PIN:', dbUser?.pin);
+      console.log('Entered PIN:', cleanPIN);
+      console.log('PIN match:', dbUser?.pin?.toString()?.trim() === cleanPIN);
+
+      if (dbError || !dbUser) {
+        setError('Email or PIN is incorrect');
+        return;
+      }
+
+      if (dbUser.pin?.toString()?.trim() !== cleanPIN) {
+        setError('Email or PIN is incorrect');
+        return;
+      }
+
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanEmail,
+      });
+      console.log('Supabase Auth attempt:', !!authData, authError?.message);
+
+      const cleanUser = {
+        id: dbUser.id,
+        name: dbUser.name || cleanEmail.split('@')[0],
+        email: dbUser.email,
+        isPro: dbUser.is_pro === true,
+        role: dbUser.role || 'user',
+        avatarUrl: dbUser.avatar_url || null,
+        email_confirmed: dbUser.email_confirmed,
+        status: dbUser.status,
+        proPurchaseDate: dbUser.pro_purchase_date || null,
+      };
+
+      try {
+        await Preferences.set({ key: 'stayhardy_last_login_at', value: Date.now().toString() });
+        await Preferences.set({ key: 'last_cache_reset', value: new Date().toDateString() });
+      } catch {
+        // non-critical
+      }
+
+      console.log('=== SAVE LOGIN DEBUG ===');
+      console.log('rememberMe toggle:', rememberMe);
+      console.log('email to save:', cleanEmail);
+      console.log('pin to save:', cleanPIN);
+
+      if (rememberMe) {
+        try {
+          localStorage.setItem('remembered_email', cleanEmail);
+          localStorage.setItem('remembered_pin', cleanPIN);
+          
+          await Preferences.set({ key: 'saved_email', value: cleanEmail });
+          await Preferences.set({ key: 'saved_pin', value: cleanPIN });
+          await Preferences.set({ key: 'save_login_enabled', value: 'true' });
+
+          // VERIFY it was saved:
+          const check = await Preferences.get({ key: 'save_login_enabled' });
+          const checkEmail = await Preferences.get({ key: 'saved_email' });
+          console.log('Saved enabled check:', check.value);
+          console.log('Saved email check:', checkEmail.value);
+          console.log('CREDENTIALS SAVED ✅');
+        } catch (e: any) {
+          console.error('SAVE FAILED ❌:', e.message || e);
+        }
+      } else {
+        localStorage.removeItem('remembered_email');
+        localStorage.removeItem('remembered_pin');
+
+        await Preferences.remove({ key: 'saved_email' });
+        await Preferences.remove({ key: 'saved_pin' });
+        await Preferences.set({ key: 'save_login_enabled', value: 'false' });
+        console.log('Login not saved');
+      }
+
+      setCurrentUser(cleanUser);
+      markLoginComplete();
+
+      sessionStorage.removeItem(BIO_FAIL_KEY);
+      navigate('/home');
+    } catch (err: unknown) {
+      console.error('Login error:', (err as Error)?.message || err);
+      if (isLikelyNetworkError(err)) {
+        setError('Cannot reach server. Check your internet and try again.');
+      } else {
+        setError('Email or PIN is incorrect');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -543,7 +701,7 @@ const Login: React.FC = () => {
       setSignupToast('Verification email sent! Check your inbox. 📬');
       setResendCooldown(60);
     } else {
-      setError(error.message);
+      setError(isLikelyNetworkError(error) ? NETWORK_UNREACHABLE_MSG : error.message);
     }
   };
 
@@ -608,8 +766,180 @@ const Login: React.FC = () => {
   };
 
 
+  if (isLogin) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: '#000000', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 24px', overflowY: 'auto' }}>
+        {onBack && (
+          <div
+            onClick={onBack}
+            style={{
+              position: 'absolute',
+              top: '52px',
+              left: '20px',
+              width: '40px',
+              height: '40px',
+              borderRadius: '12px',
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              zIndex: 10
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5"/>
+              <path d="M12 19l-7-7 7-7"/>
+            </svg>
+          </div>
+        )}
+        <style>{`
+          @keyframes brandGlow {
+            0%,100% { text-shadow: 0 0 20px rgba(0, 232, 122,0.4), 0 0 40px rgba(0, 232, 122,0.2); }
+            50% { text-shadow: 0 0 30px rgba(0, 232, 122,0.8), 0 0 60px rgba(0, 232, 122,0.4), 0 0 90px rgba(0, 232, 122,0.15); }
+          }
+          @keyframes inputFocus {
+            from { box-shadow: none }
+            to { box-shadow: 0 0 0 1px #00E87A, 0 0 12px rgba(0, 232, 122,0.3) }
+          }
+          @keyframes spin { to { transform: rotate(360deg) } }
+        `}</style>
+
+        <div style={{ height: '80px' }}/>
+
+        <h1 style={{ fontSize: '36px', fontWeight: '900', color: '#00E87A', letterSpacing: '0.12em', textTransform: 'uppercase', margin: '0 0 8px 0', textAlign: 'center', animation: 'brandGlow 3s ease-in-out infinite', fontStyle: 'normal' }}>
+          STAY HARDY
+        </h1>
+
+        <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.06em', margin: '0 0 48px 0', textAlign: 'center', fontWeight: '500' }}>
+          The 1% starts here.
+        </p>
+
+        <div style={{ width: '100%', marginBottom: '24px' }}>
+          <p style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
+            EMAIL ADDRESS
+          </p>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              style={{ width: '100%', height: '56px', background: '#000000', border: '1.5px solid #00E87A', borderRadius: '14px', padding: '0 48px 0 16px', fontSize: '15px', color: '#FFFFFF', outline: 'none', boxSizing: 'border-box', fontWeight: '500', boxShadow: '0 0 0 0 rgba(0, 232, 122,0)', transition: 'box-shadow 0.2s' }}
+              onFocus={(e) => { e.target.style.boxShadow = '0 0 12px rgba(0, 232, 122,0.3)' }}
+              onBlur={(e) => { e.target.style.boxShadow = '0 0 0 0 rgba(0, 232, 122,0)' }}
+            />
+            <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)' }}>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M3 9l4 4 8-8" stroke={email.includes('@') ? '#00E87A' : 'rgba(0, 232, 122,0.25)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ width: '100%', marginBottom: '24px' }}>
+          <p style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
+            4-DIGIT PIN
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', width: '100%' }}>
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} style={{ position: 'relative', height: '64px' }}>
+                <div style={{ position: 'absolute', inset: 0, background: '#000000', border: `1.5px solid ${pinDigits[i] ? '#00E87A' : 'rgba(0,232,122,0.35)'}`, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', boxShadow: pinDigits[i] ? '0 0 10px rgba(0,232,122,0.2)' : 'none' }}>
+                  {pinDigits[i] && (
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#00E87A', boxShadow: '0 0 8px rgba(0,232,122,0.6)' }}/>
+                  )}
+                </div>
+                <input
+                  ref={pinRefs[i]}
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={1}
+                  value={pinDigits[i]}
+                  onChange={(e) => handlePinChange(i, e.target.value)}
+                  onKeyDown={(e) => handlePinKeyDown(i, e)}
+                  onClick={() => pinRefs[i].current?.focus()}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: '24px', color: 'transparent', caretColor: 'transparent', zIndex: 3, cursor: 'text', WebkitTapHighlightColor: 'transparent' }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ width: '100%', background: '#000000', border: '1.5px solid rgba(0, 232, 122,0.3)', borderRadius: '16px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px', cursor: 'pointer' }}
+          onClick={() => setRememberMe(!rememberMe)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={rememberMe ? '#00E87A' : 'rgba(0, 232, 122,0.35)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: '14px', fontWeight: '700', color: '#FFFFFF', margin: '0 0 2px 0' }}>Save Login</p>
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', margin: 0 }}>Stay signed in on this device</p>
+          </div>
+          <div style={{ width: '48px', height: '28px', borderRadius: '14px', background: rememberMe ? '#00E87A' : 'rgba(255,255,255,0.1)', border: rememberMe ? 'none' : '1.5px solid rgba(0, 232, 122,0.2)', position: 'relative', transition: 'all 0.25s ease', boxShadow: rememberMe ? '0 0 12px rgba(0, 232, 122,0.4)' : 'none', flexShrink: 0 }}>
+            <div style={{ position: 'absolute', top: '4px', left: rememberMe ? '24px' : '4px', width: '20px', height: '20px', borderRadius: '50%', background: rememberMe ? '#000000' : '#FFFFFF', transition: 'left 0.25s cubic-bezier(0.34,1.56,0.64,1)', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }}/>
+          </div>
+        </div>
+
+        {error && (
+          <p style={{ fontSize: '13px', color: '#EF4444', textAlign: 'center', margin: '0 0 16px 0', fontWeight: '500' }}>{error}</p>
+        )}
+
+        <button
+          onClick={handleLogin}
+          disabled={isSubmitting}
+          style={{ width: '100%', height: '56px', background: isSubmitting ? 'rgba(0, 232, 122,0.6)' : '#00E87A', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: '900', color: '#000000', cursor: isSubmitting ? 'not-allowed' : 'pointer', letterSpacing: '0.04em', marginBottom: '32px', boxShadow: isSubmitting ? 'none' : '0 0 24px rgba(0, 232, 122,0.35)', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+          {isSubmitting ? (
+            <>
+              <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #000', borderTop: '2px solid transparent', animation: 'spin 0.8s linear infinite' }}/>
+              Signing in...
+            </>
+          ) : (
+            'Log In →'
+          )}
+        </button>
+
+        <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', margin: '0 0 40px 0' }}>
+          Don't have an account?{' '}
+          <span
+            onClick={() => { setIsLogin(false); setError(''); }}
+            style={{ color: '#00E87A', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(0, 232, 122,0.3)' }}
+          >
+            Sign Up
+          </span>
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className={`login-page-root ${isPulled ? 'is-pulled' : ''}`} style={{ background: '#000000', alignItems: 'center', transition: 'all 0.5s ease' }}>
+    <div className={`login-page-root ${isPulled ? 'is-pulled' : ''}`} style={{ background: '#000000', alignItems: 'center', transition: 'all 0.5s ease', position: 'relative' }}>
+      {onBack && (
+        <div
+          onClick={onBack}
+          style={{
+            position: 'absolute',
+            top: '52px',
+            left: '20px',
+            width: '40px',
+            height: '40px',
+            borderRadius: '12px',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 10
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5"/>
+            <path d="M12 19l-7-7 7-7"/>
+          </svg>
+        </div>
+      )}
       {/* ── Initial Minimal View (Branding & Tagline) ── */}
       {!isPulled && (
         <div className="login-minimal-header" style={{
@@ -847,8 +1177,8 @@ const Login: React.FC = () => {
                   maxLength={1}
                   placeholder=""
                   value={password[index] || ''}
-                  onChange={(e) => handlePinChange(index, e)}
-                  onKeyDown={(e) => handleKeyDown(index, e)}
+                  onChange={(e) => handlePinChange(index, e.target.value)}
+                  onKeyDown={(e) => handlePinKeyDown(index, e)}
                   required={isPulled && index === 0}
                   disabled={!isPulled}
                   style={{ 

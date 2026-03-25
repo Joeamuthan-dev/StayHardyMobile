@@ -24,6 +24,8 @@ import {
 import { invokeEdgeFunctionWithUserJwt } from '../lib/invokeEdgeFunction';
 import { getEdgeFunctionErrorMessage } from '../lib/edgeFunctionError';
 import { invokeDeleteUserAccount } from '../lib/accountDeletion';
+import { useAppSettings } from '../hooks/useAppSettings';
+import { CacheManager, CACHE_KEYS } from '../lib/smartCacheManager';
 
 /** Yellow-green admin accent (distinct from user neon green) */
 const ADM = {
@@ -33,9 +35,21 @@ const ADM = {
   goldDim: 'rgba(232, 197, 71, 0.35)',
 };
 
-const ADMIN_USERS_PAGE_SIZE = 15;
-const FEEDBACK_PAGE_SIZE = 15;
+const ADMIN_USERS_PAGE_SIZE = 10;
 const TIPS_ADMIN_CACHE_MS = 10 * 60 * 1000;
+
+const supportCategories = [
+  { value: 'signup_issue', label: '📝 Signup Issue' },
+  { value: 'login_issue', label: '🔐 Login Issue' },
+  { value: 'payment_issue', label: '💳 Payment Issue' },
+  { value: 'bug_report', label: '🐛 Bug Report' },
+  { value: 'feature_request', label: '✨ Feature Request' },
+  { value: 'account_issue', label: '👤 Account Issue' },
+  { value: 'performance_issue', label: '⚡ Performance Issue' },
+  { value: 'data_issue', label: '📊 Data Issue' },
+  { value: 'notification_issue', label: '🔔 Notification Issue' },
+  { value: 'other', label: '💬 Other' }
+];
 
 function useCountUp(target: number, durationMs = 1000, enabled = true): number {
   const [value, setValue] = useState(0);
@@ -141,42 +155,118 @@ function adminInitialAvatarStyle(name: string): { bg: string; color: string } {
   return palette[h];
 }
 
+function FilterPill({
+  label,
+  count,
+  active,
+  color,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '8px 16px',
+        borderRadius: '20px',
+        border: `1px solid ${active ? color : '#333'}`,
+        background: active ? `${color}22` : 'transparent',
+        color: active ? color : '#888',
+        fontSize: '13px',
+        fontWeight: active ? 700 : 400,
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+      }}
+    >
+      {label}
+      <span
+        style={{
+          background: active ? color : '#333',
+          color: active ? '#000' : '#666',
+          borderRadius: '10px',
+          padding: '1px 7px',
+          fontSize: '11px',
+          fontWeight: 700,
+        }}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 const AdminDashboard: React.FC = () => {
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const { user } = useAuth();
+  const { settings: appSettings, loadSettings } = useAppSettings();
   const navigate = useNavigate();
   const [stats, setStats] = useState({ users: 0, tasks: 0, goals: 0, routines: 0, globalTasks: 0, globalRoutines: 0, globalTasksCompleted: 0 });
   const [users, setUsers] = useState<any[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'revenue' | 'tips' | 'users' | 'feedback'>('overview');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'revenue' | 'tips' | 'users' | 'feedback' | 'settings'
+  >('overview');
   const [resetPinModal, setResetPinModal] = useState<{ show: boolean, userId: string, userName: string }>({ show: false, userId: '', userName: '' });
   const [deleteUserModal, setDeleteUserModal] = useState<{ show: boolean, userId: string, userName: string }>({ show: false, userId: '', userName: '' });
   const [newPinInput, setNewPinInput] = useState(['', '', '', '']);
   const [timeRange, setTimeRange] = useState<7 | 30>(7);
   const [chartData, setChartData] = useState<any[]>([]);
-  const [feedbackTabFilter, setFeedbackTabFilter] = useState<'All' | 'Feature' | 'Bug' | 'Other'>('All');
+  const [feedbackActiveFilter, setFeedbackActiveFilter] = useState<'all' | 'feature' | 'support'>('all');
   const [feedbackSortOrder, setFeedbackSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [totalFeedbackCount, setTotalFeedbackCount] = useState(0);
   const [feedbacksLoading, setFeedbacksLoading] = useState(false);
-  const [feedbacksLoadingMore, setFeedbacksLoadingMore] = useState(false);
-  const [hasMoreFeedbacks, setHasMoreFeedbacks] = useState(false);
   const [deletingFeedbackId, setDeletingFeedbackId] = useState<string | null>(null);
-  const feedbackFetchGenRef = useRef(0);
-  const feedbackLengthRef = useRef(0);
-  const [userTabFilter, setUserTabFilter] = useState<'All' | 'admin' | 'user'>('All');
+  const [respondModal, setRespondModal] = useState<{ show: boolean; item: any | null; note: string }>({
+    show: false,
+    item: null,
+    note: '',
+  });
+  const [activeFilter, setActiveFilter] = useState<'all' | 'verified' | 'pending' | 'pro'>('all');
   const [userSortOrder, setUserSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(0);
   const [totalUsersCount, setTotalUsersCount] = useState(0);
+  const [verifiedCount, setVerifiedCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [proCount, setProCount] = useState(0);
   const [recentSignups, setRecentSignups] = useState<any[]>([]);
   const [brokenImages, setBrokenImages] = useState<Set<string>>(new Set());
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersLoadingMore, setUsersLoadingMore] = useState(false);
   const [hasMoreUsers, setHasMoreUsers] = useState(true);
   const userFetchGenRef = useRef(0);
-  const usersLengthRef = useRef(0);
-  const usersLoadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
-  const [proUpdatingId, setProUpdatingId] = useState<string | null>(null);
+
+  const [newPrice, setNewPrice] = useState('');
+  const [newOriginalPrice, setNewOriginalPrice] = useState('');
+  const [isSavingPrice, setIsSavingPrice] = useState(false);
+  const [annoTitle, setAnnoTitle] = useState('');
+  const [annoMessage, setAnnoMessage] = useState('');
+  const [annoCategory, setAnnoCategory] = useState<'update' | 'feature' | 'maintenance' | 'urgent' | 'general'>(
+    'update'
+  );
+  const [isPosting, setIsPosting] = useState(false);
+  const [announcements, setAnnouncements] = useState<
+    Array<{
+      id: string;
+      title: string;
+      message: string;
+      category: string;
+      is_active: boolean;
+      posted_by: string | null;
+      created_at: string;
+      updated_at: string | null;
+    }>
+  >([]);
 
   const [proCounts, setProCounts] = useState<ProMembershipCounts>({ total: 0, last30: 0, last7: 0 });
   const [proPrevWeek, setProPrevWeek] = useState(0);
@@ -368,7 +458,10 @@ const AdminDashboard: React.FC = () => {
       return;
     }
 
-    const price = LIFETIME_PRICE_INR;
+    const price =
+      Number.isFinite(appSettings.pro_price) && appSettings.pro_price >= 1
+        ? appSettings.pro_price
+        : LIFETIME_PRICE_INR;
     const d30 = new Date();
     d30.setDate(d30.getDate() - 30);
     const t = new Date();
@@ -428,150 +521,264 @@ const AdminDashboard: React.FC = () => {
       tx: txRows ?? [],
       bar,
     };
-  }, [user]);
+  }, [user, appSettings.pro_price]);
+
+  const loadAnnouncements = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) {
+      console.error('loadAnnouncements', error);
+      return;
+    }
+    setAnnouncements(data ?? []);
+  }, []);
+
+  const handleUpdatePrice = useCallback(async () => {
+    const np = parseInt(newPrice, 10);
+    const no = parseInt(newOriginalPrice, 10);
+    if (!Number.isFinite(np) || np < 1) {
+      window.alert('Enter a valid Pro price (₹).');
+      return;
+    }
+    setIsSavingPrice(true);
+    try {
+      const { error: e1 } = await supabase.from('app_settings').upsert(
+        {
+          key: 'pro_price',
+          value: String(np),
+          description: 'Pro membership price in INR',
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email ?? 'admin',
+        },
+        { onConflict: 'key' }
+      );
+      if (e1) throw e1;
+      if (Number.isFinite(no) && no >= 1) {
+        const { error: e2 } = await supabase.from('app_settings').upsert(
+          {
+            key: 'pro_original_price',
+            value: String(no),
+            description: 'Pro original strike-through price in INR',
+            updated_at: new Date().toISOString(),
+            updated_by: user?.email ?? 'admin',
+          },
+          { onConflict: 'key' }
+        );
+        if (e2) throw e2;
+      }
+      await CacheManager.invalidate(CACHE_KEYS.APP_SETTINGS);
+      await loadSettings();
+      window.alert(`Price updated to ₹${np}.`);
+    } catch (e) {
+      console.error(e);
+      window.alert('Failed to update price.');
+    } finally {
+      setIsSavingPrice(false);
+    }
+  }, [newPrice, newOriginalPrice, user?.email, loadSettings]);
+
+  const handlePostAnnouncement = useCallback(async () => {
+    if (!annoTitle.trim()) {
+      window.alert('Please add a title.');
+      return;
+    }
+    if (!annoMessage.trim() || annoMessage.trim().length < 10) {
+      window.alert('Message too short (at least 10 characters).');
+      return;
+    }
+    setIsPosting(true);
+    try {
+      const { data, error } = await supabase
+        .from('announcements')
+        .insert({
+          title: annoTitle.trim(),
+          message: annoMessage.trim(),
+          category: annoCategory,
+          is_active: true,
+          posted_by: user?.email ?? null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      if (data) setAnnouncements((prev) => [data, ...prev]);
+      setAnnoTitle('');
+      setAnnoMessage('');
+      setAnnoCategory('update');
+      await CacheManager.invalidate(CACHE_KEYS.ANNOUNCEMENTS_LIST);
+      window.alert('Announcement posted.');
+    } catch (e) {
+      console.error(e);
+      window.alert('Failed to post announcement.');
+    } finally {
+      setIsPosting(false);
+    }
+  }, [annoTitle, annoMessage, annoCategory, user?.email]);
+
+  const toggleAnnouncementActive = useCallback(
+    async (id: string) => {
+      const item = announcements.find((a) => a.id === id);
+      if (!item) return;
+      const next = !item.is_active;
+      const { error } = await supabase
+        .from('announcements')
+        .update({ is_active: next, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) {
+        window.alert(error.message);
+        return;
+      }
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? { ...a, is_active: next } : a)));
+      await CacheManager.invalidate(CACHE_KEYS.ANNOUNCEMENTS_LIST);
+    },
+    [announcements]
+  );
+
+  const deleteAnnouncement = useCallback(async (id: string) => {
+    if (!window.confirm('Delete this announcement?')) return;
+    const { error } = await supabase.from('announcements').delete().eq('id', id);
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    await CacheManager.invalidate(CACHE_KEYS.ANNOUNCEMENTS_LIST);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'settings') return;
+    setNewPrice(String(appSettings.pro_price));
+    setNewOriginalPrice(String(appSettings.pro_original_price));
+  }, [activeTab, appSettings.pro_price, appSettings.pro_original_price]);
 
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedSearch(userSearchQuery), 400);
     return () => clearTimeout(handler);
   }, [userSearchQuery]);
 
-  const userListQueryKey = useMemo(
-    () => `${debouncedSearch}|||${userTabFilter}|||${userSortOrder}`,
-    [debouncedSearch, userTabFilter, userSortOrder]
-  );
+  const fetchUserCounts = useCallback(async () => {
+    const [all, verified, pending, pro] = await Promise.all([
+      supabase.from('users').select('id', { count: 'exact', head: true }),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('email_confirmed', true),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('email_confirmed', false),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_pro', true),
+    ]);
+    setTotalUsersCount(all.count || 0);
+    setVerifiedCount(verified.count || 0);
+    setPendingCount(pending.count || 0);
+    setProCount(pro.count || 0);
+  }, []);
 
-  const fetchUsersListPage = useCallback(
-    async (offset: number) => {
+  const enrichUsersWithStats = useCallback(async (userData: any[]) => {
+    const { data: rpcCounts } = await supabase.rpc('get_global_counts');
+    const tasks = (rpcCounts?.tasks || []).map((t: any) => ({
+      created_at: t.created_at,
+      userId: t.userId,
+      status: t.status,
+      progress: t.progress,
+    }));
+    const goals = (rpcCounts?.goals || []).map((g: any) => ({
+      created_at: g.created_at,
+      userId: g.userId,
+      status: g.status,
+      progress: g.progress,
+    }));
+    const routines = (rpcCounts?.routines || []).map((r: any) => ({
+      created_at: r.created_at,
+      userId: r.userId,
+    }));
+
+    setStats((prev) => ({
+      ...prev,
+      tasks: tasks.length,
+      goals: goals.length,
+      routines: routines.length,
+      globalTasks: rpcCounts?.total_tasks || 0,
+      globalTasksCompleted: rpcCounts?.pending_tasks || 0,
+      globalRoutines: rpcCounts?.total_routines || 0,
+      users: totalUsersCount || prev.users,
+    }));
+
+    const userActivityMap: Record<string, { tasks: number; goals: number; routines: number; productivityScore: number }> =
+      {};
+    userData.forEach((u) => {
+      userActivityMap[u.id] = { tasks: 0, goals: 0, routines: 0, productivityScore: 0 };
+    });
+    tasks.forEach((t: any) => {
+      if (userActivityMap[t.userId]) userActivityMap[t.userId].tasks++;
+    });
+    goals.forEach((g: any) => {
+      if (userActivityMap[g.userId]) userActivityMap[g.userId].goals++;
+    });
+    routines.forEach((r: any) => {
+      if (userActivityMap[r.userId]) userActivityMap[r.userId].routines++;
+    });
+    userData.forEach((u) => {
+      const uTasks = tasks.filter((t: any) => t.userId === u.id);
+      const uGoals = goals.filter((g: any) => g.userId === u.id);
+      const uRoutines = routines.filter((r: any) => r.userId === u.id);
+      const tasksProgress =
+        uTasks.length > 0 ? (uTasks.filter((t: any) => t.status === 'completed').length / uTasks.length) * 100 : 0;
+      const goalsProgress =
+        uGoals.length > 0
+          ? uGoals.reduce(
+              (acc: number, g: any) => acc + (g.status === 'completed' ? 100 : Number(g.progress) || 0),
+              0
+            ) / uGoals.length
+          : 0;
+      const routinesProgress = uRoutines.length > 0 ? 100 : 0;
+      const score = Math.round(routinesProgress * 0.6 + tasksProgress * 0.2 + goalsProgress * 0.2);
+      if (userActivityMap[u.id]) userActivityMap[u.id].productivityScore = score;
+    });
+    return userData.map((u: any) => ({
+      ...u,
+      stats: userActivityMap[u.id] || { tasks: 0, goals: 0, routines: 0, productivityScore: 0 },
+    }));
+  }, [totalUsersCount]);
+
+  const fetchUsers = useCallback(
+    async (filter: 'all' | 'verified' | 'pending' | 'pro', pageNum: number, reset = false) => {
       if (!user || !isAdminHubUser(user)) return;
-      const append = offset > 0;
       const gen = ++userFetchGenRef.current;
-      if (!append) setUsersLoading(true);
-      else setUsersLoadingMore(true);
+      if (reset) {
+        setUsers([]);
+        setPage(0);
+        setHasMoreUsers(true);
+        setUsersLoading(true);
+      } else {
+        setUsersLoadingMore(true);
+      }
       try {
-        let userQuery = supabase
+        let query = supabase
           .from('users')
-          .select('id, name, email, role, created_at, status, avatar_url, is_pro')
-          .order('created_at', { ascending: userSortOrder === 'newest' ? false : true })
-          .range(offset, offset + ADMIN_USERS_PAGE_SIZE - 1);
+          .select(
+            'id, name, email, role, is_pro, status, email_confirmed, created_at, avatar_url, pro_purchase_date'
+          )
+          .order('created_at', { ascending: userSortOrder === 'oldest' })
+          .range(pageNum * ADMIN_USERS_PAGE_SIZE, (pageNum + 1) * ADMIN_USERS_PAGE_SIZE - 1);
 
-        if (userTabFilter !== 'All') {
-          userQuery = userQuery.eq('role', userTabFilter);
+        if (filter === 'verified') query = query.eq('email_confirmed', true);
+        else if (filter === 'pending') query = query.eq('email_confirmed', false);
+        else if (filter === 'pro') query = query.eq('is_pro', true);
+
+        if (debouncedSearch.trim()) {
+          query = query.or(`name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
         }
-        if (debouncedSearch) {
-          userQuery = userQuery.or(`name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
-        }
 
-        const { data: userData, error: userError } = await userQuery;
-        if (userError) console.error('Error fetching admin users table:', userError);
-
-        let countQuery = supabase.from('users').select('id', { count: 'exact', head: true });
-        if (userTabFilter !== 'All') {
-          countQuery = countQuery.eq('role', userTabFilter);
-        }
-        if (debouncedSearch) {
-          countQuery = countQuery.or(`name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
-        }
-        const { count: countResult } = await countQuery;
-        if (countResult !== null) setTotalUsersCount(countResult);
-
-        const { data: rpcCounts } = await supabase.rpc('get_global_counts');
-        const tasks = (rpcCounts?.tasks || []).map((t: any) => ({
-          created_at: t.created_at,
-          userId: t.userId,
-          status: t.status,
-          progress: t.progress,
-        }));
-        const goals = (rpcCounts?.goals || []).map((g: any) => ({
-          created_at: g.created_at,
-          userId: g.userId,
-          status: g.status,
-          progress: g.progress,
-        }));
-        const routines = (rpcCounts?.routines || []).map((r: any) => ({
-          created_at: r.created_at,
-          userId: r.userId,
-        }));
-
-        setStats((prev) => ({
-          ...prev,
-          tasks: tasks.length,
-          goals: goals.length,
-          routines: routines.length,
-          globalTasks: rpcCounts?.total_tasks || 0,
-          globalTasksCompleted: rpcCounts?.pending_tasks || 0,
-          globalRoutines: rpcCounts?.total_routines || 0,
-          users: countResult ?? prev.users,
-        }));
-
-        if (userFetchGenRef.current !== gen) return;
-
-        if (!userData || userData.length === 0) {
-          if (!append) setUsers([]);
-          setHasMoreUsers(false);
+        const { data, error } = await query;
+        if (error) {
+          console.error('Fetch error:', error);
           return;
         }
-
-        const userActivityMap: Record<
-          string,
-          { tasks: number; goals: number; routines: number; productivityScore: number }
-        > = {};
-        userData.forEach((u) => {
-          userActivityMap[u.id] = { tasks: 0, goals: 0, routines: 0, productivityScore: 0 };
-        });
-
-        tasks.forEach((t: any) => {
-          if (userActivityMap[t.userId]) userActivityMap[t.userId].tasks++;
-        });
-        goals.forEach((g: any) => {
-          if (userActivityMap[g.userId]) userActivityMap[g.userId].goals++;
-        });
-        routines.forEach((r: any) => {
-          if (userActivityMap[r.userId]) userActivityMap[r.userId].routines++;
-        });
-
-        userData.forEach((u) => {
-          const uTasks = tasks.filter((t: any) => t.userId === u.id);
-          const uGoals = goals.filter((g: any) => g.userId === u.id);
-          const uRoutines = routines.filter((r: any) => r.userId === u.id);
-
-          const tasksProgress =
-            uTasks.length > 0
-              ? (uTasks.filter((t: any) => t.status === 'completed').length / uTasks.length) * 100
-              : 0;
-          const goalsProgress =
-            uGoals.length > 0
-              ? uGoals.reduce(
-                  (acc: number, g: any) => acc + (g.status === 'completed' ? 100 : Number(g.progress) || 0),
-                  0
-                ) / uGoals.length
-              : 0;
-          const routinesProgress = uRoutines.length > 0 ? 100 : 0;
-
-          const score = Math.round(routinesProgress * 0.6 + tasksProgress * 0.2 + goalsProgress * 0.2);
-          if (userActivityMap[u.id]) userActivityMap[u.id].productivityScore = score;
-        });
-
-        const enrichedUsers = userData.map((u: any) => ({
-          ...u,
-          stats: userActivityMap[u.id] || { tasks: 0, goals: 0, routines: 0, productivityScore: 0 },
-        }));
-
         if (userFetchGenRef.current !== gen) return;
-
-        const total = countResult ?? 0;
-        setUsers((prev) => {
-          if (!append) return enrichedUsers;
-          const seen = new Set(prev.map((p) => p.id));
-          const merged = [...prev];
-          for (const row of enrichedUsers) {
-            if (!seen.has(row.id)) {
-              seen.add(row.id);
-              merged.push(row);
-            }
-          }
-          return merged;
-        });
-        setHasMoreUsers(offset + enrichedUsers.length < total);
+        const enriched = await enrichUsersWithStats(data || []);
+        if (userFetchGenRef.current !== gen) return;
+        if (reset) setUsers(enriched);
+        else setUsers((prev) => [...prev, ...enriched]);
+        setHasMoreUsers((data?.length || 0) === ADMIN_USERS_PAGE_SIZE);
+        setPage(pageNum + 1);
       } finally {
         if (userFetchGenRef.current === gen) {
           setUsersLoading(false);
@@ -579,250 +786,86 @@ const AdminDashboard: React.FC = () => {
         }
       }
     },
-    [user, userTabFilter, debouncedSearch, userSortOrder]
+    [user, userSortOrder, debouncedSearch, enrichUsersWithStats]
+  );
+
+  const handleSearch = useCallback(
+    async (query: string) => {
+      if (!user || !isAdminHubUser(user)) return;
+      if (!query.trim()) {
+        void fetchUsers(activeFilter, 0, true);
+        return;
+      }
+      setUsersLoading(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select(
+          'id, name, email, role, is_pro, status, email_confirmed, created_at, avatar_url, pro_purchase_date'
+        )
+        .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
+        .order('created_at', { ascending: userSortOrder === 'oldest' })
+        .limit(20);
+      if (error) {
+        console.error('Search error:', error);
+        setUsersLoading(false);
+        return;
+      }
+      const enriched = await enrichUsersWithStats(data || []);
+      setUsers(enriched);
+      setHasMoreUsers(false);
+      setUsersLoading(false);
+    },
+    [user, activeFilter, fetchUsers, userSortOrder, enrichUsersWithStats]
   );
 
   const resyncUsersList = useCallback(async () => {
-    if (!user || !isAdminHubUser(user)) return;
-    const loaded = usersLengthRef.current;
-    const gen = ++userFetchGenRef.current;
-    if (loaded === 0) {
-      await fetchUsersListPage(0);
+    await fetchUsers(activeFilter, 0, true);
+    await fetchUserCounts();
+  }, [fetchUsers, fetchUserCounts, activeFilter]);
+
+  useEffect(() => {
+    if (activeTab !== 'users' || !user || !isAdminHubUser(user)) return;
+    void fetchUserCounts();
+    if (debouncedSearch.trim()) {
+      void handleSearch(debouncedSearch);
       return;
     }
-    setUsersLoadingMore(true);
+    void fetchUsers(activeFilter, 0, true);
+  }, [activeTab, activeFilter, userSortOrder, debouncedSearch, user, fetchUsers, fetchUserCounts, handleSearch]);
+
+  const fetchFeedback = useCallback(async () => {
+    if (!user || !isAdminHubUser(user)) return;
+    setFeedbacksLoading(true);
     try {
-      const end = Math.max(0, loaded - 1);
-      let userQuery = supabase
-        .from('users')
-        .select('id, name, email, role, created_at, status, avatar_url, is_pro')
-        .order('created_at', { ascending: userSortOrder === 'newest' ? false : true })
-        .range(0, end);
-
-      if (userTabFilter !== 'All') {
-        userQuery = userQuery.eq('role', userTabFilter);
+      let query = supabase
+        .from('feedback')
+        .select('id, user_name, user_email, message, type, ticket_id, status, admin_note, admin_note_date, created_at')
+        .order('created_at', { ascending: feedbackSortOrder === 'oldest' });
+      if (feedbackActiveFilter === 'feature') {
+        query = query.eq('type', 'feature');
+      } else if (feedbackActiveFilter === 'support') {
+        query = query.eq('type', 'support');
       }
-      if (debouncedSearch) {
-        userQuery = userQuery.or(`name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
-      }
-
-      const { data: userData, error: userError } = await userQuery;
-      if (userError) console.error('Error resyncing admin users:', userError);
-
-      let countQuery = supabase.from('users').select('id', { count: 'exact', head: true });
-      if (userTabFilter !== 'All') {
-        countQuery = countQuery.eq('role', userTabFilter);
-      }
-      if (debouncedSearch) {
-        countQuery = countQuery.or(`name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`);
-      }
-      const { count: countResult } = await countQuery;
-      if (countResult !== null) setTotalUsersCount(countResult);
-
-      const { data: rpcCounts } = await supabase.rpc('get_global_counts');
-      const tasks = (rpcCounts?.tasks || []).map((t: any) => ({
-        created_at: t.created_at,
-        userId: t.userId,
-        status: t.status,
-        progress: t.progress,
-      }));
-      const goals = (rpcCounts?.goals || []).map((g: any) => ({
-        created_at: g.created_at,
-        userId: g.userId,
-        status: g.status,
-        progress: g.progress,
-      }));
-      const routines = (rpcCounts?.routines || []).map((r: any) => ({
-        created_at: r.created_at,
-        userId: r.userId,
-      }));
-
-      setStats((prev) => ({
-        ...prev,
-        tasks: tasks.length,
-        goals: goals.length,
-        routines: routines.length,
-        globalTasks: rpcCounts?.total_tasks || 0,
-        globalTasksCompleted: rpcCounts?.pending_tasks || 0,
-        globalRoutines: rpcCounts?.total_routines || 0,
-        users: countResult ?? prev.users,
-      }));
-
-      if (userFetchGenRef.current !== gen) return;
-
-      if (!userData || userData.length === 0) {
-        setUsers([]);
-        setHasMoreUsers(false);
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching feedback:', error);
         return;
       }
-
-      const userActivityMap: Record<
-        string,
-        { tasks: number; goals: number; routines: number; productivityScore: number }
-      > = {};
-      userData.forEach((u) => {
-        userActivityMap[u.id] = { tasks: 0, goals: 0, routines: 0, productivityScore: 0 };
-      });
-
-      tasks.forEach((t: any) => {
-        if (userActivityMap[t.userId]) userActivityMap[t.userId].tasks++;
-      });
-      goals.forEach((g: any) => {
-        if (userActivityMap[g.userId]) userActivityMap[g.userId].goals++;
-      });
-      routines.forEach((r: any) => {
-        if (userActivityMap[r.userId]) userActivityMap[r.userId].routines++;
-      });
-
-      userData.forEach((u) => {
-        const uTasks = tasks.filter((t: any) => t.userId === u.id);
-        const uGoals = goals.filter((g: any) => g.userId === u.id);
-        const uRoutines = routines.filter((r: any) => r.userId === u.id);
-
-        const tasksProgress =
-          uTasks.length > 0
-            ? (uTasks.filter((t: any) => t.status === 'completed').length / uTasks.length) * 100
-            : 0;
-        const goalsProgress =
-          uGoals.length > 0
-            ? uGoals.reduce(
-                (acc: number, g: any) => acc + (g.status === 'completed' ? 100 : Number(g.progress) || 0),
-                0
-              ) / uGoals.length
-            : 0;
-        const routinesProgress = uRoutines.length > 0 ? 100 : 0;
-
-        const score = Math.round(routinesProgress * 0.6 + tasksProgress * 0.2 + goalsProgress * 0.2);
-        if (userActivityMap[u.id]) userActivityMap[u.id].productivityScore = score;
-      });
-
-      const enrichedUsers = userData.map((u: any) => ({
-        ...u,
-        stats: userActivityMap[u.id] || { tasks: 0, goals: 0, routines: 0, productivityScore: 0 },
-      }));
-
-      if (userFetchGenRef.current !== gen) return;
-
-      const total = countResult ?? 0;
-      setUsers(enrichedUsers);
-      setHasMoreUsers(enrichedUsers.length < total);
+      setFeedbacks(data || []);
+      setTotalFeedbackCount((data || []).length);
     } finally {
-      if (userFetchGenRef.current === gen) {
-        setUsersLoadingMore(false);
-      }
+      setFeedbacksLoading(false);
     }
-  }, [user, userTabFilter, debouncedSearch, userSortOrder, fetchUsersListPage]);
-
-  useEffect(() => {
-    usersLengthRef.current = users.length;
-  }, [users.length]);
-
-  useEffect(() => {
-    if (!user || !isAdminHubUser(user) || activeTab !== 'users') return;
-    setUsers([]);
-    void fetchUsersListPage(0);
-  }, [activeTab, userListQueryKey, user, fetchUsersListPage]);
-
-  const feedbackQueryKey = useMemo(
-    () => `${feedbackTabFilter}|||${feedbackSortOrder}`,
-    [feedbackTabFilter, feedbackSortOrder]
-  );
-
-  const fetchFeedbackPage = useCallback(
-    async (offset: number) => {
-      if (!user || !isAdminHubUser(user)) return;
-      const append = offset > 0;
-      const gen = ++feedbackFetchGenRef.current;
-      if (!append) setFeedbacksLoading(true);
-      else setFeedbacksLoadingMore(true);
-      try {
-        let q = supabase
-          .from('feedback')
-          .select('id, user_name, message, type, created_at', { count: 'exact' })
-          .order('created_at', { ascending: feedbackSortOrder === 'oldest' })
-          .range(offset, offset + FEEDBACK_PAGE_SIZE - 1);
-        if (feedbackTabFilter !== 'All') {
-          q = q.eq('type', feedbackTabFilter);
-        }
-        const { data, error, count } = await q;
-        if (error) {
-          console.error('Error fetching feedback:', error);
-          return;
-        }
-        if (feedbackFetchGenRef.current !== gen) return;
-        const total = count ?? 0;
-        setTotalFeedbackCount(total);
-        const rows = data ?? [];
-        setFeedbacks((prev) => {
-          if (!append) return rows;
-          const seen = new Set(prev.map((f) => f.id));
-          const merged = [...prev];
-          for (const r of rows) {
-            if (!seen.has(r.id)) {
-              seen.add(r.id);
-              merged.push(r);
-            }
-          }
-          return merged;
-        });
-      } finally {
-        if (feedbackFetchGenRef.current === gen) {
-          setFeedbacksLoading(false);
-          setFeedbacksLoadingMore(false);
-        }
-      }
-    },
-    [user, feedbackTabFilter, feedbackSortOrder]
-  );
+  }, [user, feedbackSortOrder, feedbackActiveFilter]);
 
   const resyncFeedbackList = useCallback(async () => {
-    if (!user || !isAdminHubUser(user)) return;
-    const loaded = feedbackLengthRef.current;
-    const gen = ++feedbackFetchGenRef.current;
-    if (loaded === 0) {
-      await fetchFeedbackPage(0);
-      return;
-    }
-    setFeedbacksLoadingMore(true);
-    try {
-      const end = Math.max(0, loaded - 1);
-      let q = supabase
-        .from('feedback')
-        .select('id, user_name, message, type, created_at', { count: 'exact' })
-        .order('created_at', { ascending: feedbackSortOrder === 'oldest' })
-        .range(0, end);
-      if (feedbackTabFilter !== 'All') {
-        q = q.eq('type', feedbackTabFilter);
-      }
-      const { data, error, count } = await q;
-      if (error) {
-        console.error('Error resyncing feedback:', error);
-        return;
-      }
-      if (feedbackFetchGenRef.current !== gen) return;
-      setTotalFeedbackCount(count ?? 0);
-      const rows = data ?? [];
-      setFeedbacks(rows);
-    } finally {
-      if (feedbackFetchGenRef.current === gen) {
-        setFeedbacksLoadingMore(false);
-      }
-    }
-  }, [user, feedbackTabFilter, feedbackSortOrder, fetchFeedbackPage]);
-
-  useEffect(() => {
-    feedbackLengthRef.current = feedbacks.length;
-  }, [feedbacks.length]);
+    await fetchFeedback();
+  }, [fetchFeedback]);
 
   useEffect(() => {
     if (!user || !isAdminHubUser(user) || activeTab !== 'feedback') return;
-    setFeedbacks([]);
-    void fetchFeedbackPage(0);
-  }, [activeTab, feedbackQueryKey, user, fetchFeedbackPage]);
-
-  useEffect(() => {
-    setHasMoreFeedbacks(feedbacks.length < totalFeedbackCount);
-  }, [feedbacks.length, totalFeedbackCount]);
+    void fetchFeedback();
+  }, [activeTab, user, fetchFeedback]);
 
   useEffect(() => {
     if (user && !isAdminHubUser(user)) {
@@ -896,6 +939,11 @@ const AdminDashboard: React.FC = () => {
       if (activeTab === 'feedback') {
         return;
       }
+      if (activeTab === 'settings') {
+        await loadSettings();
+        await loadAnnouncements();
+        return;
+      }
       await fetchMainAdminData();
     };
 
@@ -924,31 +972,23 @@ const AdminDashboard: React.FC = () => {
       supabase.removeChannel(feedbackChannel);
       supabase.removeChannel(userChannel);
     };
-  }, [user, timeRange, activeTab, fetchProMembershipCounts, fetchRevenueTab, fetchTipsTab, resyncUsersList, resyncFeedbackList]);
+  }, [
+    user,
+    timeRange,
+    activeTab,
+    fetchProMembershipCounts,
+    fetchRevenueTab,
+    fetchTipsTab,
+    resyncUsersList,
+    resyncFeedbackList,
+    loadSettings,
+    loadAnnouncements,
+  ]);
 
   const loadMoreUsers = useCallback(() => {
     if (!hasMoreUsers || usersLoadingMore || usersLoading || users.length === 0) return;
-    void fetchUsersListPage(users.length);
-  }, [hasMoreUsers, usersLoadingMore, usersLoading, users.length, fetchUsersListPage]);
-
-  useEffect(() => {
-    if (activeTab !== 'users') return;
-    const el = usersLoadMoreSentinelRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) loadMoreUsers();
-      },
-      { root: null, rootMargin: '160px', threshold: 0 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [activeTab, loadMoreUsers, hasMoreUsers, users.length]);
-
-  const loadMoreFeedback = useCallback(() => {
-    if (!hasMoreFeedbacks || feedbacksLoading || feedbacksLoadingMore || feedbacks.length === 0) return;
-    void fetchFeedbackPage(feedbacks.length);
-  }, [hasMoreFeedbacks, feedbacksLoading, feedbacksLoadingMore, feedbacks.length, fetchFeedbackPage]);
+    void fetchUsers(activeFilter, page, false);
+  }, [hasMoreUsers, usersLoadingMore, usersLoading, users.length, fetchUsers, activeFilter, page]);
 
   const processChartData = (usersData: any[], tasks: any[], goals: any[], routines: any[], days: number) => {
     const data = [];
@@ -978,47 +1018,38 @@ const AdminDashboard: React.FC = () => {
 
 
 
-  const updateUserStatus = async (userId: string, newStatus: string) => {
+  const handleResendVerification = useCallback(async (targetUser: any) => {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: targetUser.email,
+      });
+      if (error) throw error;
+      alert(`Verification email sent to ${targetUser.email} ✅`);
+    } catch (err) {
+      console.error('Failed resend verification:', err);
+      alert('Failed to send email ❌');
+    }
+  }, []);
+
+  const handleMakePro = useCallback(async (targetUser: any) => {
     try {
       const { error } = await supabase
         .from('users')
-        .update({ status: newStatus })
-        .eq('id', userId);
+        .update({
+          is_pro: true,
+          pro_purchase_date: new Date().toISOString(),
+        })
+        .eq('id', targetUser.id);
       if (error) throw error;
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, is_pro: true } : u)));
+      alert(`${targetUser.name || 'User'} is now Pro ⚡`);
+      await fetchUserCounts();
     } catch (err) {
-      console.error('Error updating status:', err);
+      console.error('Failed to make pro:', err);
+      alert('Failed to update ❌');
     }
-  };
-
-  const setUserProMembership = async (userId: string, makePro: boolean, displayName: string) => {
-    const label = displayName?.trim() || 'this user';
-    const ok = window.confirm(
-      makePro
-        ? `Make Pro Member?\n\nThis will give ${label} lifetime pro access for free.`
-        : `Remove Pro Access?\n\nThis will remove ${label}'s pro membership.`,
-    );
-    if (!ok) return;
-    setProUpdatingId(userId);
-    try {
-      const payload: { is_pro: boolean; pro_purchase_date: string | null } = {
-        is_pro: makePro,
-        pro_purchase_date: makePro ? new Date().toISOString() : null,
-      };
-      const { error } = await supabase.from('users').update(payload).eq('id', userId);
-      if (error) throw error;
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === userId ? { ...u, is_pro: makePro, pro_purchase_date: payload.pro_purchase_date } : u,
-        ),
-      );
-    } catch (err) {
-      console.error('Error updating Pro status:', err);
-      alert('Failed to update Pro status.');
-    } finally {
-      setProUpdatingId(null);
-    }
-  };
+  }, [fetchUserCounts]);
 
   const deleteUser = (userId: string, userName: string) => {
     setDeleteUserModal({ show: true, userId, userName });
@@ -1068,32 +1099,53 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleClearAllFeedback = async () => {
-    if (!window.confirm('Are you sure you want to clear ALL feedback? This cannot be undone.')) return;
+  const handleOpenRespond = (item: any) => {
+    setRespondModal({
+      show: true,
+      item,
+      note: item.admin_note || '',
+    });
+  };
 
+  const handleSaveResponse = async () => {
+    const { item, note } = respondModal;
+    if (!item?.id) return;
     try {
       const { error } = await supabase
         .from('feedback')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-
+        .update({
+          admin_note: note,
+          admin_note_date: new Date().toISOString(),
+          status: 'in_progress',
+        })
+        .eq('id', item.id);
       if (error) throw error;
-
-      const { count } = await supabase.from('feedback').select('id', { count: 'exact', head: true });
-      if ((count ?? 0) > 0) {
-        alert('Some feedback could not be deleted. Remaining rows are still in the database.');
-        void resyncFeedbackList();
-        return;
-      }
-
-      setFeedbacks([]);
-      setTotalFeedbackCount(0);
-      setAdminNotifCount(0);
-      alert('All feedback records have been cleared.');
+      setFeedbacks((prev) =>
+        prev.map((f) => (f.id === item.id ? { ...f, admin_note: note, status: 'in_progress' } : f))
+      );
+      setRespondModal({ show: false, item: null, note: '' });
+      alert('Response saved ✅');
     } catch (err) {
-      console.error('Error clearing feedback:', err);
-      alert('Failed to clear all feedback.');
+      console.error('Failed to save response:', err);
+      alert('Failed to save ❌');
     }
+  };
+
+  const handleUpdateStatus = async (id: string, status: string) => {
+    try {
+      const { error } = await supabase.from('feedback').update({ status }).eq('id', id);
+      if (error) throw error;
+      setFeedbacks((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)));
+      alert('Status updated ✅');
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      alert('Failed to update ❌');
+    }
+  };
+
+  const handleDeleteFeedback = async (id: string) => {
+    if (!window.confirm('Delete this feedback?')) return;
+    await deleteFeedbackById(id);
   };
 
   const handleResetPin = async () => {
@@ -1262,7 +1314,8 @@ const AdminDashboard: React.FC = () => {
               ['revenue', 'REVENUE'],
               ['tips', 'TIPS'],
               ['users', 'USERS'],
-              ['feedback', 'FEEDBACK'],
+              ['feedback', 'SUPPORT'],
+              ['settings', '⚙️ SETTINGS'],
             ] as const
           ).map(([tab, label]) => (
             <button
@@ -1880,13 +1933,46 @@ const AdminDashboard: React.FC = () => {
 
         {activeTab === 'users' && (
           <div className="admin-users-tab">
-            <div className="admin-users-report-card admin-enter">
-              <div className="admin-users-report-shimmer" aria-hidden />
-              <h2 className="admin-users-report-title">User Management Report</h2>
-              <p className="admin-users-report-sub">Technical summary of all registered accounts</p>
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                padding: '12px 16px',
+                overflowX: 'auto',
+                marginBottom: '10px',
+              }}
+            >
+              <FilterPill
+                label="All Users"
+                count={totalUsersCount}
+                active={activeFilter === 'all'}
+                color="#00E87A"
+                onClick={() => setActiveFilter('all')}
+              />
+              <FilterPill
+                label="Verified"
+                count={verifiedCount}
+                active={activeFilter === 'verified'}
+                color="#00E87A"
+                onClick={() => setActiveFilter('verified')}
+              />
+              <FilterPill
+                label="Pending"
+                count={pendingCount}
+                active={activeFilter === 'pending'}
+                color="#FF9500"
+                onClick={() => setActiveFilter('pending')}
+              />
+              <FilterPill
+                label="Pro ⚡"
+                count={proCount}
+                active={activeFilter === 'pro'}
+                color="#FFD700"
+                onClick={() => setActiveFilter('pro')}
+              />
             </div>
 
-            <div className="admin-users-controls admin-enter" style={{ animationDelay: '60ms' }}>
+            <div className="admin-users-controls admin-enter" style={{ animationDelay: '60ms', marginTop: 0 }}>
               <div className="admin-users-search-wrap">
                 <span className="material-symbols-outlined admin-users-search-ic" aria-hidden>
                   search
@@ -1899,21 +1985,6 @@ const AdminDashboard: React.FC = () => {
                   onChange={(e) => setUserSearchQuery(e.target.value)}
                   aria-label="Search users"
                 />
-              </div>
-              <div className="admin-users-filter-wrap">
-                <select
-                  className="admin-users-filter-select"
-                  value={userTabFilter}
-                  onChange={(e) => setUserTabFilter(e.target.value as 'All' | 'admin' | 'user')}
-                  aria-label="Filter by role"
-                >
-                  <option value="All">All Roles</option>
-                  <option value="user">Standard Users</option>
-                  <option value="admin">Administrators</option>
-                </select>
-                <span className="material-symbols-outlined admin-users-filter-chev" aria-hidden>
-                  expand_more
-                </span>
               </div>
             </div>
 
@@ -1934,10 +2005,6 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            <p className="admin-users-tab-tagline admin-enter" style={{ animationDelay: '120ms' }}>
-              YOUR JOURNEY · YOUR PROOF
-            </p>
-
             <div className="admin-users-list">
               {usersLoading && users.length === 0
                 ? [0, 1, 2].map((sk) => <div key={sk} className="admin-user-skeleton-card" />)
@@ -1945,22 +2012,30 @@ const AdminDashboard: React.FC = () => {
                     const av = adminInitialAvatarStyle(u.name || 'U');
                     const score = u.stats?.productivityScore ?? 0;
                     const prodColor = productivityScoreColor(score);
-                    const inactive = u.status === 'inactive';
                     const lastRel = formatRelativeTime(u.created_at);
                     const isPro = Boolean(u.is_pro);
-                    const proBusy = proUpdatingId === u.id;
+                    const isPending = !u.email_confirmed;
                     return (
                       <div
                         key={u.id}
-                        className={`admin-v2-user-card admin-enter${inactive ? ' admin-v2-user-card--inactive' : ''}`}
+                        className="admin-enter"
                         style={{ animationDelay: `${Math.min(320, 160 + idx * 45)}ms` }}
                       >
-                        <div className="admin-v2-user-r1">
-                          <div className="admin-v2-user-r1-left">
-                            <div
-                              className="admin-v2-avatar"
-                              style={{ background: av.bg, color: av.color }}
-                            >
+                        <div
+                          style={{
+                            background: isPro
+                              ? 'linear-gradient(135deg, #1A1500 0%, #0F0F0F 100%)'
+                              : '#0F0F0F',
+                            border: isPro ? '1px solid #FFD700' : isPending ? '1px solid #FF9500' : '1px solid #1A1A1A',
+                            borderRadius: '16px',
+                            padding: '16px',
+                            marginBottom: '12px',
+                            boxShadow: isPro ? '0 0 12px #FFD70022' : 'none',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div className="admin-v2-avatar" style={{ background: av.bg, color: av.color }}>
                               {(u.avatar_url || u.avatarUrl) && !brokenImages.has(u.id) ? (
                                 <img
                                   src={u.avatar_url || u.avatarUrl}
@@ -1971,80 +2046,117 @@ const AdminDashboard: React.FC = () => {
                                 <span>{u.name?.charAt(0).toUpperCase() || 'U'}</span>
                               )}
                             </div>
-                            <div className="admin-v2-ident">
-                              <div className="admin-v2-name">{u.name || '—'}</div>
-                              <div className="admin-v2-email" title={u.email || undefined}>
-                                {u.email || '—'}
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                  <span className="admin-v2-name">{u.name || '—'}</span>
+                                  {isPro && (
+                                    <span
+                                      style={{
+                                        background: '#FFD700',
+                                        color: '#000',
+                                        fontSize: '10px',
+                                        fontWeight: 800,
+                                        padding: '2px 8px',
+                                        borderRadius: '10px',
+                                      }}
+                                    >
+                                      ⚡ PRO
+                                    </span>
+                                  )}
+                                  <span className={`admin-role-pill ${u.role === 'admin' ? 'admin-role-pill--admin' : ''}`}>
+                                    {u.role === 'admin' ? 'Admin' : 'User'}
+                                  </span>
+                                </div>
+                                <div className="admin-v2-email" title={u.email || undefined}>
+                                  {u.email || '—'}
+                                </div>
                               </div>
                             </div>
                           </div>
-                          {isPro && <span className="admin-v2-pro-badge">PRO</span>}
-                        </div>
-                        <div className="admin-v2-user-r2">
-                          <div className="admin-v2-stat-col">
-                            <span className="admin-v2-stat-lbl">PRODUCTIVITY</span>
-                            <span className="admin-v2-stat-val-prod" style={{ color: prodColor }}>
-                              {score}%
-                            </span>
+                          <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+                            <div>
+                              <div className="admin-v2-stat-lbl">STATUS</div>
+                              <div style={{ color: isPending ? '#FF9500' : '#00E87A', fontWeight: 700 }}>
+                                {isPending ? 'Pending' : 'Active'}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="admin-v2-stat-lbl">LAST ACTIVE</div>
+                              <div className="admin-v2-stat-val-la">{lastRel}</div>
+                            </div>
+                            <div>
+                              <div className="admin-v2-stat-lbl">PRODUCTIVITY</div>
+                              <div className="admin-v2-stat-val-prod" style={{ color: prodColor }}>
+                                {score}%
+                              </div>
+                            </div>
                           </div>
-                          <div className="admin-v2-stat-divider" aria-hidden />
-                          <div className="admin-v2-stat-col">
-                            <span className="admin-v2-stat-lbl">LAST ACTIVE</span>
-                            <span className="admin-v2-stat-val-la">{lastRel}</span>
-                          </div>
-                          <div className="admin-v2-stat-divider" aria-hidden />
-                          <div className="admin-v2-stat-col">
-                            <span className="admin-v2-stat-lbl">STATUS</span>
+                          <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                             <button
                               type="button"
-                              className="admin-v2-status-hit"
-                              onClick={() => updateUserStatus(u.id, inactive ? 'active' : 'inactive')}
-                            >
-                              <span
-                                className="admin-v2-status-dot"
-                                style={{ background: inactive ? '#64748b' : '#00E87A' }}
-                              />
-                              <span style={{ color: inactive ? 'rgba(148,163,184,0.95)' : '#00E87A' }}>
-                                {inactive ? 'Inactive' : 'Active'}
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                        <div className="admin-v2-user-r3">
-                          <div className="admin-v2-r3-left">
-                            <button
-                              type="button"
-                              className="admin-v2-act admin-v2-act--reset"
-                              aria-label="Reset PIN"
+                              title="Reset PIN"
                               onClick={() => setResetPinModal({ show: true, userId: u.id, userName: u.name })}
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                border: '1px solid #333',
+                                background: '#111',
+                                color: '#d1d5db',
+                                cursor: 'pointer',
+                              }}
                             >
-                              <span className="material-symbols-outlined">lock_reset</span>
+                              🔑
                             </button>
                             <button
                               type="button"
-                              className="admin-v2-act admin-v2-act--del"
-                              aria-label="Delete user"
+                              title="Delete User"
                               onClick={() => deleteUser(u.id, u.name)}
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 8,
+                                border: '1px solid #333',
+                                background: '#111',
+                                color: '#f87171',
+                                cursor: 'pointer',
+                              }}
                             >
-                              <span className="material-symbols-outlined">delete</span>
+                              🗑️
                             </button>
-                          </div>
-                          <div className="admin-v2-r3-right">
-                            {isPro ? (
+                            {!u.email_confirmed && (
                               <button
                                 type="button"
-                                className="admin-v2-pro-btn admin-v2-pro-btn--remove"
-                                disabled={proBusy}
-                                onClick={() => void setUserProMembership(u.id, false, u.name || '')}
+                                onClick={() => void handleResendVerification(u)}
+                                style={{
+                                  padding: '6px 12px',
+                                  background: '#FF950022',
+                                  border: '1px solid #FF9500',
+                                  borderRadius: '8px',
+                                  color: '#FF9500',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
                               >
-                                Remove Pro
+                                📧 Resend Verification
                               </button>
-                            ) : (
+                            )}
+                            {!u.is_pro && (
                               <button
                                 type="button"
-                                className="admin-v2-pro-btn admin-v2-pro-btn--make"
-                                disabled={proBusy}
-                                onClick={() => void setUserProMembership(u.id, true, u.name || '')}
+                                onClick={() => void handleMakePro(u)}
+                                style={{
+                                  padding: '6px 12px',
+                                  background: '#FFD70022',
+                                  border: '1px solid #FFD700',
+                                  borderRadius: '8px',
+                                  color: '#FFD700',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  marginLeft: 'auto',
+                                }}
                               >
                                 ⚡ Make Pro
                               </button>
@@ -2062,11 +2174,25 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            <div ref={usersLoadMoreSentinelRef} className="admin-users-sentinel" aria-hidden />
-
             {hasMoreUsers && users.length > 0 && !usersLoading && (
-              <button type="button" className="admin-users-load-more" onClick={loadMoreUsers} disabled={usersLoadingMore}>
-                {usersLoadingMore ? 'Loading…' : 'Load more'}
+              <button
+                type="button"
+                onClick={loadMoreUsers}
+                disabled={usersLoadingMore}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: '#111',
+                  border: '1px solid #333',
+                  borderRadius: '12px',
+                  color: '#00E87A',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  marginTop: '12px',
+                }}
+              >
+                {usersLoadingMore ? 'Loading...' : 'Load More Users'}
               </button>
             )}
 
@@ -2098,42 +2224,49 @@ const AdminDashboard: React.FC = () => {
 
         {activeTab === 'feedback' && (
           <div className="admin-fb-tab">
-            <div className="admin-fb-report-card admin-enter">
-              <div className="admin-fb-report-shimmer" aria-hidden />
-              <h2 className="admin-fb-report-title">User Feedback Intelligence</h2>
-              <p className="admin-fb-report-sub">Sorting and filtering system insights</p>
+            <h2
+              style={{
+                margin: '0 0 8px',
+                fontFamily: 'Syne, sans-serif',
+                fontWeight: 800,
+                color: '#f8fafc',
+              }}
+            >
+              Support &amp; Feedback
+            </h2>
+
+            <div style={{ display: 'flex', gap: '8px', padding: '12px 0 14px' }}>
+              <FilterPill
+                label="All"
+                count={totalFeedbackCount}
+                active={feedbackActiveFilter === 'all'}
+                color="#777"
+                onClick={() => setFeedbackActiveFilter('all')}
+              />
+              <FilterPill
+                label="⭐ Feature"
+                count={feedbacks.filter((f) => (f.type || '').toLowerCase() === 'feature').length}
+                active={feedbackActiveFilter === 'feature'}
+                color="#00E87A"
+                onClick={() => setFeedbackActiveFilter('feature')}
+              />
+              <FilterPill
+                label="🎧 Support"
+                count={feedbacks.filter((f) => (f.type || '').toLowerCase() === 'support').length}
+                active={feedbackActiveFilter === 'support'}
+                color="#FF9500"
+                onClick={() => setFeedbackActiveFilter('support')}
+              />
             </div>
 
-            <div className="admin-fb-toolbar admin-enter" style={{ animationDelay: '70ms' }}>
-              <div className="admin-fb-filter-wrap">
-                <select
-                  className="admin-fb-filter-select"
-                  value={feedbackTabFilter}
-                  onChange={(e) => setFeedbackTabFilter(e.target.value as 'All' | 'Feature' | 'Bug' | 'Other')}
-                  aria-label="Filter by type"
-                >
-                  <option value="All">All Types</option>
-                  <option value="Feature">Features</option>
-                  <option value="Bug">Bugs</option>
-                  <option value="Other">Others</option>
-                </select>
-                <span className="material-symbols-outlined admin-fb-filter-chev" aria-hidden>
-                  expand_more
-                </span>
-              </div>
+            <div className="admin-fb-toolbar admin-enter" style={{ animationDelay: '70ms', marginBottom: 10 }}>
               <button
                 type="button"
                 className="admin-fb-sort-btn"
                 onClick={() => setFeedbackSortOrder((prev) => (prev === 'newest' ? 'oldest' : 'newest'))}
               >
-                <span className="material-symbols-outlined">
-                  {feedbackSortOrder === 'newest' ? 'south' : 'north'}
-                </span>
+                <span className="material-symbols-outlined">{feedbackSortOrder === 'newest' ? 'south' : 'north'}</span>
                 {feedbackSortOrder === 'newest' ? 'Newest' : 'Oldest'}
-              </button>
-              <button type="button" className="admin-fb-clear-btn" onClick={handleClearAllFeedback}>
-                <span className="material-symbols-outlined">delete_sweep</span>
-                Clear All
               </button>
             </div>
 
@@ -2141,77 +2274,203 @@ const AdminDashboard: React.FC = () => {
               {feedbacksLoading && feedbacks.length === 0
                 ? [0, 1, 2, 3, 4].map((sk) => <div key={sk} className="admin-fb-skeleton-card" />)
                 : feedbacks.map((f, idx) => {
-                    const name = f.user_name || 'Anonymous';
-                    const av = adminInitialAvatarStyle(name);
-                    const rawType = f.type || 'Feature';
-                    const typeLabel = rawType === 'Other' ? 'GENERAL' : rawType === 'Bug' ? 'BUG' : 'FEATURE';
-                    const typeClass =
-                      rawType === 'Bug' ? 'admin-fb-type--bug' : rawType === 'Other' ? 'admin-fb-type--general' : 'admin-fb-type--feature';
-                    const dateStr = f.created_at
-                      ? new Date(f.created_at).toLocaleString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true,
-                        })
-                      : '—';
+                    const name = f.user_name || 'User';
+                    const rawType = String(f.type || '').toLowerCase();
+                    const isSupport = rawType === 'support';
+                    const dateStr = f.created_at ? new Date(f.created_at).toLocaleString('en-IN') : '—';
                     const busy = deletingFeedbackId === f.id;
                     return (
                       <div
                         key={f.id}
-                        className="admin-fb-card admin-enter"
+                        className="admin-enter"
                         style={{ animationDelay: `${Math.min(380, 120 + idx * 48)}ms` }}
                       >
-                        <div className="admin-fb-card-row1">
-                          <div className="admin-fb-user">
+                        <div
+                          style={{
+                            background: isSupport ? '#1A1000' : '#0F1A14',
+                            border: isSupport ? '1px solid #FF950044' : '1px solid #00E87A33',
+                            borderRadius: '16px',
+                            padding: '16px',
+                            marginBottom: '12px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
                             <div
-                              className="admin-fb-avatar"
-                              style={{ background: av.bg, color: av.color, border: `1px solid ${ADM.goldDim}` }}
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '50%',
+                                background: '#1A1A2E',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#00E87A',
+                                fontWeight: 700,
+                                fontSize: '14px',
+                              }}
                             >
-                              {name.charAt(0).toUpperCase()}
+                              {name?.[0]?.toUpperCase() || 'U'}
                             </div>
-                            <span className="admin-fb-username">{name}</span>
-                          </div>
-                          <span className={`admin-fb-type-pill ${typeClass}`}>{typeLabel}</span>
-                        </div>
-                        <p className="admin-fb-message">{f.message || '—'}</p>
-                        <div className="admin-fb-card-row3">
-                          <span className="admin-fb-date">{dateStr}</span>
-                          <button
-                            type="button"
-                            className="admin-fb-del"
-                            disabled={busy}
-                            onClick={() => void deleteFeedbackById(f.id)}
-                          >
-                            <span className="material-symbols-outlined" aria-hidden>
-                              delete
+                            <div style={{ flex: 1 }}>
+                              <div style={{ color: '#fff', fontWeight: 600, fontSize: '14px' }}>{name}</div>
+                              <div style={{ color: '#666', fontSize: '11px' }}>{f.user_email || '—'}</div>
+                            </div>
+                            <span
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: '10px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                background: isSupport ? '#FF950022' : '#00E87A22',
+                                color: isSupport ? '#FF9500' : '#00E87A',
+                                border: `1px solid ${isSupport ? '#FF9500' : '#00E87A'}`,
+                              }}
+                            >
+                              {isSupport ? '🎧 Support' : '⭐ Feature'}
                             </span>
-                            DELETE
-                          </button>
+                          </div>
+
+                          {isSupport && f.ticket_id && (
+                            <div
+                              style={{
+                                background: '#FF950011',
+                                border: '1px solid #FF950033',
+                                borderRadius: '8px',
+                                padding: '6px 12px',
+                                marginBottom: '10px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                              }}
+                            >
+                              <span style={{ color: '#FF9500', fontSize: '11px', fontWeight: 600 }}>🎫 Ticket:</span>
+                              <span style={{ color: '#fff', fontSize: '12px', fontWeight: 700, letterSpacing: '1px' }}>
+                                {f.ticket_id}
+                              </span>
+                              <span
+                                style={{
+                                  marginLeft: 'auto',
+                                  padding: '2px 8px',
+                                  borderRadius: '8px',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  background:
+                                    f.status === 'resolved'
+                                      ? '#00E87A22'
+                                      : f.status === 'in_progress'
+                                        ? '#007AFF22'
+                                        : '#FF950022',
+                                  color:
+                                    f.status === 'resolved'
+                                      ? '#00E87A'
+                                      : f.status === 'in_progress'
+                                        ? '#007AFF'
+                                        : '#FF9500',
+                                }}
+                              >
+                                {f.status === 'resolved'
+                                  ? '✅ Resolved'
+                                  : f.status === 'in_progress'
+                                    ? '🔄 In Progress'
+                                    : '⏳ Pending'}
+                              </span>
+                            </div>
+                          )}
+
+                          {isSupport && f.subcategory && (
+                            <div style={{ color: '#FF9500', fontSize: '11px', fontWeight: 600, marginBottom: '6px' }}>
+                              {supportCategories.find((c) => c.value === f.subcategory)?.label || f.subcategory}
+                            </div>
+                          )}
+
+                          <p style={{ color: '#CCC', fontSize: '14px', lineHeight: 1.5, margin: '0 0 10px 0' }}>
+                            {f.message || '—'}
+                          </p>
+                          <div style={{ color: '#555', fontSize: '11px', marginBottom: '12px' }}>{dateStr}</div>
+
+                          {f.admin_note && (
+                            <div
+                              style={{
+                                background: '#00E87A11',
+                                border: '1px solid #00E87A33',
+                                borderRadius: '8px',
+                                padding: '10px',
+                                marginBottom: '12px',
+                              }}
+                            >
+                              <div style={{ color: '#00E87A', fontSize: '11px', fontWeight: 700, marginBottom: '4px' }}>
+                                🛡️ Admin Response:
+                              </div>
+                              <div style={{ color: '#CCC', fontSize: '13px' }}>{f.admin_note}</div>
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            {isSupport && (
+                              <select
+                                value={f.status || 'pending'}
+                                onChange={(e) => void handleUpdateStatus(f.id, e.target.value)}
+                                style={{
+                                  padding: '6px 10px',
+                                  background: '#1A1A1A',
+                                  border: '1px solid #333',
+                                  borderRadius: '8px',
+                                  color: '#fff',
+                                  fontSize: '12px',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <option value="pending">⏳ Pending</option>
+                                <option value="in_progress">🔄 In Progress</option>
+                                <option value="resolved">✅ Resolved</option>
+                                <option value="closed">🔒 Closed</option>
+                              </select>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRespond(f)}
+                              style={{
+                                padding: '6px 12px',
+                                background: '#007AFF22',
+                                border: '1px solid #007AFF',
+                                borderRadius: '8px',
+                                color: '#007AFF',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              💬 Respond
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void handleDeleteFeedback(f.id)}
+                              style={{
+                                padding: '6px 12px',
+                                background: '#FF3B3022',
+                                border: '1px solid #FF3B30',
+                                borderRadius: '8px',
+                                color: '#FF3B30',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                marginLeft: 'auto',
+                              }}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
                   })}
             </div>
 
-            {feedbacksLoadingMore && (
-              <div className="admin-fb-more-skel">
-                <div className="admin-fb-skeleton-card admin-fb-skeleton-card--short" />
-              </div>
-            )}
-
-            {hasMoreFeedbacks && feedbacks.length > 0 && !feedbacksLoading && (
-              <button type="button" className="admin-fb-load-more" onClick={loadMoreFeedback} disabled={feedbacksLoadingMore}>
-                {feedbacksLoadingMore ? 'Loading…' : 'Load more'}
-              </button>
-            )}
-
             <p className="admin-fb-showing">
               {feedbacksLoading && feedbacks.length === 0
                 ? 'Loading feedback…'
-                : `Showing ${feedbacks.length} of ${totalFeedbackCount} feedback items`}
+                : `${totalFeedbackCount} items`}
             </p>
 
             {!feedbacksLoading && feedbacks.length === 0 && (
@@ -2222,11 +2481,464 @@ const AdminDashboard: React.FC = () => {
                 <p className="admin-fb-empty-txt">No feedback found.</p>
               </div>
             )}
+
+            {respondModal.show && (
+              <div
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: '#000000CC',
+                  zIndex: 1000,
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    background: '#111',
+                    borderRadius: '20px 20px 0 0',
+                    padding: '24px 20px',
+                    border: '1px solid #222',
+                  }}
+                >
+                  <div style={{ color: '#fff', fontWeight: 700, fontSize: '16px', marginBottom: '6px' }}>💬 Admin Response</div>
+                  {respondModal.item?.ticket_id && (
+                    <div style={{ color: '#FF9500', fontSize: '12px', marginBottom: '16px' }}>
+                      🎫 {respondModal.item.ticket_id}
+                    </div>
+                  )}
+                  <textarea
+                    value={respondModal.note}
+                    onChange={(e) => setRespondModal((prev) => ({ ...prev, note: e.target.value }))}
+                    placeholder="Type your response..."
+                    rows={4}
+                    style={{
+                      width: '100%',
+                      background: '#1A1A1A',
+                      border: '1px solid #333',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      resize: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setRespondModal({ show: false, item: null, note: '' })}
+                      style={{
+                        flex: 1,
+                        padding: '14px',
+                        background: '#1A1A1A',
+                        border: '1px solid #333',
+                        borderRadius: '12px',
+                        color: '#888',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveResponse()}
+                      style={{
+                        flex: 2,
+                        padding: '14px',
+                        background: '#00E87A',
+                        border: 'none',
+                        borderRadius: '12px',
+                        color: '#000',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Send Response ✅
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="admin-settings-tab">
+            <div className="admin-card admin-enter" style={{ marginBottom: 16 }}>
+              <p className="admin-mono-label" style={{ marginBottom: 8 }}>
+                APP SETTINGS
+              </p>
+              <h2 style={{ margin: '0 0 6px', fontFamily: 'Syne, sans-serif', fontWeight: 800, color: '#f8fafc' }}>
+                Control pricing &amp; announcements
+              </h2>
+              <p style={{ margin: 0, fontSize: 13, color: 'rgba(148,163,184,0.95)' }}>
+                Updates apply for all users after save (no app update required).
+              </p>
+            </div>
+
+            <div className="admin-settings-section-label-wrap" style={{ marginBottom: 10 }}>
+              <span className="admin-settings-section-line" />
+              <p className="admin-settings-section-label">💰 PRO MEMBERSHIP PRICING</p>
+            </div>
+            <div
+              style={{
+                background: 'rgba(0,232,122,0.06)',
+                border: '1px solid rgba(0,232,122,0.2)',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 14,
+              }}
+            >
+              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, letterSpacing: '0.12em', margin: '0 0 8px', fontWeight: 700 }}>
+                CURRENT LIVE PRICE
+              </p>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 28, color: '#00E87A' }}>
+                  ₹{appSettings.pro_price}
+                </span>
+                <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', textDecoration: 'line-through' }}>
+                  ₹{appSettings.pro_original_price}
+                </span>
+              </div>
+              {appSettings.updated_at && (
+                <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, margin: '10px 0 0' }}>
+                  Last updated: {new Date(appSettings.updated_at).toLocaleString('en-IN')}
+                  {appSettings.updated_by ? ` · ${appSettings.updated_by}` : ''}
+                </p>
+              )}
+            </div>
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 14,
+              }}
+            >
+              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, letterSpacing: '0.12em', margin: '0 0 14px', fontWeight: 700 }}>
+                UPDATE PRICE
+              </p>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.65)', fontSize: 12, marginBottom: 6 }}>
+                New Pro Price (₹)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={9999}
+                value={newPrice}
+                onChange={(e) => setNewPrice(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  color: '#fff',
+                  fontSize: 16,
+                  marginBottom: 12,
+                  boxSizing: 'border-box',
+                }}
+              />
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.65)', fontSize: 12, marginBottom: 6 }}>
+                Original (strikethrough) ₹
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={99999}
+                value={newOriginalPrice}
+                onChange={(e) => setNewOriginalPrice(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  color: '#fff',
+                  fontSize: 16,
+                  marginBottom: 12,
+                  boxSizing: 'border-box',
+                }}
+              />
+              <div
+                style={{
+                  background: 'rgba(245,158,11,0.06)',
+                  border: '1px solid rgba(245,158,11,0.2)',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  marginBottom: 14,
+                  fontSize: 11,
+                  color: 'rgba(245,158,11,0.85)',
+                  lineHeight: 1.5,
+                }}
+              >
+                ⚠️ This changes Razorpay amount for new Pro purchases. Deploy Edge Functions that read{' '}
+                <code style={{ color: '#fde68a' }}>app_settings</code>.
+              </div>
+              <button
+                type="button"
+                disabled={isSavingPrice}
+                onClick={() => void handleUpdatePrice()}
+                style={{
+                  width: '100%',
+                  height: 48,
+                  borderRadius: 14,
+                  border: 'none',
+                  fontWeight: 800,
+                  cursor: isSavingPrice ? 'not-allowed' : 'pointer',
+                  background: isSavingPrice ? 'rgba(0,232,122,0.35)' : 'linear-gradient(135deg, #00E87A, #00C563)',
+                  color: '#000',
+                }}
+              >
+                {isSavingPrice ? 'Saving…' : 'Update Price'}
+              </button>
+            </div>
+
+            <div className="admin-settings-section-label-wrap" style={{ marginTop: 8, marginBottom: 10 }}>
+              <span className="admin-settings-section-line" />
+              <p className="admin-settings-section-label">📢 ANNOUNCEMENTS</p>
+            </div>
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 14,
+              }}
+            >
+              <div style={{ color: '#00E87A', fontWeight: 700, fontSize: 16, marginBottom: 4 }}>📢 Post Announcement</div>
+              <div style={{ color: '#666', fontSize: 12, marginBottom: 16 }}>Broadcast to all StayHardy users</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                {(
+                  [
+                    ['update', '🔄 Update'],
+                    ['feature', '✨ New Feature'],
+                    ['maintenance', '🔧 Maintenance'],
+                    ['urgent', '🚨 Urgent'],
+                    ['general', '📢 General'],
+                  ] as const
+                ).map(([k, lab]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setAnnoCategory(k)}
+                    style={{
+                      height: 32,
+                      padding: '0 14px',
+                      borderRadius: 20,
+                      border:
+                        annoCategory === k
+                          ? `1px solid ${k === 'feature' ? 'rgba(0,232,122,0.45)' : k === 'update' ? 'rgba(99,102,241,0.45)' : k === 'maintenance' ? 'rgba(245,158,11,0.45)' : k === 'urgent' ? 'rgba(239,68,68,0.45)' : 'rgba(255,255,255,0.3)'}`
+                          : '1px solid rgba(255,255,255,0.08)',
+                      background:
+                        annoCategory === k
+                          ? k === 'feature'
+                            ? 'rgba(0,232,122,0.15)'
+                            : k === 'update'
+                              ? 'rgba(99,102,241,0.15)'
+                              : k === 'maintenance'
+                                ? 'rgba(245,158,11,0.15)'
+                                : k === 'urgent'
+                                  ? 'rgba(239,68,68,0.15)'
+                                : 'rgba(255,255,255,0.1)'
+                          : 'rgba(255,255,255,0.04)',
+                      color:
+                        annoCategory === k
+                          ? k === 'feature'
+                            ? '#00E87A'
+                            : k === 'update'
+                              ? '#818CF8'
+                              : k === 'maintenance'
+                                ? '#F59E0B'
+                                : k === 'urgent'
+                                  ? '#EF4444'
+                                : '#fff'
+                          : 'rgba(255,255,255,0.4)',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {lab}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                placeholder="Announcement title…"
+                value={annoTitle}
+                onChange={(e) => setAnnoTitle(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  color: '#fff',
+                  fontSize: 14,
+                  marginBottom: 10,
+                  boxSizing: 'border-box',
+                }}
+              />
+              <textarea
+                placeholder="Write your announcement…"
+                value={annoMessage}
+                onChange={(e) => setAnnoMessage(e.target.value)}
+                rows={4}
+                style={{
+                  width: '100%',
+                  resize: 'none',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  color: '#fff',
+                  fontSize: 14,
+                  marginBottom: 8,
+                  boxSizing: 'border-box',
+                }}
+              />
+              <p style={{ color: 'rgba(148,163,184,0.9)', fontSize: 11, margin: '0 0 12px' }}>
+                {annoMessage.length}/500
+              </p>
+              <button
+                type="button"
+                disabled={isPosting}
+                onClick={() => void handlePostAnnouncement()}
+                style={{
+                  width: '100%',
+                  height: 48,
+                  borderRadius: 14,
+                  border: 'none',
+                  fontWeight: 800,
+                  cursor: isPosting ? 'not-allowed' : 'pointer',
+                  background: isPosting ? 'rgba(0,232,122,0.35)' : 'linear-gradient(135deg, #00E87A, #00C563)',
+                  color: '#000',
+                }}
+              >
+                {isPosting ? 'Posting...' : '📢 Post to All Users'}
+              </button>
+            </div>
+
+            <p style={{ fontSize: 10, letterSpacing: '0.14em', color: 'rgba(148,163,184,0.85)', margin: '0 0 8px' }}>
+              RECENT POSTS ({announcements.length})
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {announcements.map((a) => (
+                <div
+                  key={a.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '12px 14px',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    borderRadius: 12,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background:
+                            a.category === 'feature'
+                              ? '#00E87A'
+                              : a.category === 'update'
+                                ? '#818CF8'
+                                : a.category === 'maintenance'
+                                  ? '#F59E0B'
+                                  : a.category === 'urgent'
+                                    ? '#EF4444'
+                                  : '#94a3b8',
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span style={{ fontWeight: 800, color: '#f8fafc', fontSize: 13 }}>{a.title}</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 10, color: 'rgba(148,163,184,0.9)' }}>
+                      {new Date(a.created_at).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      type="button"
+                        title={a.is_active ? 'Hide from users' : 'Show to users'}
+                      onClick={() => void toggleAnnouncementActive(a.id)}
+                      style={{
+                          padding: '4px 10px',
+                          background: a.is_active ? '#00E87A22' : '#FF3B3022',
+                          border: `1px solid ${a.is_active ? '#00E87A' : '#FF3B30'}`,
+                        borderRadius: 8,
+                          color: a.is_active ? '#00E87A' : '#FF3B30',
+                          fontSize: 11,
+                        cursor: 'pointer',
+                          marginRight: '8px',
+                      }}
+                    >
+                        {a.is_active ? '✅ Active' : '⏸ Hidden'}
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete"
+                      onClick={() => void deleteAnnouncement(a.id)}
+                      style={{
+                        background: 'rgba(239,68,68,0.12)',
+                        border: '1px solid rgba(239,68,68,0.25)',
+                        borderRadius: 8,
+                        padding: '4px 8px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {announcements.length === 0 && (
+                <p style={{ color: 'rgba(148,163,184,0.8)', fontSize: 13, textAlign: 'center', padding: '1rem 0' }}>
+                  No announcements yet.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </main>
 
       <style>{`
+        .admin-settings-tab {
+          max-width: 520px;
+          margin: 0 auto;
+          padding: 0 0 2rem;
+        }
+        .admin-settings-section-label-wrap {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .admin-settings-section-line {
+          flex: 1;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.25), transparent);
+        }
+        .admin-settings-section-label {
+          margin: 0;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.18em;
+          color: rgba(148, 163, 184, 0.95);
+          white-space: nowrap;
+        }
         .admin-hub-root {
           --admin-accent: ${ADM.accent};
           --admin-gold: ${ADM.gold};

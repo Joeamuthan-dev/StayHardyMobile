@@ -170,6 +170,7 @@ export async function mergeAppSettings(partial: Record<string, unknown>): Promis
 
 export async function invalidateUserStatsCache(): Promise<void> {
   await clearCache(CACHE_KEYS.user_stats);
+  await clearCache(CACHE_KEYS.home_stats);
 }
 
 /** Single entry point: re-exports for "never use Preferences directly in UI" rule */

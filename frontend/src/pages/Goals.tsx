@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
 import { syncWidgetData } from '../lib/syncWidgetData';
@@ -8,9 +8,11 @@ import { persistGoalsList, loadGoalsListStale } from '../lib/listCaches';
 import { isOnline } from '../lib/networkStatus';
 import { enqueueSync, AFTER_SYNC_FLUSH_EVENT } from '../lib/syncQueue';
 import BottomNav from '../components/BottomNav';
-import {  useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { ProductivityService } from '../lib/ProductivityService';
+import { triggerCelebration } from '../components/CelebrationOverlay';
 
-import { useLanguage } from '../context/LanguageContext';
+
 
 interface Goal {
   id: string;
@@ -25,77 +27,11 @@ interface Goal {
   updatedAt?: string;
 }
 
-type UrgencyBucket = 'critical' | 'urgent' | 'soon' | 'comfort';
 
-function getUrgencyBucket(daysLeft: number | null, isOverdue: boolean): UrgencyBucket {
-  if (isOverdue || daysLeft === null) return 'critical';
-  if (daysLeft <= 3) return 'urgent';
-  if (daysLeft <= 7) return 'soon';
-  return 'comfort';
-}
 
-/** Card gradient + left accent by time pressure (not index). */
-function getCardUrgencyStyle(bucket: UrgencyBucket): {
-  gradient: string;
-  leftGlow: string;
-  shadow: string;
-} {
-  switch (bucket) {
-    case 'critical':
-      return {
-        gradient: 'linear-gradient(145deg, rgba(127, 29, 29, 0.35), rgba(15, 23, 42, 0.92))',
-        leftGlow: '#f87171',
-        shadow: '0 12px 40px rgba(239, 68, 68, 0.18)',
-      };
-    case 'urgent':
-      return {
-        gradient: 'linear-gradient(145deg, rgba(185, 28, 28, 0.28), rgba(15, 23, 42, 0.9))',
-        leftGlow: '#ef4444',
-        shadow: '0 12px 36px rgba(239, 68, 68, 0.15)',
-      };
-    case 'soon':
-      return {
-        gradient: 'linear-gradient(145deg, rgba(30, 58, 138, 0.35), rgba(15, 23, 42, 0.92))',
-        leftGlow: '#fbbf24',
-        shadow: '0 12px 36px rgba(59, 130, 246, 0.14)',
-      };
-    default:
-      return {
-        gradient: 'linear-gradient(145deg, rgba(6, 78, 59, 0.32), rgba(15, 23, 42, 0.92))',
-        leftGlow: '#34d399',
-        shadow: '0 12px 36px rgba(16, 185, 129, 0.12)',
-      };
-  }
-}
 
-/** DAYS LEFT badge: 0–3 red, 4–7 amber, 8+ green (overdue = red). */
-function getDaysBadgeColors(daysLeft: number | null, isOverdue: boolean) {
-  if (isOverdue || daysLeft === null || daysLeft <= 3) {
-    return {
-      bg: 'rgba(239, 68, 68, 0.22)',
-      border: 'rgba(248, 113, 113, 0.55)',
-      text: '#fecaca',
-      glow: 'rgba(239, 68, 68, 0.55)',
-      pulse: true,
-    };
-  }
-  if (daysLeft <= 7) {
-    return {
-      bg: 'rgba(245, 158, 11, 0.2)',
-      border: 'rgba(251, 191, 36, 0.5)',
-      text: '#fde68a',
-      glow: 'rgba(245, 158, 11, 0.45)',
-      pulse: false,
-    };
-  }
-  return {
-    bg: 'rgba(16, 185, 129, 0.2)',
-    border: 'rgba(52, 211, 153, 0.45)',
-    text: '#a7f3d0',
-    glow: 'rgba(16, 185, 129, 0.4)',
-    pulse: false,
-  };
-}
+
+
 
 const motivationalQuotes = [
   "Small progress each day leads to big results.",
@@ -109,117 +45,479 @@ const motivationalQuotes = [
   "The only way to do great work is to love what you do."
 ];
 
-function GoalProgressRing({
-  percent,
-  size = 92,
-  goalId,
-  children,
+
+
+const GoalCard = ({
+  goal,
+  onComplete,
+  onDelete
 }: {
-  percent: number;
-  size?: number;
-  goalId: string;
-  children: React.ReactNode;
-}) {
-  const gid = `g${goalId.replace(/[^a-zA-Z0-9]/g, '')}`;
-  const r = 36;
-  const c = 2 * Math.PI * r;
-  const clamped = Math.min(100, Math.max(0, percent));
-  const offset = c - (clamped / 100) * c;
+  goal: Goal;
+  onComplete: (id: string) => void;
+  onDelete: (id: string) => void;
+}) => {
+
+  // Calculate days left:
+  const daysLeft = goal.targetDate
+    ? Math.ceil(
+        (new Date(goal.targetDate).getTime() -
+         new Date().getTime()) /
+        (1000 * 60 * 60 * 24))
+    : null
+
+  const isOverdue = daysLeft !== null
+    && daysLeft < 0
+
+  const isUrgent = daysLeft !== null
+    && daysLeft <= 3
+    && daysLeft >= 0
+
+  // Progress (days elapsed vs total):
+  const progress = goal.targetDate
+    ? Math.min(100, Math.max(0,
+        Math.round(
+          (1 - (daysLeft || 0) /
+          Math.max(1,
+            Math.ceil(
+              (new Date(goal.targetDate).getTime()
+               - new Date(goal.createdAt).getTime())
+              / (1000*60*60*24)
+            )
+          )) * 100
+        )
+      ))
+    : 0
+
   return (
-    <div className="goal-progress-ring-wrap" style={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>
-      <svg width={size} height={size} viewBox="0 0 100 100" className="goal-progress-ring-svg" aria-hidden>
-        <defs>
-          <linearGradient id={`goalRingGrad-${gid}`} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#6ee7b7" />
-            <stop offset="100%" stopColor="#10b981" />
-          </linearGradient>
-        </defs>
-        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="7" />
-        <circle
-          cx="50"
-          cy="50"
-          r={r}
-          fill="none"
-          stroke={`url(#goalRingGrad-${gid})`}
-          strokeWidth="7"
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-          transform="rotate(-90 50 50)"
-          style={{ transition: 'stroke-dashoffset 1.1s cubic-bezier(0.4, 0, 0.2, 1)' }}
-          className="goal-progress-ring-stroke"
-        />
-      </svg>
-      <div
-        className="goal-progress-ring-inner"
-        style={{
-          position: 'absolute',
-          inset: 0,
+    <div style={{
+      margin: '0 0px 12px 0px',
+      borderRadius: '24px',
+      overflow: 'hidden',
+      position: 'relative',
+      boxShadow:
+        isOverdue
+          ? '0 4px 24px rgba(239,68,68,0.2)'
+          : '0 4px 24px rgba(147,51,234,0.2)'
+    }}>
+
+      {/* Mesh gradient background */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        background: isOverdue
+          ? 'linear-gradient(135deg,' +
+            '#4E0000 0%,' +
+            '#2E0000 100%)'
+          : 'linear-gradient(135deg,' +
+            '#2E004E 0%,' +
+            '#1A002E 100%)',
+        backgroundSize: '200% 200%',
+        animation:
+          'meshMove 6s ease infinite'
+      }}/>
+
+      {/* Mesh overlay */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        background:
+          'radial-gradient(' +
+          'circle at 20% 20%,' +
+          (isOverdue
+            ? 'rgba(239,68,68,0.15)'
+            : 'rgba(147,51,234,0.2)') +
+          ' 0%,transparent 60%),' +
+          'radial-gradient(' +
+          'circle at 80% 80%,' +
+          (isOverdue
+            ? 'rgba(185,28,28,0.1)'
+            : 'rgba(109,40,217,0.15)') +
+          ' 0%,transparent 60%)',
+        pointerEvents: 'none'
+      }}/>
+
+      {/* Border */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius: '24px',
+        border: '1px solid ' +
+          (isOverdue
+            ? 'rgba(239,68,68,0.3)'
+            : 'rgba(147,51,234,0.4)'),
+        pointerEvents: 'none'
+      }}/>
+
+      {/* Card content */}
+      <div style={{
+        position: 'relative',
+        padding: '18px 18px 16px 18px',
+        zIndex: 1
+      }}>
+
+        {/* TOP ROW — title + icon + delete */}
+        <div style={{
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          pointerEvents: 'none',
-        }}
-      >
-        {children}
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: '16px',
+          gap: '12px'
+        }}>
+
+          <div style={{ flex: 1 }}>
+            {/* Status badge */}
+            {isOverdue && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                background:
+                  'rgba(239,68,68,0.2)',
+                border: '1px solid ' +
+                  'rgba(239,68,68,0.4)',
+                borderRadius: '8px',
+                padding: '2px 8px',
+                marginBottom: '6px'
+              }}>
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: '800',
+                  color: '#EF4444',
+                  letterSpacing: '0.1em'
+                }}>
+                  🚨 OVERDUE
+                </span>
+              </div>
+            )}
+
+            {isUrgent && !isOverdue && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                background:
+                  'rgba(249,115,22,0.2)',
+                border: '1px solid ' +
+                  'rgba(249,115,22,0.4)',
+                borderRadius: '8px',
+                padding: '2px 8px',
+                marginBottom: '6px'
+              }}>
+                <span style={{
+                  fontSize: '9px',
+                  fontWeight: '800',
+                  color: '#F97316',
+                  letterSpacing: '0.1em'
+                }}>
+                  ⚡ URGENT
+                </span>
+              </div>
+            )}
+
+            {/* Goal title */}
+            <p style={{
+              fontSize: '18px',
+              fontWeight: '900',
+              color: '#FFFFFF',
+              margin: 0,
+              letterSpacing: '-0.3px',
+              lineHeight: 1.2,
+              paddingRight: '8px'
+            }}>
+              {goal.name}
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Delete button */}
+            <div 
+              onClick={(e) => { e.stopPropagation(); onDelete(goal.id); }}
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </div>
+
+            {/* 3D Target icon */}
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '14px',
+              background:
+                'rgba(147,51,234,0.2)',
+              border: '1px solid ' +
+                'rgba(147,51,234,0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              animation:
+                'targetGlow 3s ease-in-out infinite'
+            }}>
+              <span style={{
+                fontSize: '24px'
+              }}>
+                🎯
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* PROGRESS SECTION */}
+        <div style={{
+          marginBottom: '16px'
+        }}>
+
+          {/* Progress label row */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '8px'
+          }}>
+            <span style={{
+              fontSize: '10px',
+              fontWeight: '700',
+              color: 'rgba(255,255,255,0.4)',
+              letterSpacing: '0.1em'
+            }}>
+              MISSION PROGRESS
+            </span>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: '800',
+              color: isOverdue
+                ? '#EF4444'
+                : '#A855F7'
+            }}>
+              {progress}%
+            </span>
+          </div>
+
+          {/* Thick glowing progress bar */}
+          <div style={{
+            height: '8px',
+            background:
+              'rgba(255,255,255,0.06)',
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              height: '100%',
+              width: progress + '%',
+              background: isOverdue
+                ? 'linear-gradient(' +
+                  '90deg,' +
+                  '#EF4444,#DC2626)'
+                : 'linear-gradient(' +
+                  '90deg,' +
+                  '#A855F7,#7C3AED)',
+              borderRadius: '8px',
+              animation:
+                'progressGlow 2s ' +
+                'ease-in-out infinite',
+              transition:
+                'width 1s ease'
+            }}/>
+          </div>
+        </div>
+
+        {/* BOTTOM ROW —
+            date chip + mark done */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+
+          {/* Glassmorphic date chip */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            background:
+              'rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid ' +
+              'rgba(255,255,255,0.12)',
+            borderRadius: '12px',
+            padding: '7px 12px'
+          }}>
+            <svg width="12" height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="rgba(255,255,255,0.5)"
+              strokeWidth="2"
+              strokeLinecap="round">
+              <rect x="3" y="4"
+                width="18" height="18"
+                rx="2"/>
+              <line x1="16" y1="2"
+                x2="16" y2="6"/>
+              <line x1="8" y1="2"
+                x2="8" y2="6"/>
+              <line x1="3" y1="10"
+                x2="21" y2="10"/>
+            </svg>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: '700',
+              color: isOverdue
+                ? '#EF4444'
+                : isUrgent
+                  ? '#F97316'
+                  : 'rgba(255,255,255,0.7)'
+            }}>
+              {daysLeft === null
+                ? 'No deadline'
+                : isOverdue
+                  ? `${Math.abs(daysLeft)}d overdue`
+                  : daysLeft === 0
+                    ? 'Due today!'
+                    : `${daysLeft}d left`}
+            </span>
+          </div>
+
+          {/* Mark Done button */}
+          <div
+            onClick={() =>
+              onComplete(goal.id)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background:
+                'linear-gradient(' +
+                '90deg,' +
+                '#00E87A 0%,' +
+                '#00FF88 50%,' +
+                '#00E87A 100%)',
+              backgroundSize: '200% auto',
+              animation:
+                'markDoneShimmer ' +
+                '2s linear infinite',
+              borderRadius: '12px',
+              padding: '8px 16px',
+              cursor: 'pointer',
+              boxShadow:
+                '0 0 16px ' +
+                'rgba(0,232,122,0.4)'
+            }}>
+            <svg width="14" height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#000"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round">
+              <polyline points=
+                "20 6 9 17 4 12"/>
+            </svg>
+            <span style={{
+              fontSize: '12px',
+              fontWeight: '900',
+              color: '#000000',
+              letterSpacing: '0.04em'
+            }}>
+              Mark Done
+            </span>
+          </div>
+        </div>
+
+        {/* Description if exists */}
+        {goal.description && (
+          <p style={{
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.35)',
+            margin: '12px 0 0 0',
+            lineHeight: 1.5,
+            borderTop: '1px solid ' +
+              'rgba(255,255,255,0.06)',
+            paddingTop: '12px'
+          }}>
+            {goal.description}
+          </p>
+        )}
       </div>
     </div>
-  );
+  )
 }
+
+
+const triggerGlobalRefresh = () => {
+  window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
+  console.log('Global refresh triggered');
+};
 
 const Goals: React.FC = () => {
   const { user } = useAuth();
-  const { t, language } = useLanguage();
   // const navigate = useNavigate();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [targetDate, setTargetDate] = useState('');
-  const [isSidebarHidden, setIsSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
-  const toggleSidebar = () => {
-    const newState = !isSidebarHidden;
-    setIsSidebarHidden(newState);
-    localStorage.setItem('sidebarHidden', newState.toString());
-  };
+
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [completedGoalsCount, setCompletedGoalsCount] = useState(0);
+  const [focusedField, setFocusedField] = useState('');
+
+  const [toast, setToast] = useState<string | null>(null);
+  const justCreatedGoal = useRef(false);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const [showModal, setShowModal] = useState(false);
-  const [confettiActive, setConfettiActive] = useState(false);
+
+  useEffect(() => {
+    const handleOpenCreateGoal = () => setShowModal(true);
+    window.addEventListener('open-create-goal', handleOpenCreateGoal);
+    return () => window.removeEventListener('open-create-goal', handleOpenCreateGoal);
+  }, []);
 
   const fetchGoals = useCallback(
     async (options?: { force?: boolean }) => {
       if (!user?.id) return;
+      if (justCreatedGoal.current) return;
+
       const stale = await loadGoalsListStale<Goal>(user.id);
       if (stale !== null) {
-        const sortedGoals = stale.sort((a, b) => {
-          if (a.status === b.status) return 0;
-          return a.status === 'pending' ? -1 : 1;
-        });
-        setGoals(sortedGoals);
+        setGoals((stale as Goal[]).filter(g => g.status === 'pending'));
+        setCompletedGoalsCount((stale as Goal[]).filter(g => g.status === 'completed').length);
       }
 
-      const expired =
-        options?.force ||
-        (await isCacheExpired(CACHE_KEYS.goals_list, CACHE_EXPIRY_MINUTES.goals_list));
+      const expired = options?.force || (await isCacheExpired(CACHE_KEYS.goals_list, CACHE_EXPIRY_MINUTES.goals_list));
       if (!expired) return;
 
       const { data, error } = await supabase
         .from('goals')
         .select('id, userId, name, description, targetDate, status, quote, image_url, createdAt, updatedAt')
         .eq('userId', user.id)
-        .eq('status', 'pending')
         .order('createdAt', { ascending: false });
 
       if (error) console.error('Error fetching goals:', error);
       else if (data) {
-        const sortedGoals = (data as Goal[]).sort((a, b) => {
-          if (a.status === b.status) return 0;
-          return a.status === 'pending' ? -1 : 1;
-        });
-        setGoals(sortedGoals);
-        void persistGoalsList(user.id, sortedGoals);
+        const active = (data as Goal[]).filter(g => (g.status as string) !== 'completed' && (g.status as string) !== 'done' && (g.status as string) !== 'achieved');
+        const completed = (data as Goal[]).filter(g => (g.status as string) === 'completed' || (g.status as string) === 'done' || (g.status as string) === 'achieved');
+        
+        setGoals(active);
+        setCompletedGoalsCount(completed.length);
+        void persistGoalsList(user.id, data as Goal[]);
       }
     },
     [user?.id],
@@ -286,34 +584,61 @@ const Goals: React.FC = () => {
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id || !name) return;
+    
+    if (targetDate) {
+      const selected = new Date(targetDate);
+      const now = new Date();
+      now.setHours(0,0,0,0);
+      if (selected < now) {
+        showToast('Please select a future date');
+        return;
+      }
+    }
 
     setLoading(true);
-    setError('');
+
 
     const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
     const tempId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
-    try {
-      const online = await isOnline();
-      if (!online) {
-        if (imageFile) {
-          setError('Images require a connection. Try again when online.');
-          setLoading(false);
-          return;
+    const online = await isOnline();
+    if (!online && imageFile) {
+      showToast('Images require a connection. Try again when online.');
+      return;
+    }
+
+    const optimistic: Goal = {
+      id: tempId,
+      userId: user.id,
+      name,
+      description,
+      targetDate,
+      status: 'pending',
+      quote: randomQuote,
+      image_url: undefined, // temporary
+      createdAt: nowIso,
+    };
+
+    // 1. Fully Optimistic Immediate Updates
+    setGoals((prev) => [optimistic, ...prev]);
+    if (user?.id) {
+      loadGoalsListStale<Goal>(user.id).then((stale) => {
+        if (stale) {
+          persistGoalsList(user.id, [optimistic, ...stale]);
+          void ProductivityService.recalculate(user.id);
         }
-        const optimistic: Goal = {
-          id: tempId,
-          userId: user.id,
-          name,
-          description,
-          targetDate,
-          status: 'pending',
-          quote: randomQuote,
-          image_url: undefined,
-          createdAt: nowIso,
-        };
-        setGoals((prev) => [optimistic, ...prev]);
+      });
+    }
+
+    setName('');
+    setDescription('');
+    setImageFile(null);
+    setTargetDate('');
+    setShowModal(false);
+
+    try {
+      if (!online) {
         await enqueueSync({
           action: 'create',
           entity: 'goal',
@@ -330,17 +655,9 @@ const Goals: React.FC = () => {
           },
           timestamp: Date.now(),
         });
-        void setGoals((prev) => {
-          void persistGoalsList(user.id, prev);
-          return prev;
-        });
         void invalidateUserStatsCache();
-        setName('');
-        setDescription('');
-        setImageFile(null);
-        setTargetDate('');
-        setShowModal(false);
         setLoading(false);
+        triggerGlobalRefresh();
         return;
       }
 
@@ -351,92 +668,113 @@ const Goals: React.FC = () => {
 
       const newGoal = {
         userId: user.id,
-        name,
-        description,
-        targetDate,
-        status: 'pending' as const,
+        name: name.trim(),
+        description: description?.trim() || null,
+        targetDate: targetDate || null,
+        status: 'pending',
         quote: randomQuote,
         image_url: imageUrl,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
-      const { error: insertError } = await supabase.from('goals').insert([newGoal]);
+      const { data, error: insertError } = await supabase
+        .from('goals')
+        .insert([newGoal])
+        .select()
+        .single();
 
       if (insertError) throw insertError;
 
-      setName('');
-      setDescription('');
-      setImageFile(null);
-      setTargetDate('');
-      setShowModal(false);
-      void fetchGoals({ force: true });
+      justCreatedGoal.current = true;
+      if (data) {
+        // Swap temp ID with real ID quietly
+        const createdGoal = data as Goal;
+        setGoals(prev => prev.map(g => g.id === tempId ? createdGoal : g));
+        if (user?.id) {
+          loadGoalsListStale<Goal>(user.id).then((stale) => {
+            if (stale) {
+              persistGoalsList(user.id, stale.map(g => g.id === tempId ? createdGoal : g));
+            }
+          });
+        }
+      }
+      setTimeout(() => { justCreatedGoal.current = false; }, 5000);
+
       void invalidateUserStatsCache();
+      triggerGlobalRefresh();
     } catch (err: any) {
       console.error('Error creating goal:', err);
-      setError(err.message || 'Failed to create goal.');
+      showToast('Error: ' + (err.message || 'Failed to create goal.'));
+      // Rollback
+      setGoals(prev => prev.filter(g => g.id !== tempId));
+      if (user?.id) {
+        loadGoalsListStale<Goal>(user.id).then((stale) => {
+          if (stale) {
+            persistGoalsList(user.id, stale.filter(g => g.id !== tempId));
+            void ProductivityService.recalculate(user.id);
+          }
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const triggerCompleteCelebration = useCallback(() => {
-    setConfettiActive(true);
-    window.setTimeout(() => setConfettiActive(false), 2600);
-  }, []);
-
-  const toggleGoalStatus = async (goal: Goal) => {
-    const newStatus = goal.status === 'pending' ? 'completed' : 'pending';
+  const completeGoal = async (id: string) => {
+    // 1. Fully Optimistic Immediate UI & Cache Update
+    const completedGoal = goals.find(g => g.id === id);
+    triggerCelebration('goal', completedGoal?.name);
     const originalGoals = [...goals];
+    setGoals(prev => prev.filter(g => g.id !== id));
+    setCompletedGoalsCount(prev => prev + 1);
 
-    setGoals(prev => prev.map(g => (g.id === goal.id ? { ...g, status: newStatus } : g)));
+    if (user?.id) {
+      loadGoalsListStale<Goal>(user.id).then((stale) => {
+        if (stale) {
+          persistGoalsList(user.id, stale.map(g => g.id === id ? { ...g, status: 'completed' } : g));
+          void ProductivityService.recalculate(user.id);
+        }
+      });
+    }
 
     const online = await isOnline();
     if (!online && user?.id) {
       await enqueueSync({
         action: 'update',
         entity: 'goal',
-        data: {
-          id: goal.id,
-          patch: {
-            status: newStatus,
-            updatedAt: newStatus === 'completed' ? new Date().toISOString() : null,
-          },
-        },
+        data: { id, patch: { status: 'completed', updatedAt: new Date().toISOString() } },
         timestamp: Date.now(),
       });
-      void setGoals((prev) => {
-        void persistGoalsList(user.id, prev);
-        return prev;
-      });
-      void invalidateUserStatsCache();
-      void syncWidgetData();
+      triggerGlobalRefresh();
       return;
     }
 
-    try {
-      const { error: statusError } = await supabase
-        .from('goals')
-        .update({ status: newStatus })
-        .eq('id', goal.id);
+    const { error } = await supabase
+      .from('goals')
+      .update({ status: 'completed', updatedAt: new Date().toISOString() })
+      .eq('id', id);
 
-      if (statusError) throw statusError;
-
-      await supabase
-        .from('goals')
-        .update({ updatedAt: newStatus === 'completed' ? new Date().toISOString() : null })
-        .eq('id', goal.id);
-
-      void syncWidgetData();
-      void invalidateUserStatsCache();
-      void setGoals((prev) => {
-        if (user?.id) void persistGoalsList(user.id, prev);
-        return prev;
-      });
-    } catch (err: any) {
-      console.error('Core status update failed:', err);
-      setError('Failed to update goal status. Please check your connection.');
+    if (error) {
+      console.error('Goal complete failed:', error.message);
+      showToast('Failed: ' + error.message);
+      // Rollback
       setGoals(originalGoals);
-      void fetchGoals({ force: true });
+      setCompletedGoalsCount(prev => prev - 1);
+      if (user?.id) {
+        loadGoalsListStale<Goal>(user.id).then((stale) => {
+          if (stale) {
+            persistGoalsList(user.id, stale.map(g => g.id === id ? { ...g, status: 'pending' } : g));
+            void ProductivityService.recalculate(user.id);
+          }
+        });
+      }
+      return;
     }
+
+    void syncWidgetData();
+    void invalidateUserStatsCache();
+    triggerGlobalRefresh();
   };
 
   const deleteGoal = async (goalId: string) => {
@@ -456,6 +794,7 @@ const Goals: React.FC = () => {
         return prev;
       });
       void invalidateUserStatsCache();
+      triggerGlobalRefresh();
       return;
     }
 
@@ -466,897 +805,707 @@ const Goals: React.FC = () => {
       void fetchGoals({ force: true });
     } else {
       void invalidateUserStatsCache();
-      void setGoals((prev) => {
-        void persistGoalsList(user.id, prev);
-        return prev;
-      });
+      if (user?.id) {
+        const stale = await loadGoalsListStale<Goal>(user.id) || [];
+        persistGoalsList(user.id, stale.filter(g => g.id !== goalId));
+        void ProductivityService.recalculate(user.id);
+      }
+      triggerGlobalRefresh();
     }
   };
 
-  const calculateDaysRemaining = useCallback((dateStr: string) => {
-    if (!dateStr) return null;
-    const target = new Date(dateStr);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    target.setHours(0, 0, 0, 0);
-    const diffTime = target.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  }, []);
 
-  const calculateTimeProgress = (createdAt: string, targetDate: string, isCompleted: boolean) => {
-    if (isCompleted) return 100;
-    if (!targetDate || !createdAt) return 0;
-    
-    const start = new Date(createdAt).getTime();
-    const end = new Date(targetDate).getTime();
-    const now = new Date().getTime();
-    
-    if (end <= start) return 100;
-    
-    const total = end - start;
-    const elapsed = now - start;
-    const progress = Math.min(Math.max((elapsed / total) * 100, 0), 100);
-    return Math.round(progress);
-  };
 
-  /** Second bar: timeline runway until target (no goal-linked tasks in schema). */
-  const calculateTimeRemainingPct = (createdAt: string, targetDate: string, isCompleted: boolean) => {
-    const tp = calculateTimeProgress(createdAt, targetDate, isCompleted);
-    return Math.max(0, 100 - tp);
-  };
 
-  const openNewGoalModal = () => {
-    setShowModal(true);
-  };
 
-  const pendingGoals = goals.filter((g) => g.status === 'pending');
-  const onTrackCount = pendingGoals.filter((g) => {
-    const d = calculateDaysRemaining(g.targetDate);
-    return d !== null && d >= 0;
-  }).length;
 
-  const goalsSummaryStats = useMemo(() => {
-    const pending = goals.filter((g) => g.status === 'pending');
-    const onTrack = pending.filter((g) => {
-      const d = calculateDaysRemaining(g.targetDate);
-      return d !== null && d >= 0;
-    }).length;
-    const completed = goals.filter((g) => g.status === 'completed').length;
-    const daysLeftList = pending
-      .map((g) => calculateDaysRemaining(g.targetDate))
-      .filter((d): d is number => d !== null);
-    const minDays = daysLeftList.length === 0 ? null : Math.min(...daysLeftList);
-    return { onTrack, completed, minDays };
-  }, [goals, calculateDaysRemaining]);
 
-  const daysLeftStatColor = (d: number | null) => {
-    if (d === null) return 'rgba(255, 255, 255, 0.55)';
-    if (d <= 0) return '#EF4444';
-    if (d <= 7) return '#F59E0B';
-    return '#ffffff';
-  };
+
 
   return (
-    <div className={`page-shell ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
-      <div className="aurora-bg">
-        <div className="aurora-gradient-1"></div>
-        <div className="aurora-gradient-2"></div>
+    <div className="page-shell goals-page-layout" style={{ 
+      background: '#000', 
+      minHeight: '100vh',
+      position: 'relative',
+      display: 'flex',
+      flexDirection: 'column',
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch'
+    }}>
+      <style>{`
+        @keyframes meshMove {
+          0%,100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+        @keyframes targetGlow {
+          0%,100% { filter: drop-shadow(0 0 8px rgba(147,51,234,0.6)); }
+          50% { filter: drop-shadow(0 0 16px rgba(167,71,254,1)); }
+        }
+        @keyframes progressGlow {
+          0%,100% { box-shadow: 0 0 8px rgba(168,85,247,0.4); }
+          50% { box-shadow: 0 0 20px rgba(168,85,247,0.8); }
+        }
+        @keyframes markDoneShimmer {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        @keyframes portalPulse {
+          0%,100% { opacity: 0.5; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.05); }
+        }
+        @keyframes rocketFloat {
+          0%,100% { transform: translateY(0) rotate(-15deg); }
+          50% { transform: translateY(-12px) rotate(-15deg); }
+        }
+        @keyframes metallic {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        @keyframes btnGlow {
+          0%,100% { box-shadow: 0 0 20px rgba(0,232,122,0.4); }
+          50% { box-shadow: 0 0 40px rgba(0,232,122,0.7); }
+        }
+        @keyframes modalSlideUp {
+          from { transform: translateY(30px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes borderGlowGreen {
+          0%,100% { border-color: rgba(0,232,122,0.2); box-shadow: 0 0 10px rgba(0,232,122,0.1); }
+          50% { border-color: rgba(0,232,122,0.6); box-shadow: 0 0 20px rgba(0,232,122,0.3); }
+        }
+        @keyframes borderGlowPurple {
+          0%,100% { border-color: rgba(124,77,255,0.3); box-shadow: 0 0 10px rgba(124,77,255,0.2); }
+          50% { border-color: rgba(124,77,255,0.8); box-shadow: 0 0 20px rgba(124,77,255,0.5); }
+        }
+        @keyframes errorPulse {
+          0%,100% { border-color: rgba(255,0,0,0.3); box-shadow: 0 0 5px rgba(255,0,0,0.2); }
+          50% { border-color: rgba(255,0,0,1); box-shadow: 0 0 20px rgba(255,0,0,0.5); }
+        }
+        @keyframes launchShimmer {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+      `}</style>
+
+      {/* Pinned Header */}
+      <div style={{
+        padding: '24px 16px 16px 72px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end', 
+        position: 'sticky', 
+        top: 0,
+        zIndex: 100,
+        background: 'rgba(0, 0, 0, 0.65)', 
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <p style={{
+            fontSize: '10px',
+            fontWeight: '800',
+            color: '#666666',
+            letterSpacing: '0.15em',
+            margin: '0 0 2px 0',
+            textTransform: 'uppercase'
+          }}>
+            YOUR MISSIONS
+          </p>
+          <h2 style={{
+            fontSize: '28px',
+            fontWeight: '900',
+            color: '#FFFFFF',
+            margin: 0,
+            letterSpacing: '-1px',
+            lineHeight: 1
+          }}>
+            Goals
+          </h2>
+        </div>
+
+        {/* Stats Row */}
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '2px' // Align better with "Goals" baseline
+        }}>
+          <div style={{
+            background: 'rgba(124, 77, 255, 0.1)',
+            border: '1px solid rgba(124, 77, 255, 0.4)',
+            borderRadius: '10px',
+            padding: '4px 10px',
+            textAlign: 'center',
+            boxShadow: '0 0 10px rgba(124, 77, 255, 0.2)'
+          }}>
+            <p style={{
+              fontSize: '14px',
+              fontWeight: '900',
+              color: '#7C4DFF',
+              margin: 0,
+              lineHeight: 1
+            }}>
+              {goals.length} <span style={{ fontSize: '9px', opacity: 0.6, fontWeight: '700' }}>ACTIVE</span>
+            </p>
+          </div>
+
+          <div style={{
+            background: 'rgba(0, 230, 118, 0.08)',
+            border: '1px solid rgba(0, 230, 118, 0.3)',
+            borderRadius: '10px',
+            padding: '4px 10px',
+            textAlign: 'center',
+            boxShadow: '0 0 10px rgba(0, 230, 118, 0.15)'
+          }}>
+            <p style={{
+              fontSize: '14px',
+              fontWeight: '900',
+              color: '#00E676',
+              margin: 0,
+              lineHeight: 1
+            }}>
+              {completedGoalsCount} <span style={{ fontSize: '9px', opacity: 0.6, fontWeight: '700' }}>DONE</span>
+            </p>
+          </div>
+        </div>
       </div>
 
-      <header className="stats-premium-header">
-        <div className="stats-header-center">
-          <h1 className="stats-display-title">{(language === 'Tamil' ? t('goals') : t('goals').toUpperCase())}</h1>
-          <div className="stats-marquee-wrap">
-            <div className="stats-marquee-line" />
-            <div className="stats-marquee-track" aria-hidden>
-              <div className="stats-marquee-inner">
-                <span>SET TARGETS · TRACK PROGRESS · WIN BIG · SET TARGETS · TRACK PROGRESS · WIN BIG · </span>
-                <span>SET TARGETS · TRACK PROGRESS · WIN BIG · SET TARGETS · TRACK PROGRESS · WIN BIG · </span>
+      {/* Active Goals Grid Wrapper */}
+      <div 
+        className="bouncing-scroll"
+        style={{ 
+          paddingTop: '32px', // Sticky header takes up its own space
+          paddingBottom: '120px'
+        }}
+      >
+        <style>{`
+          @keyframes floatTrophy {
+            0%, 100% { transform: translateY(0) rotate(-5deg); }
+            50% { transform: translateY(-15px) rotate(5deg); }
+          }
+          @keyframes spinRingPurple {
+            from { transform: rotateX(60deg) rotateY(20deg) rotateZ(0deg); }
+            to { transform: rotateX(60deg) rotateY(20deg) rotateZ(360deg); }
+          }
+          @keyframes spinRingPurpleReverse {
+            from { transform: rotateX(70deg) rotateY(-20deg) rotateZ(360deg); }
+            to { transform: rotateX(70deg) rotateY(-20deg) rotateZ(0deg); }
+          }
+          @keyframes pulseTrophy {
+            0%, 100% { box-shadow: 0 10px 30px rgba(124, 77, 255, 0.4), inset -10px -10px 20px rgba(0,0,0,0.5); }
+            50% { box-shadow: 0 15px 40px rgba(124, 77, 255, 0.6), inset -10px -10px 20px rgba(0,0,0,0.6); }
+          }
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+
+          /* ── Fix: Remove ALL default browser focus rings inside the Goal modal ── */
+          .goal-modal-form input,
+          .goal-modal-form input:focus,
+          .goal-modal-form input:focus-visible,
+          .goal-modal-form textarea,
+          .goal-modal-form textarea:focus,
+          .goal-modal-form textarea:focus-visible {
+            outline: none !important;
+            box-shadow: none !important;
+            -webkit-appearance: none;
+            appearance: none;
+          }
+
+          /* ── Global: caret and selection color ── */
+          .goal-modal-form input,
+          .goal-modal-form textarea {
+            caret-color: #00E676;
+          }
+          .goal-modal-form input::selection,
+          .goal-modal-form textarea::selection {
+            background: rgba(0, 230, 118, 0.25);
+            color: #FFFFFF;
+          }
+        `}</style>
+        {goals.length === 0 ? (
+          <div style={{
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            height: '100%',
+            padding: '40px 32px',
+            animation: 'fadeIn 0.5s ease-out forwards',
+            overflow: 'hidden'
+          }}>
+            {/* Ambient Background Glow (Deep Purple to Transparent 10% Opacity) */}
+            <div style={{
+              position: 'absolute',
+              width: '600px',
+              height: '600px',
+              background: 'radial-gradient(circle, rgba(124, 77, 255, 0.1) 0%, rgba(124, 77, 255, 0) 70%)',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              zIndex: 0
+            }}/>
+
+            <div style={{
+              position: 'relative',
+              width: '120px',
+              height: '120px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '40px', // 40px spacing from sphere to headline
+              animation: 'floatTrophy 6s ease-in-out infinite',
+              zIndex: 1
+            }}>
+              {/* Central glowing orb */}
+              <div style={{
+                position: 'absolute',
+                width: '70px',
+                height: '70px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at 30% 30%, #b388ff 0%, #7c4dff 40%, #311b92 100%)',
+                animation: 'pulseTrophy 4s ease-in-out infinite',
+                zIndex: 2
+              }}/>
+              
+              {/* Outer rings */}
+              <div style={{
+                position: 'absolute',
+                width: '120px',
+                height: '120px',
+                borderRadius: '50%',
+                border: '1.5px solid rgba(124, 77, 255, 0.3)',
+                boxShadow: '0 0 20px rgba(124, 77, 255, 0.1)',
+                animation: 'spinRingPurple 10s linear infinite',
+                zIndex: 1
+              }}/>
+              <div style={{
+                position: 'absolute',
+                width: '85px',
+                height: '85px',
+                borderRadius: '50%',
+                border: '1.5px dashed rgba(255, 255, 255, 0.2)',
+                animation: 'spinRingPurpleReverse 12s linear infinite',
+                zIndex: 3
+              }}/>
+            </div>
+
+            <div style={{ textAlign: 'center', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <h2 style={{
+                fontSize: '28px',
+                fontWeight: '900',
+                color: '#FFFFFF',
+                margin: '0 0 8px 0', // 8px spacing from headline to subtitle
+                letterSpacing: '0.02em',
+                textTransform: 'uppercase',
+                fontFamily: 'system-ui, -apple-system, sans-serif'
+              }}>
+                GOALS CRUSHED
+              </h2>
+              <p style={{
+                fontSize: '15px',
+                color: '#A0A0A0',
+                lineHeight: 1.6,
+                margin: '0 0 20px 0', // 20px spacing from subtitle to button
+                maxWidth: '280px',
+                textAlign: 'center'
+              }}>
+                All active missions accomplished. The baseline just moved up. Set your next target.
+              </p>
+
+              <style>{`
+                .new-target-btn {
+                  background: #00E87A;
+                  color: #000000;
+                  border: none;
+                  border-radius: 24px;
+                  padding: 16px 36px;
+                  font-size: 15px;
+                  font-weight: 800;
+                  letter-spacing: 0.05em;
+                  cursor: pointer;
+                  box-shadow: 0 0 15px rgba(0, 232, 122, 0.4);
+                  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                  text-transform: uppercase;
+                }
+                .new-target-btn:active {
+                  transform: scale(0.96);
+                  box-shadow: 0 0 8px rgba(0, 232, 122, 0.6);
+                }
+              `}</style>
+              <button
+                className="new-target-btn"
+                onClick={() => setShowModal(true)}
+              >
+                + NEW TARGET
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="goals-grid"
+            style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
+              gap: '16px', 
+              padding: '0 16px 20px 16px' 
+            }}
+          >
+            {goals.map((goal) => (
+              <GoalCard 
+                key={goal.id} 
+                goal={goal} 
+                onComplete={(id) => {
+                  void completeGoal(id);
+                }} 
+                onDelete={deleteGoal} 
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+
+
+      {/* Elite Command Interface Modal */}
+      {showModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(15px)',
+
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+          padding: '20px'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '440px',
+            background: 'rgba(18,18,18,0.97)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '28px',
+            padding: '32px 24px',
+            animation: 'modalSlideUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
+            backdropFilter: 'blur(20px)',
+            position: 'relative'
+          }}>
+
+
+
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '32px'
+            }}>
+              <div>
+                <p style={{
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  color: '#7C4DFF',
+                  letterSpacing: '0.2em',
+                  margin: '0 0 4px 0'
+                }}>
+                  PURSUIT OF EXCELLENCE
+                </p>
+                <h3 style={{
+                  fontSize: '26px',
+                  fontWeight: '900',
+                  color: '#FFF',
+                  margin: 0,
+                  letterSpacing: '-1px'
+                }}>
+                  Define Your Goal
+                </h3>
+              </div>
+              <div 
+                onClick={() => setShowModal(false)}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '14px',
+                  background: 'rgba(255,255,255,0.05)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  close
+                </span>
               </div>
             </div>
-            <div className="stats-marquee-line" />
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="stats-header-sidebar-btn notification-btn desktop-only-btn"
-          title={isSidebarHidden ? 'Show Sidebar' : 'Hide Sidebar (Focus Mode)'}
-          data-tooltip={isSidebarHidden ? 'Show Sidebar' : 'Hide Sidebar'}
-          aria-label="Toggle sidebar"
-          style={
-            isSidebarHidden
-              ? { background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' }
-              : undefined
-          }
-        >
-          <span className="material-symbols-outlined">{isSidebarHidden ? 'side_navigation' : 'fullscreen'}</span>
-        </button>
-      </header>
 
-      <div className="goals-header-meta">
-        <div className="goals-summary-chip" role="status">
-          <span className="material-symbols-outlined goals-summary-chip-icon" aria-hidden>
-            trending_up
-          </span>
-          <span>
-            {onTrackCount} of {pendingGoals.length} goal{pendingGoals.length === 1 ? '' : 's'} on track
-          </span>
-        </div>
-        <div className="goals-summary-bar" aria-label="Goals summary">
-          <div className="goals-summary-bar__item">
-            <span className="material-symbols-outlined goals-summary-bar__ic" style={{ color: '#00E87A' }}>
-              north_east
-            </span>
-            <span className="goals-summary-bar__val">{goalsSummaryStats.onTrack}</span>
-            <span className="goals-summary-bar__lbl">On Track</span>
-          </div>
-          <div className="goals-summary-bar__divider" aria-hidden />
-          <div className="goals-summary-bar__item">
-            <span className="material-symbols-outlined goals-summary-bar__ic" style={{ color: 'rgba(245, 158, 11, 0.8)' }}>
-              schedule
-            </span>
-            <span
-              className="goals-summary-bar__val"
-              style={{ color: daysLeftStatColor(goalsSummaryStats.minDays) }}
-            >
-              {goalsSummaryStats.minDays === null ? '—' : goalsSummaryStats.minDays}
-            </span>
-            <span className="goals-summary-bar__lbl">Days Left</span>
-          </div>
-          <div className="goals-summary-bar__divider" aria-hidden />
-          <div className="goals-summary-bar__item">
-            <span className="material-symbols-outlined goals-summary-bar__ic" style={{ color: '#00E87A' }}>
-              check_circle
-            </span>
-            <span className="goals-summary-bar__val">{goalsSummaryStats.completed}</span>
-            <span className="goals-summary-bar__lbl">Completed</span>
-          </div>
-          <div className="goals-summary-bar__divider" aria-hidden />
-          <button
-            type="button"
-            className="goals-summary-bar__item goals-summary-bar__item--add"
-            onClick={openNewGoalModal}
-            title={`${t('add')} Goal`}
-            aria-label={`${t('add')} Goal`}
-          >
-            <span className="goals-summary-bar__add-ic" aria-hidden>
-              <span className="material-symbols-outlined">add</span>
-            </span>
-            <span className="goals-summary-bar__lbl goals-summary-bar__lbl--add">New Goal</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Active Goals Grid */}
-      {goals.filter(g => g.status === 'pending').length === 0 ? (
-        <div style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          padding: '8rem 2rem', 
-          textAlign: 'center',
-          background: 'rgba(255,255,255,0.02)',
-          borderRadius: '2.5rem',
-          border: '1px dashed rgba(255,255,255,0.1)',
-          marginBottom: '2rem'
-        }}>
-           <div style={{ 
-             width: '120px', 
-             height: '120px', 
-             borderRadius: '40px', 
-             background: 'rgba(16, 185, 129, 0.05)', 
-             display: 'flex', 
-             alignItems: 'center', 
-             justifyContent: 'center', 
-             marginBottom: '2rem', 
-             border: '1px solid rgba(16, 185, 129, 0.1)',
-             boxShadow: '0 0 40px rgba(16, 185, 129, 0.05)'
-           }}>
-             <span className="material-symbols-outlined" style={{ fontSize: '4.5rem', color: '#10b981', opacity: 0.8 }}>rocket_launch</span>
-           </div>
-           <h2 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-main)', marginBottom: '1rem', letterSpacing: '-0.02em' }}>
-             Create your first dream goal
-           </h2>
-           <p style={{ color: 'rgba(255,255,255,0.5)', marginBottom: '3rem', maxWidth: '450px', fontSize: '1.1rem', lineHeight: 1.6, fontWeight: 600 }}>
-             Turn your vision into reality. Every great achievement starts with the decision to try.
-           </p>
-           <button 
-             onClick={openNewGoalModal} 
-             className="glow-btn-primary" 
-             style={{ padding: '0 3rem', height: '4rem', borderRadius: '1.5rem', fontSize: '1.1rem', fontWeight: 900, width: 'fit-content' }}
-           >
-             <span>Make it Track & Happen</span>
-           </button>
-        </div>
-      ) : (
-        <div
-          className="goals-grid goals-page-grid"
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem', paddingBottom: '2rem', alignItems: 'start' }}
-        >
-        {pendingGoals.map((goal) => {
-          const daysLeft = calculateDaysRemaining(goal.targetDate);
-          const isOverdue = daysLeft !== null && daysLeft < 0;
-          const isTargetToday = daysLeft === 0;
-          const isCompleted = false;
-          const bucket = getUrgencyBucket(daysLeft, isOverdue);
-          const cardStyle = getCardUrgencyStyle(bucket);
-          const badge = getDaysBadgeColors(daysLeft, isOverdue);
-          const timeProgress = calculateTimeProgress(goal.createdAt, goal.targetDate, isCompleted);
-          const timeLeftPct = calculateTimeRemainingPct(goal.createdAt, goal.targetDate, isCompleted);
-          const showBehindStrip = timeProgress < 50 && !isOverdue && daysLeft !== null;
-
-          const daysPrimary =
-            daysLeft === null
-              ? '—'
-              : isOverdue
-                ? `${Math.abs(daysLeft)}`
-                : String(daysLeft);
-          const daysSub = daysLeft === null ? 'SET DATE' : isOverdue ? 'DAYS OVER' : 'DAYS LEFT';
-
-          const targetChipLabel = goal.targetDate
-            ? new Date(goal.targetDate).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })
-            : 'No date';
-
-          return (
-            <div
-              key={goal.id}
-              className="glass-card active-goal-card goals-mobile-card goals-urgency-card"
-              style={{
-                padding: 0,
-                borderRadius: '20px',
-                overflow: 'hidden',
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
-                background: cardStyle.gradient,
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: `${cardStyle.shadow}, -4px 0 18px ${badge.glow}`,
-                transition: 'transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                borderLeft: `3px solid ${badge.border}`,
-              }}
-            >
-              <div
-                style={{
-                  padding: '1.25rem 1.35rem 1rem',
-                  position: 'relative',
-                  minHeight: '200px',
+            <form onSubmit={handleCreateGoal} className="goal-modal-form">
+              {/* Goal Name Input */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  color: 'rgba(255,255,255,0.35)',
+                  letterSpacing: '0.15em',
+                  display: 'block',
+                  marginBottom: '8px'
+                }}>
+                  GOAL TITLE
+                </label>
+                <div style={{
+                  background: '#1A1A1A',
+                  borderRadius: '14px',
+                  border: '1px solid ' + (focusedField === 'name' ? '#7C4DFF' : 'rgba(255,255,255,0.07)'),
+                  boxShadow: focusedField === 'name' ? '0 0 12px rgba(124,77,255,0.2)' : 'none',
+                  transition: 'all 0.25s ease',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.75rem',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
-                  <div
-                    className={`goals-days-pill ${badge.pulse ? 'goals-days-pill--pulse' : ''}`}
+                  alignItems: 'center',
+                  paddingLeft: '14px'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px', color: focusedField === 'name' ? '#7C4DFF' : 'rgba(255,255,255,0.25)', flexShrink: 0, transition: 'color 0.25s ease' }}>my_location</span>
+                  <input
+                    required
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    onFocus={() => setFocusedField('name')}
+                    onBlur={() => setFocusedField('')}
+                    placeholder="Capture your vision..."
                     style={{
-                      background: badge.bg,
-                      border: `1px solid ${badge.border}`,
-                      color: badge.text,
-                      boxShadow: `0 0 20px ${badge.glow}`,
-                      ['--pulse-glow' as string]: badge.glow,
-                    }}
-                  >
-                    <span className="goals-days-pill-num">{daysPrimary}</span>
-                    <span className="goals-days-pill-label">{daysSub}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteGoal(goal.id);
-                    }}
-                    style={{
-                      background: 'rgba(0,0,0,0.25)',
+                      flex: 1,
+                      background: 'transparent',
                       border: 'none',
-                      color: 'rgba(255,255,255,0.45)',
-                      cursor: 'pointer',
-                      padding: '8px',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
+                      padding: '14px 14px',
+                      color: '#FFF',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      outline: 'none',
+                      caretColor: '#7C4DFF'
                     }}
-                    className="delete-goal-btn"
-                    aria-label="Delete goal"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                      delete
-                    </span>
-                  </button>
-                </div>
-
-                <div className="goal-card-main-row">
-                  <div className="goal-card-text-block goals-card-text">
-                    <h3 className="goals-card-title">{goal.name}</h3>
-                    {goal.description ? (
-                      <p className="goals-card-desc">{goal.description}</p>
-                    ) : (
-                      <p className="goals-card-desc goals-card-desc--placeholder">No description</p>
-                    )}
-                    {showBehindStrip && (
-                      <div className="goals-behind-strip" role="status">
-                        <span className="material-symbols-outlined" aria-hidden>
-                          schedule
-                        </span>
-                        <span>Behind schedule — use the runway below to catch up.</span>
-                      </div>
-                    )}
-                    <div className="goals-progress-stack">
-                      <div className="goals-progress-label-row">
-                        <span className="goals-progress-metric-label">TIME PROGRESS</span>
-                        <span className="goals-progress-metric-val">{timeProgress}%</span>
-                      </div>
-                      <div className="goal-neon-track goal-neon-track--cyan">
-                        <div className="goal-neon-bar-fill" style={{ width: `${timeProgress}%` }} />
-                        <div className="goal-neon-shimmer" />
-                      </div>
-                      <div className="goals-progress-label-row goals-progress-label-row--second">
-                        <span className="goals-progress-metric-label">TIME LEFT</span>
-                        <span className="goals-progress-metric-val goals-progress-metric-val--muted">{timeLeftPct}%</span>
-                      </div>
-                      <div className="goal-neon-track goal-neon-track--violet">
-                        <div className="goal-neon-bar-fill goal-neon-bar-fill--violet" style={{ width: `${timeLeftPct}%` }} />
-                        <div className="goal-neon-shimmer goal-neon-shimmer--slow" />
-                      </div>
-                    </div>
-                  </div>
-                  <GoalProgressRing percent={timeProgress} goalId={goal.id} size={96}>
-                    {goal.image_url ? (
-                      <img src={goal.image_url} alt="" className="goals-ring-img" />
-                    ) : (
-                      <span className="goals-ring-emoji" aria-hidden>
-                        🎯
-                      </span>
-                    )}
-                  </GoalProgressRing>
+                  />
                 </div>
               </div>
-              <div
-                className="goal-card-footer goals-card-footer"
-                style={{
-                  padding: '1rem 1.35rem 1.2rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: 'rgba(0,0,0,0.2)',
-                  gap: '0.75rem',
-                }}
-              >
+
+              {/* Date Input — read-only, triggers native date picker */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  color: 'rgba(255,255,255,0.35)',
+                  letterSpacing: '0.15em',
+                  display: 'block',
+                  marginBottom: '8px'
+                }}>
+                  TARGET DEADLINE
+                </label>
                 <div
-                  className={`goals-date-chip ${isOverdue || isTargetToday ? 'goals-date-chip--warn' : ''}`}
-                >
-                  <span className="material-symbols-outlined goals-date-chip-icon" aria-hidden>
-                    {isOverdue || isTargetToday ? 'warning' : 'calendar_today'}
-                  </span>
-                  <span>{targetChipLabel}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    triggerCompleteCelebration();
-                    void toggleGoalStatus(goal);
-                  }}
-                  className="goal-complete-tick goal-complete-tick-bounce"
                   style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '50%',
-                    border: '2px solid #10b981',
-                    background: 'transparent',
-                    color: '#10b981',
+                    background: '#1A1A1A',
+                    borderRadius: '14px',
+                    border: '1px solid ' + (
+                      targetDate && new Date(targetDate) <= new Date()
+                        ? '#FF3D00'
+                        : focusedField === 'date' ? '#00E87A' : 'rgba(255,255,255,0.07)'
+                    ),
+                    boxShadow: focusedField === 'date' ? '0 0 12px rgba(0,232,122,0.2)' : 'none',
+                    transition: 'all 0.25s ease',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    paddingLeft: '14px',
+                    paddingRight: '14px',
                     cursor: 'pointer',
-                    padding: 0,
-                    zIndex: 20,
-                    position: 'relative',
+                    position: 'relative'
                   }}
-                  title="Mark as Complete"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '28px', fontWeight: '900' }}>
-                    check
-                  </span>
-                </button>
-              </div>
-            </div>
-          );
-        })}
-        </div>
-      )}
-
-
-
-      {/* Creation Modal */}
-      {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1.5rem' }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '600px', padding: '2.5rem', borderRadius: '2.5rem', position: 'relative' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>{t('define_milestone')}</h2>
-              <button onClick={() => setShowModal(false)} className="notification-btn"><span className="material-symbols-outlined">close</span></button>
-            </div>
-
-            {error && <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '1rem', borderRadius: '1rem', marginBottom: '1.5rem', fontSize: '0.85rem', fontWeight: 700 }}>{error}</div>}
-            
-            <form onSubmit={handleCreateGoal} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-                <div className="input-group">
-                  <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>{t('task_name')}</label>
-                  <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder={t('what_achieve')} required style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '1rem', color: 'var(--text-main)', width: '100%', boxSizing: 'border-box', fontWeight: 'bold' }} />
-                </div>
-                <div className="input-group">
-                  <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>{t('target_date')}</label>
-                  <div style={{ position: 'relative' }}>
-                    <input 
-                      type="date" 
-                      className="form-input date-input-premium" 
-                      value={targetDate} 
-                      onChange={e => setTargetDate(e.target.value)} 
-                      required 
-                      style={{ 
-                        background: 'rgba(255,255,255,0.03)', 
-                        border: '1px solid rgba(255,255,255,0.05)', 
-                        padding: '1rem', 
-                        paddingRight: '3rem',
-                        borderRadius: '1rem', 
-                        color: 'var(--text-main)', 
-                        width: '100%', 
-                        boxSizing: 'border-box', 
-                        fontWeight: 'bold',
-                        fontSize: '1rem'
-                      }} 
-                    />
-                    <span className="material-symbols-outlined" style={{ 
-                      position: 'absolute', 
-                      right: '1rem', 
-                      top: '50%', 
-                      transform: 'translateY(-50%)', 
-                      color: '#10b981', 
+                  {/* Hidden real date input to trigger native picker */}
+                  <input
+                    type="date"
+                    required
+                    min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                    value={targetDate}
+                    onChange={e => setTargetDate(e.target.value)}
+                    onFocus={() => setFocusedField('date')}
+                    onBlur={() => setFocusedField('')}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      opacity: 0,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'pointer',
+                      zIndex: 2
+                    }}
+                  />
+                  {/* Display-only row */}
+                  <span
+                    style={{
+                      flex: 1,
+                      padding: '14px 0',
+                      color: targetDate ? '#FFF' : 'rgba(255,255,255,0.3)',
+                      fontSize: '16px',
+                      fontWeight: '600',
                       pointerEvents: 'none',
-                      fontSize: '22px'
-                    }}>
-                      calendar_month
-                    </span>
-                  </div>
+                      userSelect: 'none'
+                    }}
+                  >
+                    {targetDate
+                      ? new Date(targetDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : 'Select target date...'}
+                  </span>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{
+                      fontSize: '22px',
+                      color: targetDate ? '#00E87A' : 'rgba(255,255,255,0.25)',
+                      pointerEvents: 'none',
+                      transition: 'color 0.25s ease'
+                    }}
+                  >
+                    calendar_month
+                  </span>
+                </div>
+                {targetDate && new Date(targetDate) <= new Date() && (
+                  <p style={{
+                    fontSize: '11px',
+                    color: '#FF3D00',
+                    fontWeight: '700',
+                    margin: '8px 0 0 4px',
+                    letterSpacing: '0.02em'
+                  }}>
+                    The 1% focus on the future. Select a future date.
+                  </p>
+                )}
+              </div>
+
+              {/* Description Input */}
+              <div style={{ marginBottom: '28px' }}>
+                <label style={{
+                  fontSize: '10px',
+                  fontWeight: '800',
+                  color: 'rgba(255,255,255,0.35)',
+                  letterSpacing: '0.1em',
+                  display: 'block',
+                  marginBottom: '8px'
+                }}>
+                  STRATEGY (OPTIONAL)
+                </label>
+                <div style={{
+                  background: '#1A1A1A',
+                  borderRadius: '14px',
+                  border: '1px solid ' + (focusedField === 'desc' ? '#00E87A' : 'rgba(255,255,255,0.07)'),
+                  boxShadow: focusedField === 'desc' ? '0 0 12px rgba(0,232,122,0.15)' : 'none',
+                  transition: 'all 0.25s ease',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  paddingLeft: '14px',
+                  paddingTop: '14px'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px', color: focusedField === 'desc' ? '#00E87A' : 'rgba(255,255,255,0.25)', flexShrink: 0, marginRight: '10px', transition: 'color 0.25s ease', marginTop: '2px' }}>explore</span>
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    onFocus={() => setFocusedField('desc')}
+                    onBlur={() => setFocusedField('')}
+                    placeholder="How will you achieve this?"
+                    style={{
+                      flex: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      padding: '0 14px 14px 0',
+                      color: '#FFF',
+                      fontSize: '15px',
+                      minHeight: '90px',
+                      outline: 'none',
+                      resize: 'none',
+                      caretColor: '#00E87A'
+                    }}
+                  />
                 </div>
               </div>
 
-              <div className="input-group">
-                  <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>{t('description_vision')}</label>
-                <textarea className="form-input" value={description} onChange={e => setDescription(e.target.value)} placeholder={t('path_success')} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', minHeight: '80px', padding: '1rem', borderRadius: '1rem', color: 'var(--text-main)', width: '100%', boxSizing: 'border-box', resize: 'none' }} />
-                
-              </div>
-
-              <button type="submit" disabled={loading} className="glow-btn-primary" style={{ height: '3.5rem', width: '100%', borderRadius: '1.25rem' }}>
-                {loading ? <span className="material-symbols-outlined rotating">sync</span> : <span>{t('add')} Goal</span>}
+              {/* Submit Button */}
+              <style>{`
+                .launch-btn { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+                .launch-btn:not(:disabled):active { transform: scale(0.96); }
+              `}</style>
+              <button
+                type="submit"
+                className="launch-btn"
+                disabled={loading || !name.trim() || !targetDate || new Date(targetDate) <= new Date()}
+                style={{
+                  width: '100%',
+                  height: '58px',
+                  background: (loading || !name.trim() || !targetDate || new Date(targetDate) <= new Date())
+                    ? 'rgba(255,255,255,0.05)'
+                    : '#00E87A',
+                  borderRadius: '18px',
+                  border: 'none',
+                  color: (loading || !name.trim() || !targetDate || new Date(targetDate) <= new Date()) ? 'rgba(255,255,255,0.2)' : '#000',
+                  fontSize: '15px',
+                  fontWeight: '900',
+                  letterSpacing: '0.1em',
+                  cursor: (loading || !name.trim() || !targetDate || new Date(targetDate) <= new Date()) ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  boxShadow: (loading || !name.trim() || !targetDate || new Date(targetDate) <= new Date()) ? 'none' : '0 0 20px rgba(0,232,122,0.35), 0 8px 24px rgba(0,232,122,0.2)',
+                  transition: 'background 0.25s ease, box-shadow 0.25s ease'
+                }}
+              >
+                {loading ? (
+                  <span className="material-symbols-outlined rotating" style={{ fontSize: '24px' }}>sync</span>
+                ) : (
+                  <>
+                    <span>LAUNCH MISSION</span>
+                    <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>rocket_launch</span>
+                  </>
+                )}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {confettiActive && (
-        <div className="goals-confetti-overlay" aria-hidden>
-          {Array.from({ length: 56 }, (_, i) => (
-            <span
-              key={i}
-              className="goals-confetti-bit"
-              style={{
-                left: `${(i * 17 + (i % 7) * 11) % 100}%`,
-                animationDelay: `${(i % 12) * 0.04}s`,
-                background: ['#34d399', '#60a5fa', '#fbbf24', '#f472b6', '#a78bfa', '#f87171'][i % 6],
-              }}
-            />
-          ))}
+      {/* Confetti overlay removed */}
+
+      {toast && (
+        <div
+          role="status"
+          className="goal-save-toast"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 'max(1rem, env(safe-area-inset-bottom))',
+            transform: 'translateX(-50%)',
+            zIndex: 1100,
+            padding: '0.5rem 1rem',
+            borderRadius: '999px',
+            background: 'rgba(15, 23, 42, 0.92)',
+            color: '#e2e8f0',
+            fontSize: '13px',
+            fontWeight: 600,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+            maxWidth: 'min(90vw, 320px)',
+            textAlign: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          {toast}
         </div>
       )}
 
       <BottomNav
-        isHidden={isSidebarHidden}
+        isHidden={false}
         hideFloatingShelf={showModal}
         hideMobileNavChrome={showModal}
       />
-      
-      <style>{`
-        .goals-header-meta {
-          display: flex;
-          flex-direction: column;
-          align-items: stretch;
-          gap: 0.5rem;
-          max-width: 720px;
-          margin: 0 auto 1rem;
-          padding: 0 0.2rem;
-        }
-        .goals-header-meta .goals-summary-chip {
-          margin-top: 0;
-          align-self: flex-start;
-        }
-        .goals-summary-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.35rem;
-          margin-top: 0.5rem;
-          padding: 0.35rem 0.75rem;
-          border-radius: 999px;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.04em;
-          color: rgba(248, 250, 252, 0.88);
-          background: rgba(16, 185, 129, 0.12);
-          border: 1px solid rgba(52, 211, 153, 0.28);
-        }
-        .goals-summary-chip-icon {
-          font-size: 16px !important;
-          color: #34d399;
-        }
-        .goals-summary-bar {
-          display: flex;
-          flex-direction: row;
-          align-items: stretch;
-          width: 100%;
-          box-sizing: border-box;
-          margin-bottom: 12px;
-          padding: 12px 16px;
-          border-radius: 14px;
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-        }
-        .goals-summary-bar__item {
-          flex: 1;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          gap: 2px;
-        }
-        .goals-summary-bar__ic {
-          font-size: 18px !important;
-          font-variation-settings: 'FILL' 0, 'wght' 500;
-          line-height: 1;
-          margin-bottom: 2px;
-        }
-        .goals-summary-bar__val {
-          font-family: 'Syne', system-ui, sans-serif;
-          font-size: 18px;
-          font-weight: 700;
-          color: #ffffff;
-          line-height: 1.2;
-        }
-        .goals-summary-bar__lbl {
-          font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 10px;
-          font-weight: 500;
-          color: rgba(255, 255, 255, 0.4);
-          letter-spacing: 0.02em;
-        }
-        .goals-summary-bar__divider {
-          width: 1px;
-          align-self: stretch;
-          min-height: 44px;
-          background: rgba(255, 255, 255, 0.08);
-          flex-shrink: 0;
-        }
-        .goals-summary-bar__item--add {
-          flex: 1;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          gap: 2px;
-          background: rgba(0, 232, 122, 0.06);
-          border: none;
-          border-radius: 10px;
-          padding: 8px 4px;
-          margin: 0;
-          cursor: pointer;
-          font: inherit;
-          transition: transform 120ms ease, background 120ms ease;
-        }
-        .goals-summary-bar__item--add:active {
-          transform: scale(0.95);
-          background: rgba(0, 232, 122, 0.1);
-        }
-        .goals-summary-bar__add-ic {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: #00e87a;
-          color: #000000;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 12px rgba(0, 232, 122, 0.3);
-        }
-        .goals-summary-bar__add-ic .material-symbols-outlined {
-          font-size: 20px !important;
-          font-variation-settings: 'FILL' 0, 'wght' 300;
-          line-height: 1;
-        }
-        .goals-summary-bar__lbl--add {
-          color: #00e87a !important;
-          margin-top: 4px;
-        }
-        .goal-card-main-row {
-          display: flex;
-          flex-direction: row;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 0.75rem;
-        }
-        .goals-card-text {
-          flex: 1;
-          min-width: 0;
-          margin-right: 0;
-        }
-        .goals-card-title {
-          font-size: 18px;
-          font-weight: 800;
-          color: #fff;
-          margin: 0 0 0.35rem;
-          line-height: 1.25;
-        }
-        .goals-card-desc {
-          font-size: 12px;
-          color: rgba(148, 163, 184, 0.95);
-          margin: 0 0 0.5rem;
-          line-height: 1.4;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .goals-card-desc--placeholder {
-          opacity: 0.45;
-        }
-        .goals-behind-strip {
-          display: flex;
-          align-items: flex-start;
-          gap: 0.35rem;
-          padding: 0.45rem 0.55rem;
-          margin-bottom: 0.5rem;
-          border-radius: 10px;
-          background: rgba(245, 158, 11, 0.1);
-          border: 1px solid rgba(251, 191, 36, 0.25);
-          font-size: 11px;
-          font-weight: 700;
-          color: #fde68a;
-          line-height: 1.35;
-        }
-        .goals-behind-strip .material-symbols-outlined {
-          font-size: 16px !important;
-          color: #fbbf24;
-          flex-shrink: 0;
-        }
-        .goals-days-pill {
-          display: inline-flex;
-          align-items: baseline;
-          gap: 0.4rem;
-          padding: 0.4rem 0.85rem 0.45rem;
-          border-radius: 999px;
-          backdrop-filter: blur(8px);
-        }
-        .goals-days-pill-num {
-          font-size: 1.05rem;
-          font-weight: 900;
-          letter-spacing: -0.02em;
-        }
-        .goals-days-pill-label {
-          font-size: 9px;
-          font-weight: 900;
-          letter-spacing: 0.14em;
-          opacity: 0.92;
-        }
-        @keyframes goalsDaysPulse {
-          0%, 100% { box-shadow: 0 0 12px var(--pulse-glow); transform: scale(1); }
-          50% { box-shadow: 0 0 28px var(--pulse-glow); transform: scale(1.02); }
-        }
-        .goals-days-pill--pulse {
-          animation: goalsDaysPulse 1.8s ease-in-out infinite;
-        }
-        .goals-progress-stack {
-          margin-top: 0.35rem;
-        }
-        .goals-progress-label-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 4px;
-        }
-        .goals-progress-label-row--second {
-          margin-top: 10px;
-        }
-        .goals-progress-metric-label {
-          font-size: 10px;
-          font-weight: 900;
-          letter-spacing: 0.22em;
-          color: rgba(255, 255, 255, 0.38);
-        }
-        .goals-progress-metric-val {
-          font-size: 12px;
-          font-weight: 900;
-          color: #5eead4;
-        }
-        .goals-progress-metric-val--muted {
-          color: #c4b5fd;
-        }
-        .goal-neon-track {
-          position: relative;
-          height: 7px;
-          border-radius: 999px;
-          background: rgba(0, 0, 0, 0.35);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          overflow: hidden;
-          box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
-        }
-        .goal-neon-track--cyan {
-          box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 12px rgba(45, 212, 191, 0.15);
-        }
-        .goal-neon-track--violet {
-          box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 12px rgba(167, 139, 250, 0.12);
-        }
-        .goal-neon-bar-fill {
-          height: 100%;
-          border-radius: 999px;
-          background: linear-gradient(90deg, #2dd4bf, #5eead4, #99f6e4);
-          box-shadow: 0 0 14px rgba(45, 212, 191, 0.65), 0 0 4px rgba(255, 255, 255, 0.5);
-          transition: width 1.2s cubic-bezier(0.34, 1.2, 0.64, 1);
-          min-width: 0;
-        }
-        .goal-neon-bar-fill--violet {
-          background: linear-gradient(90deg, #8b5cf6, #a78bfa, #c4b5fd);
-          box-shadow: 0 0 14px rgba(139, 92, 246, 0.55), 0 0 4px rgba(255, 255, 255, 0.35);
-        }
-        .goal-neon-shimmer {
-          position: absolute;
-          top: 0;
-          left: -40%;
-          width: 40%;
-          height: 100%;
-          background: linear-gradient(
-            90deg,
-            transparent,
-            rgba(255, 255, 255, 0.45),
-            transparent
-          );
-          animation: goalNeonShimmer 2.4s ease-in-out infinite;
-          pointer-events: none;
-          border-radius: 999px;
-        }
-        .goal-neon-shimmer--slow {
-          animation-duration: 3.2s;
-          opacity: 0.7;
-        }
-        @keyframes goalNeonShimmer {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(350%); }
-        }
-        .goals-ring-img {
-          width: 52px;
-          height: 52px;
-          border-radius: 14px;
-          object-fit: cover;
-        }
-        .goals-ring-emoji {
-          font-size: 2.35rem;
-          line-height: 1;
-          filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.35));
-        }
-        .goal-progress-ring-stroke {
-          filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.45));
-        }
-        .goals-date-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.35rem;
-          padding: 0.4rem 0.75rem;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 800;
-          color: rgba(226, 232, 240, 0.92);
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .goals-date-chip-icon {
-          font-size: 16px !important;
-          color: #94a3b8;
-        }
-        .goals-date-chip--warn {
-          color: #fecaca;
-          background: rgba(127, 29, 29, 0.35);
-          border-color: rgba(248, 113, 113, 0.45);
-        }
-        .goals-date-chip--warn .goals-date-chip-icon {
-          color: #f87171;
-        }
-        @keyframes goalTickBounce {
-          0% { transform: scale(1); }
-          35% { transform: scale(0.88); }
-          55% { transform: scale(1.12); }
-          75% { transform: scale(0.96); }
-          100% { transform: scale(1); }
-        }
-        .goal-complete-tick-bounce:active {
-          animation: goalTickBounce 0.45s cubic-bezier(0.34, 1.4, 0.64, 1);
-        }
-        .goals-confetti-overlay {
-          position: fixed;
-          inset: 0;
-          pointer-events: none;
-          z-index: 2000;
-          overflow: hidden;
-        }
-        .goals-confetti-bit {
-          position: absolute;
-          top: -12px;
-          width: 8px;
-          height: 10px;
-          border-radius: 2px;
-          opacity: 0.95;
-          animation: goalsConfettiFall 2.4s ease-out forwards;
-        }
-        @keyframes goalsConfettiFall {
-          0% {
-            transform: translateY(0) rotate(0deg);
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(100vh) rotate(720deg);
-            opacity: 0.85;
-          }
-        }
-        .goals-grid {
-          display: grid;
-          gap: 1.5rem;
-          padding-bottom: 7rem;
-        }
-        @media (min-width: 1400px) {
-          .goals-grid { grid-template-columns: repeat(4, 1fr) !important; }
-        }
-        @media (max-width: 1399px) and (min-width: 1024px) {
-          .goals-grid { grid-template-columns: repeat(3, 1fr) !important; }
-        }
-        @media (max-width: 1023px) and (min-width: 640px) {
-          .goals-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        }
-        @media (max-width: 639px) {
-          .goals-grid { grid-template-columns: 1fr !important; }
-        }
-        .delete-goal-btn:hover {
-          color: #ef4444 !important;
-          background: rgba(239, 68, 68, 0.1) !important;
-          border-radius: 50%;
-        }
-        .goals-urgency-card.glass-card:hover {
-          transform: translateY(-4px);
-          filter: brightness(1.03);
-        }
-        .date-input-premium::-webkit-calendar-picker-indicator {
-          background: transparent;
-          bottom: 0;
-          color: transparent;
-          cursor: pointer;
-          height: auto;
-          left: 0;
-          position: absolute;
-          right: 0;
-          top: 0;
-          width: auto;
-        }
-        .goal-complete-tick:hover {
-          background: #10b981 !important;
-          color: white !important;
-          transform: scale(1.08);
-          box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
-        }
-      `}</style>
     </div>
   );
 };
