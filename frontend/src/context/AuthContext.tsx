@@ -8,6 +8,7 @@ import { clearAllCache } from '../lib/cacheManager';
 import { saveUserProfileCache } from '../lib/userProfileCache';
 import { flushPendingListCacheWrites } from '../lib/listCaches';
 import { resolveUserRole } from '../config/adminOwner';
+import { RevenueCatService } from '../lib/RevenueCatService';
 
 export interface AuthUser {
   id: string;
@@ -198,6 +199,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
             
             persistUser(merged);
+            
+            // RevenueCat: Configure and Sync
+            if (Capacitor.isNativePlatform() && merged.id) {
+              void RevenueCatService.configure(merged.id).then(() => {
+                void RevenueCatService.syncProStatus(merged.id).then((isNowPro) => {
+                  if (isNowPro !== merged.isPro) {
+                    refreshUserProfile();
+                  }
+                });
+              });
+            }
+
             setLoading(false);
             return;
           } else {
@@ -257,6 +270,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           };
           persistUser(merged);
           void saveUserProfileCache(merged);
+
+          // RevenueCat: Configure and Sync
+          if (Capacitor.isNativePlatform() && merged.id) {
+            void RevenueCatService.configure(merged.id).then(() => {
+              void RevenueCatService.syncProStatus(merged.id).then((isNowPro) => {
+                if (isNowPro !== merged.isPro) {
+                  refreshUserProfile();
+                }
+              });
+            });
+          }
+
           console.log('Restored session ✅', merged.email);
         } else {
           console.log('No user in DB');
@@ -298,6 +323,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await Preferences.remove({ key: 'saved_pin' });
 
     if (Capacitor.isNativePlatform()) {
+      await RevenueCatService.logOut().catch(() => {});
       await supabase.auth.signOut({ scope: 'local' });
     } else {
       await supabase.auth.signOut({ scope: 'global' });

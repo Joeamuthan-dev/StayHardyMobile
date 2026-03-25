@@ -11,6 +11,7 @@ import { saveUserProfileCache } from '../lib/userProfileCache';
 import { ProductivityService } from '../lib/ProductivityService';
 import SupportModal from '../components/SupportModal';
 import { shouldShowLifetimeUpsell } from '../lib/lifetimeAccess';
+import { RevenueCatService } from '../lib/RevenueCatService';
 // import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
 import { isAdminProfileUser } from '../config/adminOwner';
 import {
@@ -72,7 +73,7 @@ void _getAnnouncementCategoryStyle;
 const Settings: React.FC = () => {
   const [isSidebarHidden, setIsSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const _toggleSidebar = () => { setIsSidebarHidden(prev => { const next = !prev; localStorage.setItem('sidebarHidden', next.toString()); return next; }); }; void _toggleSidebar;
-  const { user, logout, setCurrentUser } = useAuth();
+  const { user, logout, setCurrentUser, refreshUserProfile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -86,6 +87,8 @@ const Settings: React.FC = () => {
 
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const isNative = Capacitor.isNativePlatform();
   const [_showPinModal, setShowPinModal] = useState(false); void _showPinModal;
   const [currentPin, setCurrentPin] = useState(['', '', '', '']);
   const [newPin, setNewPin] = useState(['', '', '', '']);
@@ -1232,6 +1235,49 @@ const Settings: React.FC = () => {
           </button>
         </div>
       </div>
+      
+      {/* ── SECTION: PURCHASES (Native Only) ── */}
+      {isNative && (
+        <div className="sp-group">
+          <div className="sp-group-label">PURCHASES</div>
+          <div className="sp-group-card">
+            <button 
+              type="button" 
+              className="sp-row" 
+              disabled={isRestoring}
+              onClick={async () => {
+                setIsRestoring(true);
+                try {
+                  const ok = await RevenueCatService.restorePurchases();
+                  if (ok) {
+                    const isNowPro = await refreshUserProfile();
+                    setNotificationToast(isNowPro ? 'Purchases restored successfully! ✅' : 'Restored, but account refresh needed.');
+                  } else {
+                    setNotificationToast('No active purchases found to restore.');
+                  }
+                } catch (e) {
+                  setNotificationToast('Restore failed. Please try again later.');
+                } finally {
+                  setIsRestoring(false);
+                }
+              }}
+            >
+              <div className="sp-ic">
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>restore</span>
+              </div>
+              <div className="sp-row-body">
+                <span className="sp-row-title">Restore Purchases</span>
+                <span className="sp-row-sub">Recover your Pro access from the store</span>
+              </div>
+              {isRestoring ? (
+                <span className="material-symbols-outlined rotating" style={{ color: '#00E87A', fontSize: 18, marginRight: 4 }}>sync</span>
+              ) : (
+                <span className="material-symbols-outlined sp-chev">chevron_right</span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── SECTION 5: DANGER ZONE ── */}
       <div className="sp-group">

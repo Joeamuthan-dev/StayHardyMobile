@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Preferences } from '@capacitor/preferences';
 import { supabase } from '../supabase';
+import { Capacitor } from '@capacitor/core';
+import { RevenueCatService } from '../lib/RevenueCatService';
+import type { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 declare global {
   interface Window {
@@ -43,9 +46,25 @@ const ProPaywall: React.FC<ProPaywallProps> = ({ currentUser, onClose }) => {
   const [userCount, setUserCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [rcPackage, setRcPackage] = useState<PurchasesPackage | null>(null);
+  const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
     const fetchProPrice = async () => {
+      if (isNative) {
+        setBusy(true);
+        const pkg = await RevenueCatService.getLifetimePackage();
+        if (pkg) {
+          setRcPackage(pkg);
+          const price = pkg.product.price;
+          setProPrice(price);
+          // Original price is not easily available for single products in RC without multi-offering setup
+          setOriginalPrice(price * 4); // Aesthetic fallback or placeholder
+        }
+        setBusy(false);
+        return;
+      }
+
       try {
         const { value } = await Preferences.get({ key: 'app_settings' });
         if (value) {
@@ -89,6 +108,36 @@ const ProPaywall: React.FC<ProPaywallProps> = ({ currentUser, onClose }) => {
     if (!currentUser?.id) {
       setErr('Please log in first.');
       setBusy(false);
+      return;
+    }
+
+    setBusy(true);
+
+    if (isNative) {
+      if (!rcPackage) {
+        setErr('Pro package not loaded. Check connection.');
+        setBusy(false);
+        return;
+      }
+
+      try {
+        const customerInfo = await RevenueCatService.purchase(rcPackage);
+        if (customerInfo?.entitlements.active['pro']) {
+          await RevenueCatService.syncProStatus(currentUser.id);
+          const isPro = await refreshUserProfile();
+          if (isPro) {
+            navigate('/home', { replace: true });
+          } else {
+            setErr('Purchase successful, but account update is pending.');
+          }
+        } else {
+          setErr('Purchase was not completed.');
+        }
+      } catch (e: any) {
+        setErr(e.message || 'Purchase failed.');
+      } finally {
+        setBusy(false);
+      }
       return;
     }
 
@@ -151,12 +200,12 @@ const ProPaywall: React.FC<ProPaywallProps> = ({ currentUser, onClose }) => {
 
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
-      setBusy(false);
+      // Don't setBusy(false) here, Razorpay modal is open
     } catch (e) {
       setErr((e as Error).message || 'Something went wrong.');
       setBusy(false);
     }
-  }, [navigate, refreshUserProfile, currentUser]);
+  }, [navigate, refreshUserProfile, currentUser, isNative, rcPackage]);
 
   return (
     <div style={{
@@ -302,8 +351,10 @@ const ProPaywall: React.FC<ProPaywallProps> = ({ currentUser, onClose }) => {
         background: 'rgba(0,232,122,0.03)'
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.25)', textDecoration: 'line-through', fontWeight: '500' }}>₹{originalPrice}</span>
-          <span style={{ fontSize: '38px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '-1px', lineHeight: 1 }}>₹{proPrice}</span>
+          {!isNative && <span style={{ fontSize: '16px', color: 'rgba(255,255,255,0.25)', textDecoration: 'line-through', fontWeight: '500' }}>₹{originalPrice}</span>}
+          <span style={{ fontSize: '38px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '-1px', lineHeight: 1 }}>
+            {isNative && rcPackage ? rcPackage.product.priceString : `₹${proPrice}`}
+          </span>
         </div>
         <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', margin: '0 0 20px 0' }}>One-time payment. No subscription.</p>
 
@@ -313,10 +364,12 @@ const ProPaywall: React.FC<ProPaywallProps> = ({ currentUser, onClose }) => {
           style={{
             width: '100%', height: '54px', background: '#00E87A', border: 'none', borderRadius: '14px', fontSize: '16px', fontWeight: '900', color: '#000000', cursor: busy ? 'wait' : 'pointer', letterSpacing: '-0.2px', boxShadow: '0 0 24px rgba(0,232,122,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: busy ? 0.7 : 1
           }}>
-          {busy ? 'Processing…' : `Unlock Now — ₹${proPrice}`}
+          {busy ? 'Processing…' : (isNative && rcPackage ? `Unlock Now — ${rcPackage.product.priceString}` : `Unlock Now — ₹${proPrice}`)}
         </button>
 
-        <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.2)', margin: '12px 0 0 0' }}>🔒 Secure payment via Razorpay</p>
+        <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.2)', margin: '12px 0 0 0' }}>
+          🔒 Secure payment via {isNative ? 'App Store / Play Store' : 'Razorpay'}
+        </p>
       </div>
 
       {onClose && (
