@@ -1,5 +1,30 @@
 import React, { useState, useRef } from 'react';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { isNative } from '../utils/platform';
+
+const triggerHaptic = async (style = 'Light') => {
+  if (!isNative) return;
+  try {
+    const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
+    await Haptics.impact({ 
+      style: style === 'Medium' ? ImpactStyle.Medium : ImpactStyle.Light 
+    });
+  } catch {
+    // silent fail
+  }
+};
+
+const triggerHapticHeavy = async () => {
+  if (!isNative) return;
+  try {
+    const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
+    await Haptics.impact({ style: ImpactStyle.Heavy });
+    setTimeout(async () => {
+      await Haptics.impact({ style: ImpactStyle.Medium });
+    }, 100);
+  } catch (e) {
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  }
+};
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -73,16 +98,11 @@ const BottomNav: React.FC<{
   const progressInterval = useRef<any>(null);
 
   const shortPressVibrate = async () => {
-    try { await Haptics.impact({ style: ImpactStyle.Light }); } catch (e) {}
+    await triggerHaptic('Light');
   };
 
   const longPressVibrate = async () => {
-    try {
-      await Haptics.impact({ style: ImpactStyle.Heavy });
-      setTimeout(async () => { await Haptics.impact({ style: ImpactStyle.Medium }); }, 100);
-    } catch (e) {
-      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    }
+    await triggerHapticHeavy();
   };
 
   const startPressProgress = () => {

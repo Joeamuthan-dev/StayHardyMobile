@@ -1,7 +1,19 @@
 {
   "rewrites": [
-    { "source": "/verified", "destination": "/verify-success.html" },
-    { "source": "/verified/", "destination": "/verify-success.html" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/((?!auth/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/auth/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
   ]
 }

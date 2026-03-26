@@ -10,6 +10,9 @@ import { loadStatsPageStale, persistStatsPageCache } from '../lib/statsPageCache
 import { ProductivityService, type ProductivityScoreData } from '../lib/ProductivityService';
 import { calculateProductivityScore } from '../utils/productivity';
 import { loadTasksListStale, loadGoalsListStale, loadRoutinesRawStale, loadRoutineLogsListStale } from '../lib/listCaches';
+import { useSubscription } from '../context/SubscriptionContext';
+import { useLoading } from '../context/LoadingContext';
+import { FeatureGate } from '../components/FeatureGate';
 
 interface Task {
   id: string;
@@ -526,6 +529,8 @@ const Stats: React.FC = () => {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [trendDays, setTrendDays] = useState(7);
   const { user } = useAuth();
+  const { setLoading } = useLoading();
+  const { isPro } = useSubscription();
   const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
   const isMountedRef = useRef(true);
   useEffect(() => {
@@ -535,7 +540,9 @@ const Stats: React.FC = () => {
 
   const fetchAllData = useCallback(async (opts?: { force?: boolean }) => {
     if (!user?.id) return;
-    if (!opts?.force) {
+    setLoading(true);
+    try {
+      if (!opts?.force) {
       const expired = await isCacheExpired(CACHE_KEYS.user_stats, CACHE_EXPIRY_MINUTES.user_stats);
       if (!expired) return;
     }
@@ -572,7 +579,12 @@ const Stats: React.FC = () => {
 
     void persistStatsPageCache(user.id, { scoreData: calculatedScore ?? null, tasks: tasksArr, routines: routinesArr, routineLogs: logsArr, goals: goalsArr, dbCategories: cats });
     void syncWidgetData();
-  }, [user?.id]);
+    } catch (e) {
+      console.error('Stats fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, setLoading]);
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -829,606 +841,144 @@ const Stats: React.FC = () => {
   };
 
   return (
-    <div className={`page-shell stats-premium-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      background: '#000',
-      overflowY: 'auto',
-      WebkitOverflowScrolling: 'touch'
-    }}>
-      <div className="aurora-bg">
-        <div className="aurora-gradient-1" />
-        <div className="aurora-gradient-2" />
-      </div>
+    <FeatureGate moduleName="Stats" isPro={!!isPro}>
+      <div 
+        className={`page-shell stats-premium-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} 
+        style={{ 
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#080C0A',
+          overflowY: 'auto'
+        }}
+      >
+        <div className="aurora-bg">
+          <div className="aurora-gradient-1" />
+          <div className="aurora-gradient-2" />
+        </div>
 
-      <main className="stats-premium-main bouncing-scroll" style={{ 
-        flex: '1', 
-        padding: '12px 0 120px 0' // Increased bottom padding to 120px as requested
-      }}>
-
-        <ScoreGauge score={dynamicTodayScore} />
-
-        <InsightsTrend
-          data={{
-            tasks: historicalData.map(d => d.tasks),
-            goals: historicalData.map(d => d.goals),
-            habits: historicalData.map(d => d.habits)
+        <main 
+          className="stats-premium-main bouncing-scroll" 
+          style={{ 
+            flex: '1', 
+            padding: '112px 0 120px 0'
           }}
-          activeRange={trendDays === 7 ? '7D' : trendDays === 30 ? '30D' : '90D'}
-          setActiveRange={(r) => setTrendDays(r === '7D' ? 7 : r === '30D' ? 30 : 90)}
-        />
+        >
+          <ScoreGauge score={dynamicTodayScore} />
 
-        <VerdictCard
-          score={dynamicTodayScore}
-          verdictText={getScoreBadge(dynamicTodayScore).fullVerdict}
-        />
-
-        {/* ── HEATMAP (premium) ── */}
-        <HabitHeatmap
-          heatmapData={getDaysArray(heatmapRange).map(d => {
-            const c = heatMap[d] || 0;
-            return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
-          })}
-          activeRange={heatmapRange}
-          setActiveRange={setHeatmapRange}
-          statsData={{
-            activeDays: activeDays,
-            bestStreak: bestStreak,
-            completionRate: activeDays > 0 ? Math.round((activeDays / getDaysArray(heatmapRange).length) * 100) : 0
-          }}
-        />
-
-        {/* ── INSIGHT CARDS (premium) ── */}
-        <InsightCard
-          type="tasks"
-          data={{
-            total: totalUserTasks,
-            completed: completedUserTasks,
-            pending: pendingCount
-          }}
-        />
-
-        <InsightCard
-          type="goals"
-          data={{
-            total: totalGoals,
-            active: activeGoalsCount,
-            completed: completedGoalsCount
-          }}
-        />
-
-        <InsightCard
-          type="habits"
-          data={{
-            total: totalRoutines,
-            today: routinesCompletedToday,
-            streak: currentStreak,
-            consistency: weeklyConsistency
-          }}
-        />
-
-        <section className="stats-category-section" style={{ marginBottom: '20px' }}>
-          <p style={{
-            fontSize: '10px',
-            fontWeight: '800',
-            color: 'rgba(255,255,255,0.25)',
-            letterSpacing: '0.15em',
-            padding: '8px 16px',
-            margin: '0 0 10px 0'
-          }}>
-            CATEGORY INSIGHT
-          </p>
-
-          <div 
-            style={{
-              padding: '0 0 24px 0'
+          <InsightsTrend
+            data={{
+              tasks: historicalData.map(d => d.tasks),
+              goals: historicalData.map(d => d.goals),
+              habits: historicalData.map(d => d.habits)
             }}
-          >
-            {categoryStats.length > 0 ? (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '12px',
-                padding: '0 16px',
-              }}>
-                {categoryStats.map((cat, i) => (
-                  <CategoryInsightCard
-                    key={i}
-                    categoryName={cat.name}
-                    score={cat.rate}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div style={{ padding: '0 16px', textAlign: 'center' }}>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)' }}>No category data available yet.</p>
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
+            activeRange={trendDays === 7 ? '7D' : trendDays === 30 ? '30D' : '90D'}
+            setActiveRange={(r) => setTrendDays(r === '7D' ? 7 : r === '30D' ? 30 : 90)}
+          />
 
-      <BottomNav isHidden={isSidebarHidden} />
-      <style>{`
-        @keyframes gaugeLoad {
-          from { stroke-dashoffset: 565 }
-          to { stroke-dashoffset: var(--target) }
-        }
-        @keyframes borderGlowGreen {
-          0%,100% { border-color: rgba(0,232,122,0.2); box-shadow: 0 0 10px rgba(0,232,122,0.1); }
-          50% { border-color: rgba(0,232,122,0.6); box-shadow: 0 0 20px rgba(0,232,122,0.3); }
-        }
-        @keyframes borderGlowPurpleInsight {
-          0%,100% { border-color: rgba(124,77,255,0.2); box-shadow: 0 0 10px rgba(124,77,255,0.1); }
-          50% { border-color: rgba(124,77,255,0.6); box-shadow: 0 0 20px rgba(124,77,255,0.3); }
-        }
-        @keyframes borderGlowCyanInsight {
-          0%,100% { border-color: rgba(0,176,255,0.2); box-shadow: 0 0 10px rgba(0,176,255,0.1); }
-          50% { border-color: rgba(0,176,255,0.6); box-shadow: 0 0 20px rgba(0,176,255,0.3); }
-        }
-        @keyframes syncShimmer {
-          0% { transform: translateX(-100%) skewX(-20deg); }
-          50%, 100% { transform: translateX(200%) skewX(-20deg); }
-        }
-        @keyframes laserPulse {
-          0%,100% {
-            r: 5;
-            filter: drop-shadow(0 0 6px rgba(0,232,122,1)) drop-shadow(0 0 12px rgba(0,232,122,0.6));
+          <VerdictCard
+            score={dynamicTodayScore}
+            verdictText={getScoreBadge(dynamicTodayScore).fullVerdict}
+          />
+
+          <HabitHeatmap
+            heatmapData={getDaysArray(heatmapRange).map(d => {
+              const c = heatMap[d] || 0;
+              return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
+            })}
+            activeRange={heatmapRange}
+            setActiveRange={setHeatmapRange}
+            statsData={{
+              activeDays: activeDays,
+              bestStreak: bestStreak,
+              completionRate: activeDays > 0 ? Math.round((activeDays / getDaysArray(heatmapRange).length) * 100) : 0
+            }}
+          />
+
+          <InsightCard
+            type="tasks"
+            data={{
+              total: totalUserTasks,
+              completed: completedUserTasks,
+              pending: pendingCount
+            }}
+          />
+
+          <InsightCard
+            type="goals"
+            data={{
+              total: totalGoals,
+              active: activeGoalsCount,
+              completed: completedGoalsCount
+            }}
+          />
+
+          <InsightCard
+            type="habits"
+            data={{
+              total: totalRoutines,
+              today: routinesCompletedToday,
+              streak: currentStreak,
+              consistency: weeklyConsistency
+            }}
+          />
+
+          <section className="stats-category-section" style={{ marginBottom: '20px' }}>
+            <p style={{
+              fontSize: '10px',
+              fontWeight: '800',
+              color: 'rgba(255,255,255,0.25)',
+              letterSpacing: '0.15em',
+              padding: '8px 16px',
+              margin: '0 0 10px 0'
+            }}>
+              CATEGORY INSIGHT
+            </p>
+
+            <div style={{ padding: '0 0 24px 0' }}>
+              {categoryStats.length > 0 ? (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '12px',
+                  padding: '0 16px',
+                }}>
+                  {categoryStats.map((cat, i) => (
+                    <CategoryInsightCard
+                      key={i}
+                      categoryName={cat.name}
+                      score={cat.rate}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: '0 16px', textAlign: 'center' }}>
+                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)' }}>No category data available yet.</p>
+                </div>
+              )}
+            </div>
+          </section>
+        </main>
+
+        <BottomNav isHidden={isSidebarHidden} />
+        
+        <style>{`
+          @keyframes gaugeLoad {
+            from { stroke-dashoffset: 565 }
+            to { stroke-dashoffset: var(--target) }
           }
-          50% {
-            r: 8;
-            filter: drop-shadow(0 0 12px rgba(0,232,122,1)) drop-shadow(0 0 24px rgba(0,232,122,0.8));
+          .stats-premium-main {
+            display: flex;
+            flex-direction: column;
+            gap: 1.15rem;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 0 0.35rem;
           }
-        }
-        @keyframes trailFade {
-          0% { opacity: 0.6 }
-          100% { opacity: 0 }
-        }
-        @keyframes segSlide {
-          from { opacity: 0.8 }
-          to { opacity: 1 }
-        }
-        @keyframes verdictGlow {
-          0%,100% {
-            box-shadow: 0 0 16px rgba(255,215,0,0.1), inset 0 0 20px rgba(255,255,255,0.02);
-          }
-          50% {
-            box-shadow: 0 0 32px rgba(255,215,0,0.2), inset 0 0 30px rgba(255,255,255,0.04);
-          }
-        }
-        @keyframes godRay {
-          0%,100% { opacity: 0.15 }
-          50% { opacity: 0.3 }
-        }
-        @keyframes countUp {
-          from { opacity: 0 }
-          to { opacity: 1 }
-        }
-        @keyframes auraGlow {
-          0%,100% { opacity: 0.4 }
-          50% { opacity: 0.7 }
-        }
-
-        .stats-premium-page {
-          padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
-        }
-
-        .stats-premium-main {
-          display: flex;
-          flex-direction: column;
-          gap: 1.15rem;
-          max-width: 720px;
-          margin: 0 auto;
-          padding: 0 0.35rem;
-        }
-
-        .stats-speedo-card {
-          position: relative;
-          border-radius: 24px;
-          padding: 1.35rem 1rem 1.25rem;
-          background:
-            radial-gradient(ellipse 130% 85% at 50% 115%, var(--speedo-glow, rgba(78, 205, 196, 0.18)), transparent 62%),
-            linear-gradient(165deg, rgba(15, 23, 42, 0.98) 0%, rgba(3, 7, 16, 0.99) 100%);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          box-shadow:
-            0 4px 32px rgba(0, 0, 0, 0.45),
-            0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-            0 0 64px var(--speedo-glow, rgba(78, 205, 196, 0.2));
-          overflow: hidden;
-        }
-        .stats-speedo-card__inner {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background: radial-gradient(ellipse 90% 55% at 50% -5%, rgba(255, 255, 255, 0.06), transparent 52%);
-          opacity: 0.9;
-        }
-        .stats-speedo-svg {
-          display: block;
-          margin: 0 auto;
-        }
-        .stats-speedo-arc-fill {
-          transition: stroke-dashoffset 1.4s cubic-bezier(0.34, 1.15, 0.64, 1), stroke 0.45s ease;
-          filter: drop-shadow(0 0 5px var(--speedo-accent, #4ecdc4))
-            drop-shadow(0 0 14px var(--speedo-glow, rgba(78, 205, 196, 0.35)));
-        }
-        .stats-speedo-readout {
-          text-align: center;
-          margin-top: 0.35rem;
-          padding-top: 0.15rem;
-          position: relative;
-          z-index: 2;
-        }
-        .stats-speedo-pct {
-          display: block;
-          font-family: 'Bebas Neue', Impact, sans-serif;
-          font-size: clamp(2.75rem, 12vw, 3.75rem);
-          font-weight: 400;
-          color: #f8fafc;
-          letter-spacing: 0.03em;
-          line-height: 1.05;
-          text-shadow:
-            0 2px 24px rgba(0, 0, 0, 0.4),
-            0 0 36px var(--speedo-glow, rgba(255, 255, 255, 0.08));
-        }
-        .stats-status-pill {
-          display: inline-block;
-          margin-top: 0.65rem;
-          padding: 0.35rem 0.85rem;
-          border-radius: 999px;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.18em;
-        }
-        .stats-status-pill--red {
-          background: rgba(239, 68, 68, 0.2);
-          color: #fecaca;
-          border: 1px solid rgba(248, 113, 113, 0.45);
-        }
-        .stats-status-pill--amber {
-          background: rgba(245, 158, 11, 0.18);
-          color: #fde68a;
-          border: 1px solid rgba(251, 191, 36, 0.4);
-        }
-        .stats-status-pill--green {
-          background: rgba(16, 185, 129, 0.2);
-          color: #a7f3d0;
-          border: 1px solid rgba(52, 211, 153, 0.45);
-        }
-
-        .stats-activity-card {
-          border-radius: 18px;
-          padding: 1.1rem 1rem 0.85rem;
-          background: rgba(12, 18, 32, 0.75);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-          backdrop-filter: blur(14px);
-        }
-        .stats-activity-head {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 0.75rem;
-          flex-wrap: wrap;
-          margin-bottom: 0.65rem;
-        }
-        .stats-mono-overline {
-          margin: 0;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 9px;
-          font-weight: 700;
-          letter-spacing: 0.2em;
-          color: rgba(148, 163, 184, 0.9);
-        }
-        .stats-activity-subtitle {
-          margin: 0.25rem 0 0;
-          font-size: 1rem;
-          font-weight: 900;
-          color: #f8fafc;
-        }
-        .stats-muted-micro {
-          margin: 0.2rem 0 0;
-          font-size: 10px;
-          font-weight: 600;
-          color: rgba(100, 116, 139, 0.95);
-        }
-        .stats-activity-head-right {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          gap: 0.5rem;
-        }
-        .stats-legend {
-          display: flex;
-          align-items: center;
-          gap: 0.45rem;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-        }
-        .stats-legend-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          box-shadow: 0 0 8px currentColor;
-        }
-        .stats-legend-dot--blue {
-          background: #3b82f6;
-          color: #3b82f6;
-        }
-        .stats-legend-dot--red {
-          background: #ef4444;
-          color: #ef4444;
-        }
-        .stats-legend-txt {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 8px;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          color: rgba(148, 163, 184, 0.95);
-        }
-        .stats-trend-filters {
-          display: flex;
-          gap: 0.3rem;
-          background: rgba(0, 0, 0, 0.3);
-          padding: 3px;
-          border-radius: 999px;
-        }
-        .stats-trend-pill {
-          padding: 0.35rem 0.65rem;
-          border-radius: 999px;
-          border: none;
-          background: transparent;
-          color: rgba(148, 163, 184, 0.9);
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 9px;
-          font-weight: 800;
-          letter-spacing: 0.1em;
-          cursor: pointer;
-          transition: all 0.25s ease;
-        }
-        .stats-trend-pill--on {
-          background: rgba(16, 185, 129, 0.22);
-          color: #ecfdf5;
-          box-shadow: 0 0 14px rgba(16, 185, 129, 0.35);
-        }
-
-        .stats-verdict-card {
-          position: relative;
-          border-radius: 18px;
-          padding: 1.25rem 1.15rem 1.4rem;
-          background: rgba(15, 23, 42, 0.55);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          backdrop-filter: blur(18px);
-          overflow: hidden;
-        }
-        .stats-verdict-shimmer {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 2px;
-          background: linear-gradient(90deg, transparent, rgba(250, 204, 21, 0.7), rgba(251, 191, 36, 0.4), transparent);
-          opacity: 0.9;
-        }
-        .stats-verdict-head {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 0.75rem;
-        }
-        .stats-verdict-trophy {
-          font-size: 1.35rem;
-          filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.45));
-        }
-        .stats-verdict-label {
-          font-size: 11px;
-          font-weight: 900;
-          letter-spacing: 0.22em;
-          color: #fbbf24;
-        }
-        .stats-verdict-quote {
-          margin: 0;
-          font-size: clamp(1.05rem, 4vw, 1.35rem);
-          font-weight: 700;
-          font-style: italic;
-          line-height: 1.45;
-          color: #f1f5f9;
-        }
-        .stats-insight-card {
-          border-radius: 16px;
-          padding: 1rem 0.85rem;
-          border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-        .stats-insight-card--tasks {
-          background: linear-gradient(160deg, rgba(30, 58, 138, 0.12), rgba(8, 12, 22, 0.92));
-        }
-        .stats-insight-card--goals {
-          background: linear-gradient(160deg, rgba(88, 28, 135, 0.12), rgba(8, 12, 22, 0.92));
-        }
-        .stats-insight-card--routines {
-          background: linear-gradient(160deg, rgba(6, 78, 59, 0.14), rgba(8, 12, 22, 0.92));
-        }
-        .stats-insight-head {
-          display: flex;
-          align-items: center;
-          gap: 0.45rem;
-          font-size: 0.95rem;
-          font-weight: 900;
-          color: #f8fafc;
-          margin-bottom: 0.85rem;
-        }
-        .stats-insight-icon {
-          font-size: 22px !important;
-          color: #94a3b8;
-        }
-        .stats-insight-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 0.35rem;
-        }
-        @media (max-width: 400px) {
-          .stats-insight-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        .stats-col-label {
-          display: block;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 8px;
-          font-weight: 700;
-          letter-spacing: 0.14em;
-          color: rgba(148, 163, 184, 0.85);
-          margin-bottom: 0.25rem;
-        }
-        .stats-col-val {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: clamp(1.15rem, 4.5vw, 1.45rem);
-          font-weight: 800;
-          line-height: 1.1;
-        }
-        .stats-col-val--white {
-          color: #f8fafc;
-        }
-        .stats-col-val--green {
-          color: #4ade80;
-        }
-        .stats-col-val--orange {
-          color: #fb923c;
-        }
-        .stats-col-val--blue {
-          color: #60a5fa;
-        }
-        .stats-col-val--red {
-          color: #f87171;
-        }
-        .stats-col-val--cyan {
-          color: #22d3ee;
-        }
-        .stats-col-val--yellow {
-          color: #facc15;
-        }
-        .stats-fire-emoji {
-          font-style: normal;
-        }
-
-        .stats-category-section-label {
-          margin: 0.25rem 0 0.5rem;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 9px;
-          font-weight: 700;
-          letter-spacing: 0.24em;
-          color: rgba(100, 116, 139, 0.95);
-        }
-        .stats-category-stack {
-          display: flex;
-          flex-direction: column;
-          gap: 1.1rem;
-        }
-        .stats-cat-card {
-          position: relative;
-          border-radius: 16px;
-          padding: 1rem 1rem 0.85rem;
-          background: rgba(10, 14, 26, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          border-left: 3px solid var(--cat-bar, #64748b);
-          box-shadow: -4px 0 22px var(--cat-glow, transparent);
-          overflow: visible;
-        }
-        .stats-cat-card__glow {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          border-radius: 16px;
-          box-shadow: inset 0 0 40px rgba(255, 255, 255, 0.02);
-        }
-        .stats-cat-name-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        .stats-cat-name {
-          font-size: 1rem;
-          font-weight: 900;
-          color: #fff;
-        }
-        .stats-cat-pill {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 11px;
-          font-weight: 800;
-          padding: 0.25rem 0.55rem;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.08);
-          color: #e2e8f0;
-          border: 1px solid var(--cat-bar, #64748b);
-          box-shadow: 0 0 12px var(--cat-glow, transparent);
-        }
-        .stats-cat-count {
-          margin: 0.2rem 0 0;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 10px;
-          font-weight: 600;
-          color: rgba(148, 163, 184, 0.9);
-        }
-        .stats-cat-status {
-          margin: 0.35rem 0 0;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 9px;
-          font-weight: 800;
-          letter-spacing: 0.12em;
-        }
-        .stats-cat-bar-wrap {
-          position: relative;
-          margin-top: 1.15rem;
-          padding-top: 0.5rem;
-        }
-        .stats-cat-mascot {
-          position: absolute;
-          bottom: 100%;
-          transform: translateX(-50%);
-          font-size: 1.65rem;
-          line-height: 1;
-          filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
-          pointer-events: none;
-          margin-bottom: 2px;
-        }
-        .stats-cat-bar-track {
-          height: 10px;
-          border-radius: 999px;
-          background: rgba(0, 0, 0, 0.45);
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          overflow: hidden;
-        }
-        .stats-cat-bar-fill {
-          height: 100%;
-          border-radius: 999px;
-          transition: width 1.2s cubic-bezier(0.34, 1.15, 0.64, 1);
-        }
-        .stats-cat-quote {
-          margin: 0.65rem 0 0;
-          font-size: 0.8rem;
-          font-style: italic;
-          font-weight: 600;
-          color: rgba(148, 163, 184, 0.85);
-          line-height: 1.4;
-        }
-        .stats-category-empty {
-          text-align: center;
-          padding: 2.5rem 1rem;
-          border-radius: 16px;
-          border: 1px dashed rgba(255, 255, 255, 0.08);
-          color: rgba(100, 116, 139, 0.9);
-          font-size: 0.8rem;
-        }
-        .stats-category-empty .material-symbols-outlined {
-          font-size: 2rem;
-          display: block;
-          margin-bottom: 0.5rem;
-          opacity: 0.4;
-        }
-      `}</style>
-    </div>
+          /* Add other specific stats styles if needed, though most are likely global or inline already */
+        `}</style>
+      </div>
+    </FeatureGate>
   );
 };
 

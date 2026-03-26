@@ -1,4 +1,4 @@
-import { Preferences } from '@capacitor/preferences';
+import { storage } from '../utils/storage';
 import { CACHE_KEYS, CURRENT_CACHE_VERSION, type CacheKey } from './cacheKeys';
 
 const TS_SUFFIX = '_timestamp';
@@ -46,12 +46,12 @@ function wrap<T>(body: T, expiryMinutes: number | null): string {
  * @param expiryMinutes null = entry does not expire by age (app_settings).
  */
 export async function saveToCache<T>(key: string, data: T, expiryMinutes: number | null): Promise<void> {
-  await Preferences.set({ key, value: wrap(data, expiryMinutes) });
-  await Preferences.set({ key: `${key}${TS_SUFFIX}`, value: String(Date.now()) });
+  await storage.set(key, wrap(data, expiryMinutes));
+  await storage.set(`${key}${TS_SUFFIX}`, String(Date.now()));
 }
 
 export async function getFromCache<T>(key: string): Promise<T | null> {
-  const { value } = await Preferences.get({ key });
+  const value = await storage.get(key);
   if (!value) return null;
   let parsed: unknown;
   try {
@@ -64,8 +64,8 @@ export async function getFromCache<T>(key: string): Promise<T | null> {
     await clearCache(key);
     return null;
   }
-  const tsRaw = await Preferences.get({ key: `${key}${TS_SUFFIX}` });
-  const savedAt = tsRaw.value ? Number(tsRaw.value) : 0;
+  const tsRaw = await storage.get(`${key}${TS_SUFFIX}`);
+  const savedAt = tsRaw ? Number(tsRaw) : 0;
   const ageMin = savedAt ? (Date.now() - savedAt) / 60_000 : Infinity;
   const exp = parsed.expiryMinutes ?? null;
   if (exp != null && exp > 0 && ageMin > exp) return null;
@@ -77,7 +77,7 @@ export async function getFromCache<T>(key: string): Promise<T | null> {
  * Still returns null if missing, corrupt, or wrong cache_version.
  */
 export async function getStaleCache<T>(key: string): Promise<T | null> {
-  const { value } = await Preferences.get({ key });
+  const value = await storage.get(key);
   if (!value) return null;
   let parsed: unknown;
   try {
@@ -94,8 +94,8 @@ export async function getStaleCache<T>(key: string): Promise<T | null> {
 }
 
 export async function clearCache(key: string): Promise<void> {
-  await Preferences.remove({ key });
-  await Preferences.remove({ key: `${key}${TS_SUFFIX}` });
+  await storage.remove(key);
+  await storage.remove(`${key}${TS_SUFFIX}`);
 }
 
 /** Logout: wipe user data caches; keep app_settings (theme, language, onboarding, etc.). */
@@ -128,9 +128,9 @@ export async function isCacheExpired(key: string, expiryMinutes: number): Promis
 
 /** Minutes since save, or null if no timestamp. */
 export async function getCacheAge(key: string): Promise<number | null> {
-  const tsRaw = await Preferences.get({ key: `${key}${TS_SUFFIX}` });
-  if (!tsRaw.value) return null;
-  const savedAt = Number(tsRaw.value);
+  const tsRaw = await storage.get(`${key}${TS_SUFFIX}`);
+  if (!tsRaw) return null;
+  const savedAt = Number(tsRaw);
   if (!Number.isFinite(savedAt)) return null;
   return (Date.now() - savedAt) / 60_000;
 }
@@ -141,7 +141,7 @@ export async function setLastSync(which: 'tasks' | 'goals' | 'routines'): Promis
     goals: CACHE_KEYS.last_sync_goals,
     routines: CACHE_KEYS.last_sync_routines,
   } as const;
-  await Preferences.set({ key: map[which], value: new Date().toISOString() });
+  await storage.set(map[which], new Date().toISOString());
 }
 
 export async function getLastSyncIso(which: 'tasks' | 'goals' | 'routines'): Promise<string | null> {
@@ -150,7 +150,7 @@ export async function getLastSyncIso(which: 'tasks' | 'goals' | 'routines'): Pro
     goals: CACHE_KEYS.last_sync_goals,
     routines: CACHE_KEYS.last_sync_routines,
   } as const;
-  const { value } = await Preferences.get({ key: map[which] });
+  const value = await storage.get(map[which]);
   return value ?? null;
 }
 

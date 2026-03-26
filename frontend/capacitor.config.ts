@@ -18,9 +18,17 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
+    SplashScreen: {
+      launchShowDuration: 0,
+      launchAutoHide: false,
+      backgroundColor: "#000000",
+      showSpinner: false,
+    },
   },
   server: {
     // Helps third-party cookies / storage behavior on Android WebView in some setups.
+    // Set to 'https' as the recommended standard scheme for Capacitor WebView.
+    // This allows React Router BrowserRouter to function correctly.
     androidScheme: 'https',
   },
 };

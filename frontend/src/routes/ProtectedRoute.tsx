@@ -1,13 +1,12 @@
-import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 
-/** Protected route for Pro features. */
-const ProFeatureRoute: React.FC = () => {
+export const ProtectedRoute = () => {
   const { user, loading: authLoading } = useAuth();
   const { isPro, loading: subLoading } = useSubscription();
 
+  // Show nothing while checking status to prevent flashes
   if (authLoading || subLoading) return null;
 
   if (!user?.id) {
@@ -18,7 +17,5 @@ const ProFeatureRoute: React.FC = () => {
     return <Navigate to="/paywall" replace />;
   }
 
-  return <Navigate to="/home" replace />; // This is just a placeholder, the child routes should be navigated to.
+  return <Outlet />;
 };
-
-export default ProFeatureRoute;

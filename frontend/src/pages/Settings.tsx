@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
-import { Preferences } from '@capacitor/preferences';
+import { isNative } from '../utils/platform';
+import { storage } from '../utils/storage';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import BottomNav from '../components/BottomNav';
 import { supabase } from '../supabase';
@@ -11,7 +11,7 @@ import { saveUserProfileCache } from '../lib/userProfileCache';
 import { ProductivityService } from '../lib/ProductivityService';
 import SupportModal from '../components/SupportModal';
 import { shouldShowLifetimeUpsell } from '../lib/lifetimeAccess';
-import { RevenueCatService } from '../lib/RevenueCatService';
+import { RevenueCatService } from '../services/revenuecat';
 // import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
 import { isAdminProfileUser } from '../config/adminOwner';
 import {
@@ -88,7 +88,6 @@ const Settings: React.FC = () => {
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const isNative = Capacitor.isNativePlatform();
   const [_showPinModal, setShowPinModal] = useState(false); void _showPinModal;
   const [currentPin, setCurrentPin] = useState(['', '', '', '']);
   const [newPin, setNewPin] = useState(['', '', '', '']);
@@ -114,7 +113,7 @@ const Settings: React.FC = () => {
 
   const fetchProPrice = async () => {
     try {
-      const { value } = await Preferences.get({ key: 'app_settings' });
+      const value = await storage.get('app_settings');
       if (value) {
         const cached = JSON.parse(value);
         const data = cached?.data;
@@ -160,7 +159,7 @@ const Settings: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return undefined;
+    if (!isNative) return undefined;
     let handle: { remove: () => Promise<void> } | undefined;
     void App.addListener('resume', () => {
       setPrefsResumeTick((t) => t + 1);
@@ -189,7 +188,7 @@ const Settings: React.FC = () => {
         .limit(20);
       if (cancelled || error || !data) return;
       setAnnouncements(data);
-      const { value: lastSeen } = await Preferences.get({ key: 'announcements_last_seen' });
+      const lastSeen = await storage.get('announcements_last_seen');
       if (cancelled) return;
       if (lastSeen) {
         const lastSeenTs = Number.parseInt(lastSeen, 10);
@@ -495,9 +494,9 @@ const Settings: React.FC = () => {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await Preferences.remove({ key: 'save_login_enabled' });
-      await Preferences.remove({ key: 'saved_email' });
-      await Preferences.remove({ key: 'saved_pin' });
+      await storage.remove('save_login_enabled');
+      await storage.remove('saved_email');
+      await storage.remove('saved_pin');
       await logout();
       window.location.href = '/';
     } catch (err) {
@@ -594,7 +593,7 @@ const Settings: React.FC = () => {
       ];
       for (const key of keysToRemove) {
         try {
-          await Preferences.remove({ key });
+          await storage.remove(key);
         } catch {
           // ignore preference removal issues
         }
@@ -1129,9 +1128,9 @@ const Settings: React.FC = () => {
             <button
               type="button"
               className="sp-row"
-              onClick={() => {
+              onClick={async () => {
                 navigate('/updates');
-                void Preferences.set({ key: 'announcements_last_seen', value: Date.now().toString() });
+                await storage.set('announcements_last_seen', Date.now().toString());
                 setUnreadCount(0);
               }}
             >
@@ -1241,6 +1240,25 @@ const Settings: React.FC = () => {
         <div className="sp-group">
           <div className="sp-group-label">PURCHASES</div>
           <div className="sp-group-card">
+            {user?.isPro && (
+              <>
+                <button 
+                  type="button" 
+                  className="sp-row" 
+                  onClick={() => RevenueCatService.presentCustomerCenter()}
+                >
+                  <div className="sp-ic">
+                    <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'rgba(255,255,255,0.7)' }}>card_membership</span>
+                  </div>
+                  <div className="sp-row-body">
+                    <span className="sp-row-title">Manage Subscription</span>
+                    <span className="sp-row-sub">Update or cancel your plan</span>
+                  </div>
+                  <span className="material-symbols-outlined sp-chev">chevron_right</span>
+                </button>
+                <div className="sp-divider" />
+              </>
+            )}
             <button 
               type="button" 
               className="sp-row" 
@@ -1248,7 +1266,8 @@ const Settings: React.FC = () => {
               onClick={async () => {
                 setIsRestoring(true);
                 try {
-                  const ok = await RevenueCatService.restorePurchases();
+                  const info = await RevenueCatService.restorePurchases();
+                  const ok = !!info?.entitlements.active['pro'];
                   if (ok) {
                     const isNowPro = await refreshUserProfile();
                     setNotificationToast(isNowPro ? 'Purchases restored successfully! ✅' : 'Restored, but account refresh needed.');

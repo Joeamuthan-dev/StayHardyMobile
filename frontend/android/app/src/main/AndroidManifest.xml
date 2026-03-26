@@ -41,7 +41,17 @@
                 <data android:scheme="stayhardy" />
             </intent-filter>
 
-            <!-- Email verification redirect: stayhardy://login -->
+            <!-- Email verification redirect: stayhardy://auth/verify -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="stayhardy"
+                    android:host="auth" />
+            </intent-filter>
+
+            <!-- Back to login legacy: stayhardy://login -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

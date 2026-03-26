@@ -1,4 +1,4 @@
-import { Preferences } from '@capacitor/preferences';
+import { storage } from '../utils/storage';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { ThankYouManager } from './thankYouManager';
 import { ProSuccessManager } from './proSuccessManager';
@@ -14,14 +14,14 @@ export async function runAppForegroundResumeTasks(): Promise<void> {
   ProSuccessManager.restoreFromStorage();
 
   try {
-    const enabled = await Preferences.get({ key: 'routine_reminder_enabled' });
-    const time = await Preferences.get({ key: 'routine_reminder_time' });
-    if (enabled.value !== 'true' || !time.value) return;
+    const enabled = await storage.get('routine_reminder_enabled');
+    const time = await storage.get('routine_reminder_time');
+    if (enabled !== 'true' || !time) return;
     const { notifications: pending } = await LocalNotifications.getPending();
     const hasReminder = pending.some((n) => n.id === 1001);
     if (!hasReminder) {
       logger.log('[AppForeground] reminder missing, rescheduling');
-      await scheduleRoutineReminder(time.value);
+      await scheduleRoutineReminder(time);
     }
   } catch (e) {
     logger.error('[AppForeground] resume tasks error', e as { message?: unknown; code?: unknown });

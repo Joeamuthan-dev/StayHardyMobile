@@ -1,4 +1,4 @@
-import { Preferences } from '@capacitor/preferences';
+import { storage } from '../utils/storage';
 
 interface CacheItem<T> {
   data: T;
@@ -57,22 +57,22 @@ export const CacheManager = {
         expiryMs: expiryMinutes * 60 * 1000,
         version: CACHE_VERSION,
       };
-      await Preferences.set({ key, value: JSON.stringify(item) });
+      await storage.set(key, JSON.stringify(item));
     } catch (e) {
       console.warn('Cache set failed:', e);
     }
   },
   get: async <T>(key: string): Promise<T | null> => {
     try {
-      const { value } = await Preferences.get({ key });
+      const value = await storage.get(key);
       if (!value) return null;
       const item = JSON.parse(value) as CacheItem<T>;
       if (item.version !== CACHE_VERSION) {
-        await Preferences.remove({ key });
+        await storage.remove(key);
         return null;
       }
       if (Date.now() - item.timestamp > item.expiryMs) {
-        await Preferences.remove({ key });
+        await storage.remove(key);
         return null;
       }
       return item.data;
@@ -86,7 +86,7 @@ export const CacheManager = {
   },
   invalidate: async (key: string): Promise<void> => {
     try {
-      await Preferences.remove({ key });
+      await storage.remove(key);
     } catch {
       // no-op
     }
@@ -94,7 +94,7 @@ export const CacheManager = {
   invalidateMany: async (keys: string[]): Promise<void> => {
     for (const key of keys) {
       try {
-        await Preferences.remove({ key });
+        await storage.remove(key);
       } catch {
         // no-op
       }
@@ -105,12 +105,12 @@ export const CacheManager = {
   },
   checkDailyReset: async (): Promise<void> => {
     try {
-      const lastReset = await Preferences.get({ key: DAILY_RESET_KEY });
+      const lastReset = await storage.get(DAILY_RESET_KEY);
       const today = new Date().toDateString();
-      if (lastReset.value !== today) {
+      if (lastReset !== today) {
         console.log('Daily cache reset ✅');
         await CacheManager.clearAll();
-        await Preferences.set({ key: DAILY_RESET_KEY, value: today });
+        await storage.set(DAILY_RESET_KEY, today);
       }
     } catch (e) {
       console.warn('Daily cache reset failed:', e);

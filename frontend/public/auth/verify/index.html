@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Stay Hardy — Account Activation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000000;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .card {
+            background: #0A0A0A;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 24px;
+            padding: 48px 32px;
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #00E676;
+            border-radius: 24px 24px 0 0;
+        }
+
+        .card::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #00E676;
+            border-radius: 0 0 24px 24px;
+        }
+
+        .brand {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.3em;
+            color: #00E676;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .tagline {
+            font-size: 10px;
+            letter-spacing: 0.2em;
+            color: rgba(255, 255, 255, 0.25);
+            text-transform: uppercase;
+            margin-bottom: 36px;
+        }
+
+        .icon {
+            width: 72px;
+            height: 72px;
+            background: #111111;
+            border: 1px solid rgba(0, 230, 118, 0.2);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin: 0 auto 28px;
+        }
+
+        .title {
+            font-size: 26px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+            margin-bottom: 12px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.4);
+            line-height: 1.8;
+            margin-bottom: 36px;
+            padding: 0 8px;
+        }
+
+        .btn {
+            display: inline-block;
+            background: #00E676;
+            color: #000000;
+            font-size: 14px;
+            font-weight: 800;
+            text-decoration: none;
+            padding: 16px 40px;
+            border-radius: 14px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            transition: opacity 0.15s;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn-secondary {
+            display: inline-block;
+            background: transparent;
+            color: #00E676;
+            font-size: 12px;
+            font-weight: 700;
+            text-decoration: none;
+            padding: 12px 32px;
+            border-radius: 14px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            border: 1px solid rgba(0, 230, 118, 0.3);
+            cursor: pointer;
+            width: 100%;
+            margin-top: 12px;
+            transition: all 0.15s;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(0, 230, 118, 0.05);
+        }
+
+        .divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.06);
+            margin: 28px 0;
+        }
+
+        .step-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            text-align: left;
+            margin-bottom: 12px;
+        }
+
+        .step-num {
+            width: 22px;
+            height: 22px;
+            background: #00E676;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 800;
+            color: #000000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .step-text {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.45);
+            line-height: 1.6;
+        }
+
+        .footer {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.15);
+            line-height: 1.8;
+            margin-top: 28px;
+        }
+
+        /* States */
+        #state-loading {
+            display: block;
+        }
+
+        #state-success {
+            display: none;
+        }
+
+        #state-error {
+            display: none;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(0, 230, 118, 0.15);
+            border-top-color: #00E676;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-icon {
+            font-size: 40px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+
+        <!-- BRAND -->
+        <div class="brand">Stay Hardy</div>
+        <div class="tagline">The 1% starts here.</div>
+
+        <!-- LOADING STATE -->
+        <div id="state-loading">
+            <div class="spinner"></div>
+            <div class="title" style="font-size:20px;">
+                Verifying your account...
+            </div>
+            <div class="subtitle" style="margin-bottom:0;">
+                Hold tight, soldier.
+            </div>
+        </div>
+
+        <!-- SUCCESS STATE -->
+        <div id="state-success">
+            <div class="icon">⚡</div>
+            <div class="title">You're in the 1%.</div>
+            <div class="subtitle">
+                Your Stay Hardy account is now active.
+                Open the app and sign in with your
+                email and PIN.
+            </div>
+
+            <a href="stayhardy://login" class="btn">
+                Open Stay Hardy →
+            </a>
+
+            <div class="divider"></div>
+
+            <div class="step-row">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    Account activated on all devices
+                </div>
+            </div>
+            <div class="step-row">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    Open Stay Hardy on your phone
+                </div>
+            </div>
+            <div class="step-row">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    Sign in with your email + PIN
+                </div>
+            </div>
+
+            <div class="footer">
+                © 2026 Stay Hardy · Built for the disciplined.
+            </div>
+        </div>
+
+        <!-- ERROR STATE -->
+        <div id="state-error">
+            <div class="error-icon">🔒</div>
+            <div class="title" style="color:#ff4444;font-size:22px;">
+                Link expired or invalid.
+            </div>
+            <div class="subtitle">
+                This activation link has expired or
+                already been used. Request a new one
+                from the app.
+            </div>
+            <a href="stayhardy://login" class="btn">
+                Back to Stay Hardy →
+            </a>
+            <div class="footer" style="margin-top:20px;">
+                Links expire after 24 hours.
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Your Supabase project details
+        var SUPABASE_URL = 'https://tiavhmbpplerffdjmodw.supabase.co';
+
+        function show(id) {
+            document.getElementById('state-loading').style.display = 'none';
+            document.getElementById('state-success').style.display = 'none';
+            document.getElementById('state-error').style.display = 'none';
+            document.getElementById(id).style.display = 'block';
+        }
+
+        async function verifyToken() {
+            try {
+                // Get the full URL hash and query params
+                var hash = window.location.hash.substring(1);
+                var query = window.location.search.substring(1);
+                var params = {};
+
+                // Parse hash params (Supabase puts tokens in hash)
+                if (hash) {
+                    hash.split('&').forEach(function (pair) {
+                        var parts = pair.split('=');
+                        params[decodeURIComponent(parts[0])] =
+                            decodeURIComponent(parts[1] || '');
+                    });
+                }
+
+                // Also parse query params as fallback
+                if (query) {
+                    query.split('&').forEach(function (pair) {
+                        var parts = pair.split('=');
+                        params[decodeURIComponent(parts[0])] =
+                            decodeURIComponent(parts[1] || '');
+                    });
+                }
+
+                console.log('Verify params:', JSON.stringify(params));
+
+                var accessToken = params['access_token'];
+                var refreshToken = params['refresh_token'];
+                var type = params['type'];
+                var tokenHash = params['token_hash'];
+                var token = params['token'];
+
+                // Method 1: access_token in URL (implicit flow)
+                if (accessToken) {
+                    console.log('Found access_token — implicit flow');
+                    show('state-success');
+                    return;
+                }
+
+                // Method 2: token_hash (PKCE flow)
+                if (tokenHash || token) {
+                    console.log('Found token_hash — verifying with Supabase');
+                    var verifyToken = tokenHash || token;
+                    var verifyType = type || 'signup';
+
+                    var response = await fetch(
+                        SUPABASE_URL + '/auth/v1/verify',
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'apikey': getAnonKey()
+                            },
+                            body: JSON.stringify({
+                                token_hash: verifyToken,
+                                type: verifyType
+                            })
+                        }
+                    );
+
+                    var result = await response.json();
+                    console.log('Verify result:', JSON.stringify(result));
+
+                    if (response.ok && result.access_token) {
+                        show('state-success');
+                    } else {
+                        console.error('Verify failed:', JSON.stringify(result));
+                        show('state-error');
+                    }
+                    return;
+                }
+
+                // No token found — check if already verified
+                // (user may have clicked link twice)
+                if (type === 'signup' || type === 'email') {
+                    show('state-success');
+                    return;
+                }
+
+                // Nothing found
+                console.warn('No token params found in URL');
+                show('state-error');
+
+            } catch (err) {
+                console.error('Verification error:', err);
+                show('state-error');
+            }
+        }
+
+        function getAnonKey() {
+            // Your Supabase anon key
+            // Replace this with your actual anon key
+            return 'sb_publishable_H-eSK_By-dYJRD6DQvhzDA_W11z7-PQ';
+        }
+
+        // Run on page load
+        verifyToken();
+    </script>
+
+</body>
+
+</html>

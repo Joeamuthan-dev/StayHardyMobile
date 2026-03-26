@@ -1,4 +1,4 @@
-import { Preferences } from '@capacitor/preferences';
+import { storage } from '../utils/storage';
 import { supabase } from '../supabase';
 import { clearAllCache } from './cacheManager';
 
@@ -82,7 +82,7 @@ export async function wipeLocalDataAfterAccountDeletion(userId: string): Promise
   }
 
   try {
-    await Preferences.clear();
+    await storage.clear();
   } catch {
     /* ignore */
   }

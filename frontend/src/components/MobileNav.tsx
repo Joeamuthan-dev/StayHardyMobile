@@ -7,7 +7,7 @@ import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
 import { isAdminHubUser } from '../config/adminOwner';
 import { useAppSettings } from '../hooks/useAppSettings';
 import SupportModal from './SupportModal';
-import { Home, Repeat, CheckSquare, Target, Calendar, User, HelpCircle, MessageSquare, Heart, LogOut, ChevronRight } from 'lucide-react';
+import { Home, Repeat, CheckSquare, Target, BarChart2, Calendar, User, HelpCircle, MessageSquare, Heart, LogOut, ChevronRight, Lock } from 'lucide-react';
 
 import pkg from '../../package.json';
 
@@ -90,10 +90,6 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
     color: 'rgba(255,255,255,0.7)'
   };
 
-  const chevronStyle = {
-    color: 'rgba(255,255,255,0.2)'
-  };
-
   const drawerPanel = (
     <>
       <div
@@ -167,175 +163,167 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
             </div>
           </div>
 
-          {/* ── SECTION 2: NAVIGATE ── */}
-          <span style={{ fontSize: '9px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '14px 16px 6px 16px', display: 'block' }}>
-            NAVIGATE
+          {/* ── SECTION 2: NAVIGATE (The Command List) ── */}
+          <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '24px 16px 8px 20px', display: 'block', textTransform: 'uppercase' }}>
+            COMMAND CENTER
           </span>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', padding: '0 16px', width: '100%', boxSizing: 'border-box', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 12px' }}>
             {[
               { path: '/home', label: 'Home', Icon: Home },
-              { path: '/routine', label: 'Habits', Icon: Repeat },
               { path: '/dashboard', label: 'Tasks', Icon: CheckSquare },
               { path: '/goals', label: 'Goals', Icon: Target },
-            ].map(({ path, label, Icon }) => {
+              { path: '/routine', label: 'Habits', Icon: Repeat, locked: !isPro },
+              { path: '/stats', label: 'Stats', Icon: BarChart2, locked: !isPro },
+            ].map(({ path, label, Icon, locked }) => {
               const active = isActive(path);
-
-              if (path === '/routine' && !isPro) {
-                return (
-                  <div
-                    key={path}
-                    onClick={() => { handleNavigate('/lifetime-access'); setIsOpen(false); }}
-                    style={{
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      borderRadius: '16px',
-                      padding: '16px 12px',
-                      minHeight: '80px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      opacity: 0.7,
-                      boxSizing: 'border-box',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <div style={{ position: 'relative', width: 'fit-content' }}>
-                      <Icon size={22} color="#EF4444" style={{ flexShrink: 0 }} />
-                      <div style={{
-                        position: 'absolute',
-                        top: '-4px', right: '-6px',
-                        width: '12px', height: '12px',
-                        borderRadius: '50%',
-                        background: '#EF4444',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                          <rect x="3" y="11" width="18" height="11" rx="2"/>
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                        </svg>
-                      </div>
-                    </div>
-                    <span style={{ fontSize: '13px', fontWeight: '700', color: 'rgba(239,68,68,0.7)', whiteSpace: 'nowrap' }}>
-                      {label}
-                    </span>
-                  </div>
-                );
-              }
 
               return (
                 <button
                   key={path}
                   type="button"
-                  onClick={() => handleNavigate(path)}
+                  onClick={() => {
+                    if (locked) {
+                      handleNavigate('/lifetime-access');
+                    } else {
+                      handleNavigate(path);
+                    }
+                  }}
                   style={{
-                    background: active ? 'rgba(0,232,122,0.1)' : 'rgba(255,255,255,0.04)',
-                    border: active ? '1px solid rgba(0,232,122,0.3)' : '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '16px',
-                    padding: '16px 12px',
-                    minHeight: '80px',
                     display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    gap: '8px',
-                    cursor: 'pointer',
-                    boxShadow: active ? '0 0 12px rgba(0,232,122,0.1)' : 'none',
-                    textAlign: 'left',
+                    alignItems: 'center',
+                    gap: '14px',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    transition: 'all 0.2s ease',
                     width: '100%',
-                    boxSizing: 'border-box',
-                    overflow: 'hidden'
+                    background: active ? 'rgba(0, 230, 118, 0.1)' : 'transparent',
+                    borderLeft: active ? '2.5px solid #00E676' : '2.5px solid transparent',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    textAlign: 'left',
+                    opacity: locked ? 0.5 : 1
                   }}
                 >
-                  <Icon size={22} style={{ color: active ? '#00E87A' : 'rgba(255,255,255,0.5)', flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: active ? '#FFFFFF' : 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>
+                  <Icon 
+                    size={20} 
+                    style={{ 
+                      color: active ? '#00E676' : 'rgba(255,255,255,0.4)',
+                      filter: active ? 'drop-shadow(0 0 5px rgba(0, 230, 118, 0.3))' : 'none'
+                    }} 
+                  />
+                  <span style={{ 
+                    fontSize: '15px', 
+                    fontWeight: active ? '700' : '500', 
+                    color: active ? '#00E676' : 'rgba(255,255,255,0.6)',
+                    flex: 1
+                  }}>
                     {label}
                   </span>
+                  {locked && (
+                    <Lock size={14} color="#FFD700" style={{ opacity: 0.8 }} />
+                  )}
                 </button>
               );
             })}
           </div>
 
-          {/* ── SECTION 3: ACCOUNT ── */}
-          <span style={{ fontSize: '9px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '14px 16px 6px 16px', display: 'block' }}>
-            ACCOUNT
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
-            <button type="button" onClick={() => handleNavigate('/calendar')} style={rowStyle}>
-              <Calendar size={20} style={iconStyle} />
-              <span style={labelStyle}>Calendar</span>
-              <ChevronRight size={16} style={chevronStyle} />
-            </button>
-            <button type="button" onClick={() => handleNavigate('/settings')} style={rowStyle}>
-              <User size={20} style={iconStyle} />
-              <span style={labelStyle}>Profile</span>
-              <ChevronRight size={16} style={chevronStyle} />
-            </button>
-          </div>
-
-          {/* ── SECTION 4: LIFETIME OFFER ── */}
+          {/* ── SECTION 3: LIFETIME OFFER (The Funnel) ── */}
           {upsell && (
             <div
               onClick={() => handleNavigate('/lifetime-access')}
               style={{
-                margin: '8px 16px',
-                background: 'linear-gradient(135deg, rgba(0,232,122,0.08), rgba(0,232,122,0.03))',
-                border: '1px solid rgba(0,232,122,0.25)',
+                margin: '20px 16px 8px 16px',
+                background: 'linear-gradient(135deg, rgba(0,230,118,0.08), rgba(0,230,118,0.02))',
+                border: '1px solid rgba(0,230,118,0.25)',
                 borderRadius: '16px',
-                padding: '14px 16px',
+                padding: '16px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
+                gap: '14px',
                 cursor: 'pointer',
-                boxShadow: '0 0 16px rgba(0,232,122,0.08)'
+                boxShadow: '0 8px 32px rgba(0,0,0,0.2), inset 0 0 20px rgba(0,230,118,0.05)',
+                transition: 'all 0.3s ease',
+                position: 'relative'
               }}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(0,230,118,0.4)'}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(0,230,118,0.25)'}
             >
-              <span style={{ fontSize: '18px', color: '#00E87A' }}>⚡</span>
+              <div style={{ 
+                width: '32px', 
+                height: '32px', 
+                borderRadius: '10px', 
+                background: 'rgba(0,230,118,0.15)', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                flexShrink: 0 
+              }}>
+                <span style={{ fontSize: '18px', color: '#00E676' }}>⚡</span>
+              </div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '14px', fontWeight: '800', color: '#00E87A', display: 'block' }}>
+                <span style={{ fontSize: '14px', fontWeight: '900', color: '#00E676', display: 'block', letterSpacing: '-0.2px' }}>
                   Lifetime ₹{displayLifetimePrice}
                 </span>
-                <span style={{ fontSize: '10px', color: 'rgba(0,232,122,0.6)', display: 'block' }}>
-                  One-time · No renewals
+                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', display: 'block', fontWeight: '500' }}>
+                  Elite Access · No renewals
                 </span>
               </div>
-              <span style={{ background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)', borderRadius: '10px', padding: '3px 8px', fontSize: '9px', fontWeight: '800', color: '#00E87A', marginLeft: 'auto' }}>
-                ONE-TIME
-              </span>
+              <ChevronRight size={16} color="rgba(0,230,118,0.4)" />
             </div>
           )}
 
-          {/* ── SECTION 5: HELP ── */}
-          <span style={{ fontSize: '9px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '14px 16px 6px 16px', display: 'block' }}>
-            HELP
+          {/* ── SECTION 4: ACCOUNT ── */}
+          <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '24px 16px 8px 20px', display: 'block', textTransform: 'uppercase' }}>
+            ACCOUNT
           </span>
-          <div style={{ display: 'flex', flexDirection: 'column', padding: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 12px' }}>
+            {[
+              { path: '/calendar', label: 'Calendar', Icon: Calendar },
+              { path: '/settings', label: 'Profile', Icon: User },
+            ].map(({ path, label, Icon }) => (
+              <button 
+                key={path}
+                type="button" 
+                onClick={() => handleNavigate(path)} 
+                style={{
+                  ...rowStyle,
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                }}
+              >
+                <Icon size={18} style={{ color: isActive(path) ? '#00E676' : 'rgba(255,255,255,0.4)' }} />
+                <span style={{ ...labelStyle, fontSize: '14px', color: isActive(path) ? '#FFFFFF' : 'rgba(255,255,255,0.6)' }}>{label}</span>
+                <ChevronRight size={14} style={{ opacity: 0.2 }} />
+              </button>
+            ))}
+          </div>
+
+          {/* ── SECTION 5: HELP ── */}
+          <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '24px 16px 8px 20px', display: 'block', textTransform: 'uppercase' }}>
+            SUPPORT
+          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 12px' }}>
             <button type="button" onClick={() => { handleNavigate('/welcome'); setIsOpen(false); }} style={rowStyle}>
-              <HelpCircle size={20} style={iconStyle} />
-              <span style={labelStyle}>Why Stay Hardy?</span>
-              <ChevronRight size={16} style={chevronStyle} />
+              <HelpCircle size={18} style={iconStyle} />
+              <span style={{ ...labelStyle, fontSize: '14px' }}>Expert Intelligence</span>
             </button>
             {!isAdmin && (
               <>
                 <button type="button" onClick={() => { navigate('/feedback'); setIsOpen(false); }} style={rowStyle}>
-                  <MessageSquare size={20} style={iconStyle} />
-                  <span style={labelStyle}>Support &amp; Feedback</span>
-                  <ChevronRight size={16} style={chevronStyle} />
+                  <MessageSquare size={18} style={iconStyle} />
+                  <span style={{ ...labelStyle, fontSize: '14px' }}>Global Feedback</span>
                 </button>
                 <button type="button" onClick={() => { setShowSupportModal(true); setIsOpen(false); }} style={rowStyle}>
-                  <Heart size={20} style={iconStyle} />
-                  <span style={labelStyle}>Support this app</span>
-                  <ChevronRight size={16} style={chevronStyle} />
+                  <Heart size={18} style={iconStyle} />
+                  <span style={{ ...labelStyle, fontSize: '14px' }}>Back the Mission</span>
                 </button>
               </>
             )}
             {isAdminHubUser(user) && (
               <button type="button" onClick={() => handleNavigate('/admin')} style={rowStyle}>
-                <span style={{ fontSize: '18px' }}>🛡️</span>
-                <span style={labelStyle}>Admin Hub</span>
-                <ChevronRight size={16} style={chevronStyle} />
+                <span style={{ fontSize: '20px' }}>🛡️</span>
+                <span style={{ ...labelStyle, fontSize: '14px' }}>Admin Protocol</span>
               </button>
             )}
           </div>
@@ -358,18 +346,21 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
               style={{
                 width: '100%',
                 background: 'transparent',
-                border: '1px solid rgba(239,68,68,0.3)',
-                borderRadius: '14px',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: '12px',
                 padding: '12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '8px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
               }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.05)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
             >
-              <LogOut size={15} color="rgba(239,68,68,0.6)" />
-              <span style={{ fontSize: '13px', fontWeight: '600', color: 'rgba(239,68,68,0.6)' }}>Logout</span>
+              <LogOut size={16} color="rgba(239,68,68,0.7)" />
+              <span style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(239,68,68,0.7)' }}>Terminate Session</span>
             </button>
           </div>
         </aside>

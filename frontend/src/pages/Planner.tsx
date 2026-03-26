@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
+import { useLoading } from '../context/LoadingContext';
 import BottomNav from '../components/BottomNav';
 
 type TabFilter = 'all' | 'tasks' | 'goals';
@@ -109,6 +110,7 @@ const SwipeDeleteRow: React.FC<{
 
 const Planner: React.FC = () => {
   const { user } = useAuth();
+  const { setLoading } = useLoading();
   const [isSidebarHidden, setIsSidebarHidden] = useState(
     () => localStorage.getItem('sidebarHidden') === 'true',
   );
@@ -164,8 +166,9 @@ const Planner: React.FC = () => {
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
-
-    const [
+    setLoading(true);
+    try {
+      const [
       { data: taskRows },
       { count: tc },
       { data: goalRows },
@@ -201,7 +204,12 @@ const Planner: React.FC = () => {
     if (tc !== null) setTotalTasksCount(tc);
     if (goalRows) setGoals(goalRows as Goal[]);
     if (gc !== null) setTotalGoalsCount(gc);
-  }, [user?.id]);
+    } catch (e) {
+      console.error('Planner fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, setLoading]);
 
   useEffect(() => {
     fetchAll();

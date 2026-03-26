@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useLoading } from '../context/LoadingContext';
 import { supabase } from '../supabase';
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired, invalidateUserStatsCache } from '../lib/cacheManager';
@@ -463,6 +464,7 @@ const triggerGlobalRefresh = () => {
 
 const Goals: React.FC = () => {
   const { user } = useAuth();
+  const { setLoading: setGlobalLoading, setLoadingText } = useLoading();
   // const navigate = useNavigate();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [name, setName] = useState('');
@@ -493,7 +495,10 @@ const Goals: React.FC = () => {
   const fetchGoals = useCallback(
     async (options?: { force?: boolean }) => {
       if (!user?.id) return;
-      if (justCreatedGoal.current) return;
+      setGlobalLoading(true);
+      setLoadingText("Syncing Tactical Goals...");
+      try {
+        if (justCreatedGoal.current) return;
 
       const stale = await loadGoalsListStale<Goal>(user.id);
       if (stale !== null) {
@@ -519,8 +524,13 @@ const Goals: React.FC = () => {
         setCompletedGoalsCount(completed.length);
         void persistGoalsList(user.id, data as Goal[]);
       }
+      } catch (err) {
+        console.error('Error fetching goals:', err);
+      } finally {
+        setGlobalLoading(false);
+      }
     },
-    [user?.id],
+    [user?.id, setGlobalLoading, setLoadingText],
   );
 
   useEffect(() => {
@@ -596,6 +606,8 @@ const Goals: React.FC = () => {
     }
 
     setLoading(true);
+    setGlobalLoading(true);
+    setLoadingText("Establishing Tactical Link...");
 
 
     const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
@@ -718,6 +730,7 @@ const Goals: React.FC = () => {
       }
     } finally {
       setLoading(false);
+      setGlobalLoading(false);
     }
   };
 

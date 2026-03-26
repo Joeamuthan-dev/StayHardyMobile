@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { BarChart2 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useLoading } from '../context/LoadingContext';
+import { storage } from '../utils/storage';
 // import { canAccessStatsAndRoutine } from '../lib/lifetimeAccess';
 import { supabase } from '../supabase';
 import { calculateProductivityScore } from '../utils/productivity';
@@ -88,6 +90,7 @@ const HomeDashboard: React.FC = () => {
   }; void _getWelcomeGreeting;
   const navigate = useNavigate();
   const { user, refreshUserProfile } = useAuth();
+  const { setLoading } = useLoading();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [imgError, setImgError] = useState(false);
@@ -101,6 +104,28 @@ const HomeDashboard: React.FC = () => {
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportGateReady, setSupportGateReady] = useState(false);
   const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
+
+  const hasCheckedAuth = useRef(false);
+
+  useEffect(() => {
+    if (hasCheckedAuth.current) return;
+    hasCheckedAuth.current = true;
+
+    const checkAuth = async () => {
+      // First check Preferences (instant)
+      const savedLogin = await storage.get('user_session');
+      if (savedLogin && savedLogin !== '') return; // already good
+
+      // Then check Supabase session
+      const { data: { session } } =
+        await supabase.auth.getSession();
+      if (!session) {
+        navigate('/login', { replace: true });
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
 
   const fetchPendingHabits = useCallback(async () => {
     if (!user?.id) return;
@@ -147,8 +172,8 @@ const HomeDashboard: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
-
-    void refreshUserProfile();
+    setLoading(true);
+    try {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -235,11 +260,13 @@ const HomeDashboard: React.FC = () => {
       void persistGoalsList(user.id, goalsData as Goal[]);
     }
 
-    const calculatedScore = await ProductivityService.recalculate(user.id);
-    setScoreData(calculatedScore);
-
     void syncWidgetData();
-  }, [user?.id]);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, setLoading, refreshUserProfile]);
 
   useEffect(() => {
     const handleScoreUpdated = (e: any) => {
@@ -719,7 +746,7 @@ const HomeDashboard: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <span style={{ fontSize: '42px', fontWeight: 900, color: '#000000', letterSpacing: '-2px', lineHeight: 1 }}>{Math.max(0, Math.min(100, overallProgress))}%</span>
-            {overallProgress > 0 && <span style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '10px', padding: '2px 8px', fontSize: '10px', fontWeight: 700, color: '#000', marginLeft: '8px' }}>+5%</span>}
+            {overallProgress > 0 && <span style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '10px', padding: '2px 8px', fontSize: '10px', fontWeight: 700, color: '#00', marginLeft: '8px' }}>+5%</span>}
           </div>
           <button onClick={() => navigate('/stats')} style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
             <BarChart2 size={18} color="#CCFF00" strokeWidth={2.5} />
@@ -730,7 +757,7 @@ const HomeDashboard: React.FC = () => {
 
         {/* CYCLING GROUPS ROW */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '14px', fontWeight: '700', color: '#000' }}>{currentSection.label}</span>
+          <span style={{ fontSize: '14px', fontWeight: '700', color: '#00' }}>{currentSection.label}</span>
           <div style={{ display: 'flex', gap: '4px' }}>
             <button onClick={() => setActiveSection((activeSection - 1 + 3) % 3)} style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '1.5px solid rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#000000', fontSize: '16px', fontWeight: '900' }}>‹</button>
             <button onClick={() => setActiveSection((activeSection + 1) % 3)} style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '1.5px solid rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#000000', fontSize: '16px', fontWeight: '900' }}>›</button>
@@ -770,13 +797,13 @@ const HomeDashboard: React.FC = () => {
             {/* ACTIVE */}
             <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px' }}>
               <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Active</div>
-              <div style={{ fontSize: '28px', fontWeight: '900', color: '#000', lineHeight: 1 }}>{activeGoalsCount}</div>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{activeGoalsCount}</div>
               <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', marginTop: '4px' }}>in progress</div>
             </div>
             {/* DONE */}
             <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px' }}>
               <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Done</div>
-              <div style={{ fontSize: '28px', fontWeight: '900', color: '#000', lineHeight: 1 }}>{completedGoalsCount}</div>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{completedGoalsCount}</div>
               <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', marginTop: '4px' }}>achieved 🏆</div>
             </div>
           </div>
@@ -793,7 +820,7 @@ const HomeDashboard: React.FC = () => {
                   <circle cx="28" cy="28" r="22" fill="none" stroke="#000000" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 22}`} strokeDashoffset={`${2 * Math.PI * 22 * (1 - (totalHabitsTodayFresh > 0 ? completedHabitsTodayFresh / totalHabitsTodayFresh : 0))}`} transform="rotate(-90 28 28)" style={{ transition: 'stroke-dashoffset 0.5s ease' }}/>
                 </svg>
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '900', color: '#000', lineHeight: 1 }}>{completedHabitsTodayFresh}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{completedHabitsTodayFresh}</span>
                   <span style={{ fontSize: '8px', color: 'rgba(0,0,0,0.4)', fontWeight: '600' }}>/{totalHabitsTodayFresh}</span>
                 </div>
               </div>
@@ -803,7 +830,7 @@ const HomeDashboard: React.FC = () => {
             <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
               <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Best Streak</div>
               <div style={{ fontSize: '32px', lineHeight: 1, filter: 'hue-rotate(100deg) drop-shadow(0 0 4px rgba(0,200,100,0.6))' }}>🔥</div>
-              <div style={{ fontSize: '24px', fontWeight: '900', color: '#000', lineHeight: 1 }}>{bestStreakDays}</div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{bestStreakDays}</div>
               <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)' }}>days record</div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Preferences } from '@capacitor/preferences';
+import { storage } from '../utils/storage';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { supabase } from '../supabase';
@@ -93,10 +93,7 @@ const StayHardyUpdatesPage: React.FC = () => {
   }, []);
 
   const markAsRead = useCallback(async () => {
-    await Preferences.set({
-      key: 'updates_last_viewed',
-      value: new Date().toISOString(),
-    });
+    await storage.set('updates_last_viewed', new Date().toISOString());
   }, []);
 
   const loadUpdates = useCallback(async () => {

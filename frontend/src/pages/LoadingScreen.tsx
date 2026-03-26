@@ -1,6 +1,12 @@
+// src/pages/LoadingScreen.tsx
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { storage } from '../utils/storage';
+import { supabase } from '../supabase';
 
 const LoadingScreen = () => {
+  const navigate = useNavigate();
   const [fillProgress, setFillProgress] = useState(0);
   const [typedText, setTypedText] = useState('');
   const [showCursor, setShowCursor] = useState(true);
@@ -8,6 +14,7 @@ const LoadingScreen = () => {
 
   const tagline = 'The 1% starts here.';
 
+  // Aesthetic Animations (User Logic)
   useEffect(() => {
     // Phase 1: Fill 1% symbol:
     let fillVal = 0;
@@ -42,6 +49,54 @@ const LoadingScreen = () => {
       clearInterval(cursorTimer);
     };
   }, []);
+
+  // Boot Sequence Logic (Navigation & Splash Hiding)
+  useEffect(() => {
+    const init = async () => {
+      // 1. Instantly kill native splash
+      await SplashScreen.hide().catch(() => {});
+      
+      const startTime = Date.now();
+
+      try {
+        // If already navigated away, don't re-run
+        // We check Preferences as secondary but Supabase getSession is primary
+        const savedLogin = await storage.get('user_session').catch(() => null);
+        const onboardingComplete = await storage.get('onboarding_complete').catch(() => null);
+        const pendingVerification = await storage.get('pending_verification_email').catch(() => null);
+        
+        // Add small delay to let Supabase restore session or for branding
+        const elapsed = Date.now() - startTime;
+        const brandDelay = Math.max(2500 - elapsed, 0); 
+        await new Promise((resolve) => setTimeout(resolve, brandDelay));
+
+        // Get current Supabase session (Primary source of truth)
+        const { data: { session } } = await supabase.auth.getSession();
+
+        // 3. Conditional Navigation based on state
+        if (session || (savedLogin && savedLogin !== '')) {
+          // User is fully logged in → go to home
+          navigate('/home', { replace: true });
+        } else if (pendingVerification && pendingVerification !== '') {
+          // User signed up but not verified yet → go to verify screen
+          navigate('/verify-email', { replace: true });
+        } else if (onboardingComplete === 'true') {
+          // User has seen onboarding → go to login
+          navigate('/login', { replace: true });
+        } else {
+          // Brand new user — show onboarding first
+          navigate('/onboarding', { replace: true });
+        }
+      } catch (err) {
+        console.error('Boot failure:', err);
+        navigate('/onboarding', { replace: true });
+      }
+    };
+
+    // Show loading for minimum duration then route
+    const timer = setTimeout(init, 500); 
+    return () => clearTimeout(timer);
+  }, [navigate]);
 
   return (
     <div

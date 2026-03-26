@@ -1,12 +1,10 @@
 import React from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { shouldShowLifetimeUpsell } from '../lib/lifetimeAccess';
-import ProPaywall from '../components/ProPaywall';
 
 const LifetimeAccess: React.FC = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -16,7 +14,7 @@ const LifetimeAccess: React.FC = () => {
     return <Navigate to="/home" replace />;
   }
 
-  return <ProPaywall currentUser={user} onClose={() => navigate('/home')} />;
+  return <Navigate to="/paywall" replace />;
 };
 
 export default LifetimeAccess;
