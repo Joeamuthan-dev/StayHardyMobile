@@ -1,0 +1,87 @@
+diff --git a/node_modules/@capgo/capacitor-native-biometric/android/src/main/java/ee/forgr/biometric/AuthActivity.java b/node_modules/@capgo/capacitor-native-biometric/android/src/main/java/ee/forgr/biometric/AuthActivity.java
+index c2168c5..85f44bb 100644
+--- a/node_modules/@capgo/capacitor-native-biometric/android/src/main/java/ee/forgr/biometric/AuthActivity.java
++++ b/node_modules/@capgo/capacitor-native-biometric/android/src/main/java/ee/forgr/biometric/AuthActivity.java
+@@ -38,6 +38,9 @@ public class AuthActivity extends AppCompatActivity {
+     private static final int CREDENTIAL_GCM_IV_LENGTH = 12;
+     private static final String SHARED_PREFS_NAME = "NativeBiometricSharedPreferences";
+ 
++    /** Same value as KeyProperties.AUTH_BIOMETRIC_WEAK (API 31). Literal avoids compile errors when compileSdk is below 31. */
++    private static final int KEY_PROPERTIES_AUTH_BIOMETRIC_WEAK = 2;
++
+     private BiometricPrompt biometricPrompt;
+     private Cipher authCipher;
+     private String mode;
+@@ -79,7 +82,8 @@ public class AuthActivity extends AppCompatActivity {
+         // device credential fallback. Users should use system settings to enroll biometrics instead.
+         int[] allowedTypes = getIntent().getIntArrayExtra("allowedBiometryTypes");
+ 
+-        int authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG;
++        // STRONG-only hides the option on many devices where face unlock is class 2 (BIOMETRIC_WEAK).
++        int authenticators = biometricAuthenticatorsStrongAndWeak();
+         if (allowedTypes != null) {
+             // Filter authenticators based on allowed types
+             authenticators = getAllowedAuthenticators(allowedTypes);
+@@ -219,7 +223,10 @@ public class AuthActivity extends AppCompatActivity {
+             .setUserAuthenticationRequired(true);
+ 
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+-            builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
++            builder.setUserAuthenticationParameters(
++                0,
++                KeyProperties.AUTH_BIOMETRIC_STRONG | KEY_PROPERTIES_AUTH_BIOMETRIC_WEAK
++            );
+         } else {
+             builder.setUserAuthenticationValidityDurationSeconds(1);
+         }
+@@ -277,7 +284,10 @@ public class AuthActivity extends AppCompatActivity {
+             .setUserAuthenticationRequired(true);
+ 
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+-            builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG);
++            builder.setUserAuthenticationParameters(
++                0,
++                KeyProperties.AUTH_BIOMETRIC_STRONG | KEY_PROPERTIES_AUTH_BIOMETRIC_WEAK
++            );
+         } else {
+             builder.setUserAuthenticationValidityDurationSeconds(1);
+         }
+@@ -427,27 +437,30 @@ public class AuthActivity extends AppCompatActivity {
+         }
+     }
+ 
++    /** Strong + weak biometry (API 30+), so class-2 face unlock can authenticate the crypto key. */
++    private int biometricAuthenticatorsStrongAndWeak() {
++        int a = BiometricManager.Authenticators.BIOMETRIC_STRONG;
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++            a |= BiometricManager.Authenticators.BIOMETRIC_WEAK;
++        }
++        return a;
++    }
++
+     private int getAllowedAuthenticators(int[] allowedTypes) {
+         int authenticators = 0;
+         for (int type : allowedTypes) {
+             switch (type) {
+                 case 3: // FINGERPRINT
+-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
+-                    break;
+                 case 4: // FACE_AUTHENTICATION
+-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
+-                    break;
+                 case 5: // IRIS_AUTHENTICATION
+-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
+-                    break;
+                 case 6: // MULTIPLE - allow all biometric types
+-                    authenticators |= BiometricManager.Authenticators.BIOMETRIC_STRONG;
++                    authenticators |= biometricAuthenticatorsStrongAndWeak();
+                     break;
+                 case 7: // DEVICE_CREDENTIAL (PIN, pattern, or password)
+                     authenticators |= BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+                     break;
+             }
+         }
+-        return authenticators > 0 ? authenticators : BiometricManager.Authenticators.BIOMETRIC_STRONG;
++        return authenticators > 0 ? authenticators : biometricAuthenticatorsStrongAndWeak();
+     }
+ }

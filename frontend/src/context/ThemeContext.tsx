@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { mergeAppSettings, getAppSettings } from '../lib/cacheManager';
 
 type Theme = 'dark' | 'light';
 
@@ -16,7 +17,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   });
 
   useEffect(() => {
+    void (async () => {
+      const s = await getAppSettings<{ theme?: Theme }>();
+      if (s?.theme === 'light' || s?.theme === 'dark') {
+        setTheme(s.theme);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem('theme', theme);
+    void mergeAppSettings({ theme });
     if (theme === 'light') {
       document.documentElement.classList.add('light-mode');
     } else {

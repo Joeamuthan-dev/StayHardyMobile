@@ -1,420 +1,234 @@
 import React, { useEffect, useState } from 'react';
-import SupportModal from './SupportModal';
+import { useNavigate } from 'react-router-dom';
+
 
 interface WhyStayHardyModalProps {
   isOpen: boolean;
   onClose: () => void;
   isFirstTime?: boolean;
+  /** Opens the existing Support modal / flow (wired in BottomNav & HomeDashboard). */
+  onOpenSupport?: () => void;
 }
 
-const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose, isFirstTime }) => {
+/** Env override optional default below. Use `#` or empty to disable. */
+const DEFAULT_DEV_AVATAR =
+  'https://tiavhmbpplerffdjmodw.supabase.co/storage/v1/object/public/avatars/B7DB02BF-B1EE-4934-A5C0-6F45F22D9F70.JPG';
+const DEV_AVATAR_SRC =
+  (import.meta.env.VITE_DEV_AVATAR_URL as string | undefined)?.trim() || DEFAULT_DEV_AVATAR;
+
+
+
+const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose }) => {
+  const navigate = useNavigate();
   const [shouldRender, setShouldRender] = useState(isOpen);
-  const [showSupport, setShowSupport] = useState(false);
+  const [devAvatarFailed, setDevAvatarFailed] = useState(false);
+
+
 
   useEffect(() => {
     if (isOpen) setShouldRender(true);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) setDevAvatarFailed(false);
+  }, [isOpen]);
+
+  const handleDismiss = () => {
+    onClose();
+  };
+
+
+
   if (!shouldRender) return null;
 
-  const features = [
-    {
-      id: 'tasks',
-      title: 'Task Management',
-      icon: 'checklist',
-      color: '#3b82f6',
-      desc: 'Create and manage personal tasks and stay focused on what matters today.'
-    },
-    {
-      id: 'goals',
-      title: 'Goal Tracking',
-      icon: 'star',
-      color: '#ef4444',
-      desc: 'Set personal goals and track how many days remain to complete them.'
-    },
-    {
-      id: 'routine',
-      title: 'Routine & Habit Tracking',
-      icon: 'calendar_check',
-      color: '#10b981',
-      desc: 'Create daily routines and track habits consistently with daily updates.'
-    },
-    {
-      id: 'insights',
-      title: 'Productivity Insights',
-      icon: 'insights',
-      color: '#a855f7',
-      desc: 'Understand your productivity score, trends, and category performance.'
-    }
-  ];
+  const showPhoto = Boolean(DEV_AVATAR_SRC) && !devAvatarFailed;
 
   return (
-    <div 
+    <div
       className={`why-modal-overlay ${isOpen ? 'open' : ''}`}
-      onAnimationEnd={() => { if (!isOpen) setShouldRender(false); }}
-      onClick={onClose}
+      onClick={handleDismiss}
+      style={{
+        transition: 'opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s',
+      }}
     >
-      <div className="why-modal-content" onClick={e => e.stopPropagation()}>
-        <button className="why-modal-close" onClick={onClose}>
-          <span className="material-symbols-outlined">close</span>
-        </button>
+      <div
+        className="why-modal-content"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: '#080C0A',
+          width: '100%',
+          maxWidth: '500px',
+          height: '100%',
+          maxHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          padding: 0,
+          overflow: 'hidden',
+          borderRadius: 0,
+        }}
+      >
+        <style>{`
+          @keyframes borderGlow {
+            0%,100% { box-shadow: 0 0 12px rgba(0,232,122,0.2), inset 0 0 12px rgba(0,232,122,0.05); }
+            50% { box-shadow: 0 0 24px rgba(0,232,122,0.4), inset 0 0 20px rgba(0,232,122,0.08); }
+          }
+          @keyframes dataStream {
+            0% { transform: translateY(0) }
+            100% { transform: translateY(-50%) }
+          }
+          @keyframes swipeHint {
+            0%,100% { transform: translateX(0) }
+            50% { transform: translateX(8px) }
+          }
+          @keyframes pulseGeometric {
+            0%,100% { opacity: 0.3 }
+            50% { opacity: 0.6 }
+          }
+        `}</style>
 
-        <header className="why-header">
-          <h1 className="why-title">Stay Hardy</h1>
-          <p className="why-subtitle">Your personal productivity assistant</p>
-          <p className="why-desc">A simple productivity system designed to help you manage tasks, track goals, and build consistent daily routines.</p>
-        </header>
-
-        <div className="why-grid">
-          {features.map((f) => (
-            <div key={f.id} className="feature-card">
-              <div className="feature-icon-wrapper" style={{ background: `${f.color}10`, color: f.color }}>
-                <span className="material-symbols-outlined">{f.icon}</span>
-              </div>
-              <div className="feature-info">
-                <h3 className="feature-title">{f.title}</h3>
-                <p className="feature-text">{f.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <footer className="why-footer">
-          <p className="footer-message">
-            Enjoy using Stay Hardy.<br/>
-            Share your feedback and support the project if you find it useful.
-          </p>
+        {/* Outer scrolling container */}
+        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '40px', position: 'relative' }}>
           
-          {isFirstTime && (
-             <button className="why-start-btn" onClick={onClose}>
-               Get Started — Let's Grind
-             </button>
-          )}
+          {/* Close button */}
+          <div style={{ position: 'absolute', top: '16px', right: '16px', width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }} onClick={handleDismiss}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round">
+              <line x1="1" y1="1" x2="13" y2="13"/>
+              <line x1="13" y1="1" x2="1" y2="13"/>
+            </svg>
+          </div>
 
-          <div className="why-closing">
-            <span>Enjoying the app?</span>
-            <div className="closing-actions">
-              <button onClick={() => { onClose(); window.location.href='/feedback'; }}>Give Feedback</button>
-              <span className="dot"></span>
-              <button onClick={() => setShowSupport(true)}>Support the project</button>
+          <div style={{ padding: '48px 24px 32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+            {/* App icon */}
+            <div style={{ width: '72px', height: '72px', borderRadius: '20px', background: 'linear-gradient(135deg, #0d2018, #1a3d28)', border: '1.5px solid rgba(0,232,122,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', boxShadow: '0 0 24px rgba(0,232,122,0.2)', animation: 'borderGlow 3s ease-in-out infinite' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+
+            <h1 style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '0.1em', margin: '0 0 8px 0', textTransform: 'uppercase' }}>
+              STAY HARDY
+            </h1>
+
+            <p style={{ fontSize: '14px', color: '#00E87A', fontWeight: '500', fontStyle: 'italic', margin: 0, lineHeight: 1.5 }}>
+              The 1% starts here.
+            </p>
+          </div>
+
+          {/* SECTION 2 — WHAT YOU GET */}
+          <div style={{ padding: '0 16px', marginBottom: '16px' }}>
+            <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.15em', textAlign: 'center', marginBottom: '14px' }}>
+              WHAT YOU GET
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              {/* Tasks card */}
+              <div style={{ background: 'rgba(0,232,122,0.04)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: '20px', padding: '16px', position: 'relative', overflow: 'hidden', animation: 'borderGlow 4s ease-in-out infinite' }}>
+                <div style={{ position: 'absolute', top: 0, right: 0, width: '60px', height: '200%', background: 'repeating-linear-gradient(transparent, transparent 8px, rgba(0,232,122,0.03) 8px, rgba(0,232,122,0.03) 9px)', animation: 'dataStream 4s linear infinite', pointerEvents: 'none' }}/>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(0,232,122,0.1)', border: '1px solid rgba(0,232,122,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                  </svg>
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 4px 0' }}>Tasks</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>Define, track, and master every project.</p>
+              </div>
+
+              {/* Goals card */}
+              <div style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '20px', padding: '16px', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                  </svg>
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 4px 0' }}>Goals</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>Chart your long-term success with clear milestones.</p>
+              </div>
+
+              {/* Habits card */}
+              <div style={{ background: 'rgba(249,115,22,0.04)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '20px', padding: '16px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                  </svg>
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 4px 0' }}>Habits</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>Build unbreakable daily routines that compound.</p>
+              </div>
+
+              {/* Stats card */}
+              <div style={{ background: 'rgba(6,182,212,0.04)', border: '1px solid rgba(6,182,212,0.2)', borderRadius: '20px', padding: '16px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06B6D4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                  </svg>
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 4px 0' }}>Stats</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', margin: 0, lineHeight: 1.5 }}>See your grind pay off with deep insights.</p>
+              </div>
             </div>
           </div>
 
-          <div className="developer-info-section">
-            <h4 className="developer-label">About the Developer</h4>
-            <a 
-              href="https://www.linkedin.com/in/joeamuthan?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="developer-card-link"
-            >
-              <img 
-                src="https://tiavhmbpplerffdjmodw.supabase.co/storage/v1/object/public/avatars/B7DB02BF-B1EE-4934-A5C0-6F45F22D9F70.JPG" 
-                alt="Joe Amuthan" 
-                className="developer-avatar"
-              />
-              <div className="developer-details">
-                <div className="developer-name">
-                  Joe Amuthan
-                  <span className="material-symbols-outlined">open_in_new</span>
-                </div>
-                <div className="developer-motto">Building What I Wish Existed</div>
+          {/* SECTION 4 — DEVELOPER CARD */}
+          <div style={{ margin: '0 16px 24px 16px', background: '#111814', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '24px', padding: '20px' }}>
+            <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: '0 0 16px 0' }}>BEHIND THE APP</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', border: '2px solid rgba(0,232,122,0.3)', overflow: 'hidden', flexShrink: 0, background: '#1a2e1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>
+                {showPhoto ? <img src={DEV_AVATAR_SRC} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setDevAvatarFailed(true)} /> : '👨💻'}
               </div>
-            </a>
+              <div>
+                <p style={{ fontSize: '15px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 3px 0' }}>Joe Amuthan</p>
+                <p style={{ fontSize: '11px', color: '#00E87A', fontWeight: '600', margin: 0 }}>Founder & Lead Architect</p>
+              </div>
+            </div>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.7, margin: '0 0 16px 0' }}>
+              Building the tools I always wanted for myself, one line of code at a time. This app is born from a desire to make productivity truly impactful and accessible. <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: '600' }}>Stay focused, stay hardy.</span>
+            </p>
+            <div
+              onClick={() => window.open('https://linkedin.com/in/joeamuthan', '_blank')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                background: 'rgba(0,119,181,0.12)',
+                border: '1px solid rgba(0,119,181,0.3)',
+                borderRadius: '12px',
+                padding: '10px 18px',
+                cursor: 'pointer',
+                marginTop: '12px'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#0077B5" style={{ flexShrink: 0 }}>
+                <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/>
+                <circle cx="4" cy="4" r="2" fill="#0077B5"/>
+              </svg>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: '#0077B5', lineHeight: 1 }}>
+                Connect on LinkedIn
+              </span>
+            </div>
           </div>
-        </footer>
+
+          {/* SECTION 5 — CTA BUTTON */}
+          <div style={{ padding: '0 16px' }}>
+            <button onClick={() => { navigate('/home'); onClose(); }} style={{ width: '100%', height: '58px', background: '#00E87A', border: 'none', borderRadius: '18px', fontSize: '16px', fontWeight: '900', color: '#000000', cursor: 'pointer', letterSpacing: '0.06em', boxShadow: '0 0 28px rgba(0,232,122,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '16px' }}>
+              LET'S GET STARTED
+              <span style={{ animation: 'swipeHint 1.5s ease-in-out infinite', display: 'inline-block' }}>→</span>
+            </button>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {['No Subscription', 'Zero Ads', 'Private & Secure'].map(p => (
+                <span key={p} style={{ background: 'rgba(0,232,122,0.08)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: '20px', padding: '4px 12px', fontSize: '10px', fontWeight: '700', color: '#00E87A', letterSpacing: '0.06em' }}>
+                  ✦ {p}
+                </span>
+              ))}
+            </div>
+          </div>
+
+        </div>
       </div>
-
-      <SupportModal isOpen={showSupport} onClose={() => setShowSupport(false)} />
-
-      <style>{`
-        .why-modal-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0, 0, 0, 0.92);
-          backdrop-filter: blur(20px);
-          z-index: 2000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1.5rem;
-          opacity: 0;
-          visibility: hidden;
-          transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .why-modal-overlay.open {
-          opacity: 1;
-          visibility: visible;
-        }
-        .why-modal-content {
-          background: #000000;
-          width: 100%;
-          max-width: 720px;
-          max-height: 90vh;
-          border-radius: 2.5rem;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          position: relative;
-          overflow-y: auto;
-          padding: 4rem 3rem;
-          transform: translateY(20px) scale(0.98);
-          transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-          box-shadow: 0 40px 80px rgba(0,0,0,0.8);
-          scrollbar-width: none;
-        }
-        .why-modal-content::-webkit-scrollbar { display: none; }
-        
-        .why-modal-overlay.open .why-modal-content {
-          transform: translateY(0) scale(1);
-        }
-        .why-modal-close {
-          position: absolute;
-          top: 2rem;
-          right: 2.5rem;
-          background: rgba(255, 255, 255, 0.05);
-          border: none;
-          color: #94a3b8;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s;
-        }
-        .why-modal-close:hover {
-          background: rgba(255, 255, 255, 0.1);
-          color: white;
-          transform: scale(1.1);
-        }
-        
-        .why-header {
-          text-align: center;
-          margin-bottom: 3.5rem;
-          max-width: 500px;
-          margin-left: auto;
-          margin-right: auto;
-        }
-        .why-title {
-          font-size: 2.5rem;
-          font-weight: 800;
-          color: white;
-          margin: 0 0 0.5rem;
-          letter-spacing: -0.02em;
-        }
-        .why-subtitle {
-          font-size: 1.15rem;
-          color: #10b981;
-          font-weight: 700;
-          margin-bottom: 1.25rem;
-        }
-        .why-desc {
-          color: #94a3b8;
-          line-height: 1.6;
-          font-size: 0.95rem;
-          font-weight: 500;
-          margin: 0;
-        }
-
-        .why-grid {
-          display: flex;
-          flex-direction: column;
-          gap: 1.25rem;
-          margin-bottom: 3.5rem;
-        }
-        .feature-card {
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          padding: 1.5rem 2rem;
-          border-radius: 1.75rem;
-          display: flex;
-          align-items: center;
-          gap: 1.5rem;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .feature-card:hover {
-          background: rgba(255, 255, 255, 0.05);
-          border-color: rgba(255, 255, 255, 0.1);
-          transform: translateX(5px);
-        }
-        .feature-icon-wrapper {
-          width: 52px;
-          height: 52px;
-          border-radius: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .feature-icon-wrapper span {
-          font-size: 26px;
-        }
-        .feature-info {
-          flex: 1;
-        }
-        .feature-title {
-          font-size: 1.1rem;
-          font-weight: 700;
-          color: white;
-          margin: 0 0 0.25rem;
-        }
-        .feature-text {
-          font-size: 0.9rem;
-          color: #94a3b8;
-          line-height: 1.4;
-          margin: 0;
-          font-weight: 500;
-        }
-
-        .why-footer {
-          text-align: center;
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
-          padding-top: 2.5rem;
-        }
-        .footer-message {
-          color: #94a3b8;
-          font-size: 0.95rem;
-          line-height: 1.6;
-          margin-bottom: 2rem;
-          font-weight: 500;
-        }
-        .why-start-btn {
-          background: #10b981;
-          color: white;
-          border: none;
-          padding: 1.1rem 2.5rem;
-          border-radius: 1.5rem;
-          font-weight: 800;
-          font-size: 1rem;
-          cursor: pointer;
-          transition: all 0.3s;
-          box-shadow: 0 10px 20px rgba(16, 185, 129, 0.15);
-          margin-bottom: 2rem;
-          width: 100%;
-        }
-        .why-start-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 15px 30px rgba(16, 185, 129, 0.25);
-          filter: brightness(1.1);
-        }
-        
-        .why-closing {
-          margin-bottom: 2rem;
-        }
-        .why-closing span {
-          display: block;
-          color: #64748b;
-          font-size: 0.8rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          margin-bottom: 0.75rem;
-          letter-spacing: 0.05em;
-        }
-        
-        .closing-actions {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 1rem;
-        }
-        .closing-actions button {
-          background: transparent;
-          border: none;
-          color: #10b981;
-          font-weight: 700;
-          font-size: 0.85rem;
-          cursor: pointer;
-          transition: opacity 0.2s;
-        }
-        .closing-actions button:hover {
-          opacity: 0.8;
-          text-decoration: underline;
-        }
-        .dot {
-          width: 4px;
-          height: 4px;
-          background: #334155;
-          border-radius: 50%;
-        }
-        .developer-info-section {
-          margin-top: 2rem;
-          padding-top: 2rem;
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
-          text-align: left;
-        }
-        .developer-label {
-          font-size: 10px;
-          fontWeight: 900;
-          color: #64748b;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          margin-bottom: 1rem;
-        }
-        .developer-card-link {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          text-decoration: none;
-          transition: transform 0.2s;
-        }
-        .developer-card-link:hover {
-          transform: translateX(5px);
-        }
-        .developer-avatar {
-          width: 48px;
-          height: 48px;
-          border-radius: 16px;
-          border: 2px solid #10b981;
-          object-fit: cover;
-        }
-        .developer-name {
-          font-weight: 800;
-          font-size: 1rem;
-          color: white;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        .developer-name .material-symbols-outlined {
-          font-size: 1rem;
-          color: #10b981;
-        }
-        .developer-motto {
-          font-size: 0.75rem;
-          color: #94a3b8;
-          font-weight: 600;
-        }
-
-        @media (max-width: 600px) {
-          .why-modal-content {
-            padding: 3rem 1.5rem;
-            border-radius: 2rem;
-          }
-          .why-title {
-            font-size: 2rem;
-          }
-          .feature-card {
-            padding: 1.25rem 1.5rem;
-            gap: 1.25rem;
-          }
-          .why-modal-close {
-            right: 1.5rem;
-            top: 1.5rem;
-          }
-          .feature-icon-wrapper {
-            width: 44px;
-            height: 44px;
-          }
-          .feature-title {
-             font-size: 1rem;
-          }
-          .feature-text {
-             font-size: 0.85rem;
-          }
-        }
-      `}</style>
     </div>
   );
+
 };
 
 export default WhyStayHardyModal;

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { mergeAppSettings, getAppSettings } from '../lib/cacheManager';
 
 export type Language = 'English' | 'Tamil';
 
@@ -137,8 +138,18 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return (saved as Language) || 'English';
   });
 
+  useEffect(() => {
+    void (async () => {
+      const s = await getAppSettings<{ language?: Language }>();
+      if (s?.language === 'English' || s?.language === 'Tamil') {
+        setLanguageState(s.language);
+      }
+    })();
+  }, []);
+
   const setLanguage = (lang: Language) => {
     localStorage.setItem('language', lang);
+    void mergeAppSettings({ language: lang });
     setLanguageState(lang);
   };
 

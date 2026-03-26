@@ -1,0 +1,17 @@
+# Edge Functions: disable gateway JWT verification so requests reach your code.
+# Your functions still call supabase.auth.getUser() with the Authorization header.
+# Redeploy after changing: supabase functions deploy razorpay-create-order razorpay-verify admin-tips
+#
+# If you prefer stricter gateway checks, set verify_jwt = true and ensure clients send a fresh access_token.
+
+[functions.razorpay-create-order]
+verify_jwt = false
+
+[functions.razorpay-verify]
+verify_jwt = false
+
+[functions.admin-tips]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false

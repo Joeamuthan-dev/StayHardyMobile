@@ -1,29 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
 import BottomNav from '../components/BottomNav';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  TouchSensor,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { useDroppable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
+import { syncWidgetData } from '../lib/syncWidgetData';
+import { isCacheExpired, invalidateUserStatsCache } from '../lib/cacheManager';
+import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
+import { persistTasksList, loadTasksListStale } from '../lib/listCaches';
+import { isOnline } from '../lib/networkStatus';
+import { enqueueSync, AFTER_SYNC_FLUSH_EVENT } from '../lib/syncQueue';
+import { ProductivityService } from '../lib/ProductivityService';
+// CelebrationOverlay import removed — task completions now use inline top toast
+import { isCompletedTaskToday } from '../lib/supportPopup';
 import { supabase } from '../supabase';
+import CategorySelector from '../components/CategorySelector';
+
 
 interface Task {
   id: string;
@@ -38,11 +30,8 @@ interface Task {
   image_url?: string;
 }
 
-interface SortableTaskItemProps {
-  task: Task;
-  onToggle: (task: Task) => void;
-  onEdit: (task: Task) => void;
-}
+
+
 
 
 const getCategoryColor = (category: string) => {
@@ -73,266 +62,260 @@ const getCategoryColor = (category: string) => {
   };
 };
 
-const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ task, onToggle, onEdit }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: task.id });
 
-  const priorityColor = task.priority === 'High' ? '#ef4444' : task.priority === 'Medium' ? '#f59e0b' : '#10b981';
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition: transition || 'all 0.2s ease',
-    zIndex: isDragging ? 20 : 'auto',
-    opacity: isDragging ? 0.7 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        ...style,
-        position: 'relative',
-        cursor: 'pointer',
-        padding: '1.25rem',
-        borderRadius: '24px',
-        background: 'linear-gradient(145deg, rgba(20,20,20,0.95), rgba(10,10,10,0.95))',
-        border: '1px solid rgba(255,255,255,0.03)',
-        boxShadow: `inset 4px 0 0 0 ${priorityColor}, 0 8px 20px rgba(0,0,0,0.4)`
-      }}
-      {...attributes}
-      {...listeners}
-      className={`task-card-modern ${task.status === 'completed' ? 'completed' : ''}`}
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest('.checkbox-custom')) return;
-        onEdit(task);
-      }}
-      onMouseEnter={(e) => {
-        if (!isDragging) {
-          e.currentTarget.style.transform = 'translateY(-2px) scale(1.01)';
-          e.currentTarget.style.boxShadow = `inset 4px 0 0 0 ${priorityColor}, 0 12px 25px rgba(0,0,0,0.5), -4px 0 15px ${priorityColor}33`; // Add subtle glow
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isDragging) {
-          e.currentTarget.style.transform = 'translateY(0) scale(1)';
-          e.currentTarget.style.boxShadow = `inset 4px 0 0 0 ${priorityColor}, 0 8px 20px rgba(0,0,0,0.4)`;
-        }
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', minWidth: 0 }}>
-        <div
-          className={`checkbox-custom ${task.status === 'completed' ? 'checked' : ''}`}
-          onClick={(e) => { e.stopPropagation(); onToggle(task); }}
-          style={{ 
-            marginTop: '0.1rem',
-            width: '22px', 
-            height: '22px', 
-            borderRadius: '50%', 
-            border: task.status === 'completed' ? 'none' : '2px solid rgba(255,255,255,0.15)',
-            background: task.status === 'completed' ? '#10b981' : 'rgba(255,255,255,0.03)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            transition: 'all 0.2s ease',
-            cursor: 'pointer'
-          }}
-        >
-          {task.status === 'completed' && <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: 'white', fontWeight: 900 }}>check</span>}
-        </div>
-        
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-          <h4 
-            className={`${task.status === 'completed' ? 'strike-through' : ''}`} 
-            style={{ 
-              margin: 0,
-              fontSize: '0.95rem',
-              fontWeight: 800,
-              color: task.status === 'completed' ? 'rgba(255,255,255,0.3)' : '#ffffff',
-              letterSpacing: '0.02em',
-              lineHeight: 1.3
-            }}
-          >
-            {task.title}
-          </h4>
-          
-          {task.description && (
-            <p style={{ 
-              margin: 0, 
-              color: 'rgba(255,255,255,0.4)', 
-              fontSize: '0.75rem',
-              lineHeight: 1.5,
-              fontWeight: 600,
-              textTransform: 'uppercase', 
-              letterSpacing: '0.04em'
-            }}>
-              {task.description}
-            </p>
-          )}
-
-          {task.image_url && (
-            <div style={{ width: '100%', height: '120px', borderRadius: '0.75rem', overflow: 'hidden', marginTop: '0.25rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <img src={task.image_url} alt={task.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
-          )}
-
-          <div style={{ marginTop: '0.5rem' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                padding: '0.25rem 0.6rem',
-                borderRadius: '8px',
-                fontSize: '0.6rem',
-                fontWeight: 900,
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-                background: getCategoryColor(task.category).bg,
-                color: getCategoryColor(task.category).text,
-                border: `1px solid ${getCategoryColor(task.category).border}`,
-                boxShadow: `0 2px 8px ${getCategoryColor(task.category).bg}`
-              }}
-            >
-              {task.category || 'General'}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface DroppableColumnProps {
-  id: string;
-  title: string;
-  tasks: Task[];
-  onToggle: (task: Task) => void;
+const TaskCard = ({
+  task,
+  onComplete,
+  onDelete,
+  onEdit
+}: {
+  task: Task;
+  onComplete: (id: string) => void;
+  onDelete: (id: string) => void;
   onEdit: (task: Task) => void;
-}
+}) => {
 
-const DroppableColumn: React.FC<DroppableColumnProps> = ({ id, tasks, onToggle, onEdit }) => {
-  const { setNodeRef, isOver } = useDroppable({ id });
+  const [justCompleted,
+    setJustCompleted] = useState(false)
 
-  const getColumnIcon = () => {
-    if (id === 'High') return <span style={{ color: '#ef4444', fontWeight: 900, fontSize: '1rem', marginRight: '6px' }}>!</span>;
-    if (id === 'Medium') return <span className="material-symbols-outlined" style={{ color: '#f59e0b', fontSize: '1rem', marginRight: '6px', verticalAlign: 'middle', fontWeight: 700 }}>bar_chart</span>;
-    return <span className="material-symbols-outlined" style={{ color: '#10b981', fontSize: '1rem', marginRight: '6px', verticalAlign: 'middle', fontWeight: 700 }}>done_all</span>;
+  const getPriorityColor = (priority: string) => {
+    switch((priority || '').toLowerCase()) {
+      case 'high': return '#EF4444'
+      case 'medium': return '#F59E0B'
+      case 'low': return '#06B6D4'
+      default: return '#6B7280'
+    }
   }
 
-  const getCustomTitle = () => {
-    if (id === 'High') return 'GAME CHANGER';
-    if (id === 'Medium') return 'IMPORTANT';
-    return 'LATER';
+  const handleComplete = () => {
+    if (justCompleted) return;
+    setJustCompleted(true)
+    setTimeout(() => {
+      onComplete(task.id)
+    }, 400)
   }
+
+  const isCompleted =
+    task.status === 'completed'
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`priority-column ${isOver ? 'is-over' : ''}`}
-      style={{
-        transition: 'all 0.2s ease',
-        background: 'rgba(15,15,15,0.4)',
-        border: '1px solid rgba(255,255,255,0.02)',
-        borderRadius: '32px',
-        padding: '1.5rem',
-        height: '100%',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-        <div style={{ 
-          color: '#ffffff', 
-          fontSize: '0.8rem', 
-          fontWeight: 900, 
-          letterSpacing: '0.05em',
+    <div style={{
+      margin: '0 16px 8px 16px',
+      background:
+        'rgba(18,18,18,0.95)',
+      border: '1px solid ' +
+        'rgba(255,255,255,0.06)',
+      borderRadius: '18px',
+      padding: '14px 14px 14px 14px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      boxShadow:
+        '0 4px 12px rgba(0,0,0,0.4),' +
+        'inset 0 1px 0 ' +
+        'rgba(255,255,255,0.03)',
+      opacity: isCompleted ? 0.5 : 1,
+
+      transition: 'all 0.3s ease',
+      position: 'relative',
+      overflow: 'hidden'
+    }} className={task.id === task.id ? 'task-live-flash' : ''}>
+
+
+
+      {/* Neumorphic checkbox LEFT */}
+      <div
+        onClick={handleComplete}
+        style={{
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          flexShrink: 0,
+          cursor: 'pointer',
+          background: isCompleted ||
+            justCompleted
+              ? 'linear-gradient(' +
+                '135deg,' +
+                '#00E87A,#00C563)'
+              : 'linear-gradient(' +
+                '145deg,' +
+                '#1c1c1c,#0f0f0f)',
+          boxShadow: isCompleted ||
+            justCompleted
+              ? '0 0 16px ' +
+                'rgba(0,232,122,0.7),' +
+                '0 0 32px ' +
+                'rgba(0,232,122,0.3)'
+              : 'inset 4px 4px 8px ' +
+                'rgba(0,0,0,0.8),' +
+                'inset -2px -2px 6px ' +
+                'rgba(255,255,255,0.04),' +
+                '0 0 0 1px ' +
+                'rgba(255,255,255,0.06)',
           display: 'flex',
           alignItems: 'center',
-          textTransform: 'uppercase'
+          justifyContent: 'center',
+          transition: 'all 0.3s ease',
+          animation: justCompleted
+            ? 'checkPop 0.4s ease,' +
+              'neonPop 0.4s ease'
+            : 'none'
         }}>
-          {getColumnIcon()}
-          {getCustomTitle()}
-        </div>
-        <span 
-          style={{
-            background: id === 'High' ? 'rgba(239, 68, 68, 0.15)' : id === 'Medium' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-            color: id === 'High' ? '#ef4444' : id === 'Medium' ? '#f59e0b' : '#10b981',
-            padding: '2px 8px',
-            borderRadius: '12px',
-            fontSize: '0.85rem',
-            fontWeight: 900,
-          }}
-        >
-          {tasks.length}
-        </span>
+
+        <svg width="20" height="20"
+          viewBox="0 0 20 20"
+          fill="none">
+          <path
+            d="M4 10l4.5 4.5L16 6"
+            stroke={
+              isCompleted || justCompleted
+                ? '#000000'
+                : 'rgba(255,255,255,0.15)'
+            }
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              transition:
+                'stroke 0.2s ease'
+            }}/>
+        </svg>
       </div>
 
-      <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-        <div 
-          className="task-grid" 
-          style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr', 
-            gap: '1.25rem',
-            paddingBottom: '2rem'
-          }}
-        >
-          {tasks.map(task => (
-            <SortableTaskItem
-              key={task.id}
-              task={task}
-              onToggle={onToggle}
-              onEdit={onEdit}
-            />
-          ))}
-        </div>
-      </SortableContext>
-    </div>
-  );
-};
-
-const EmptyDashboard: React.FC<{ onAdd: () => void, type: 'welcome' | 'completed' }> = ({ onAdd, type }) => {
-  const isCompleted = type === 'completed';
-  
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem', minHeight: '60vh' }}>
-      <div style={{ position: 'relative', marginBottom: '2.5rem' }}>
-        <div className="float-animation" style={{ width: '120px', height: '120px', borderRadius: '40px', background: isCompleted ? 'rgba(16, 185, 129, 0.05)' : 'rgba(59, 130, 246, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${isCompleted ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)'}` }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '4.5rem', color: isCompleted ? '#10b981' : '#3b82f6', opacity: 0.8 }}>
-            {isCompleted ? 'task_alt' : 'rocket_launch'}
+      {/* Task content MIDDLE */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{
+          fontSize: '15px',
+          fontWeight: '700',
+          color: '#FFFFFF',
+          margin: '0 0 4px 0',
+          letterSpacing: '-0.2px',
+          textDecoration: isCompleted
+            ? 'line-through' : 'none',
+          textDecorationColor:
+            'rgba(255,255,255,0.3)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
+        }}>
+          {task.title}
+        </p>
+        {task.description && (
+          <p style={{
+            fontSize: '12px',
+            color: '#888888',
+            margin: '4px 0 0 0',
+            lineHeight: 1.5,
+            display: '-webkit-box',
+            WebkitLineClamp: 4,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            wordBreak: 'break-word'
+          }}>
+            {task.description}
+          </p>
+        )}
+        {/* Priority pill */}
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          marginTop: '6px',
+          background:
+            `rgba(0,232,122,0.1)`,
+          borderRadius: '8px',
+          padding: '2px 8px'
+        }}>
+          <div style={{
+            width: '5px',
+            height: '5px',
+            borderRadius: '50%',
+            background:
+              getPriorityColor(
+                task.priority),
+            boxShadow: `0 0 6px ${
+              getPriorityColor(
+                task.priority)}`
+          }}/>
+          <span style={{
+            fontSize: '9px',
+            fontWeight: '700',
+            color: getPriorityColor(
+              task.priority),
+            letterSpacing: '0.08em',
+          }}>
+            {task.priority || 'Normal'}
           </span>
         </div>
       </div>
-      <p style={{ color: '#64748b', fontSize: '1.05rem', lineHeight: 1.6, maxWidth: '400px', margin: '0 0 1.5rem 0', fontWeight: 600 }}>
-        {isCompleted 
-          ? "All tasks completed. Great job. You cleared your focus list. Stay hungry. Stay hardy." 
-          : "Welcome to Stay Hardy and your productive journey. Track your tasks and build consistency."}
-      </p>
-      <button
-        onClick={onAdd}
-        className="minimal-circle-btn"
+
+      {/* Options right side */}
+      {!isCompleted && (
+        <div style={{ display: 'flex', gap: '6px', marginLeft: '4px' }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(task.id);
+            }}
+            style={{
+              width: '32px', height: '32px', borderRadius: '10px',
+              background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#EF4444', cursor: 'pointer'
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
+          </button>
+        </div>
+      )}
+
+      {/* Priority color bar RIGHT */}
+      <div style={{
+        width: '3px',
+        height: '48px',
+        borderRadius: '3px',
+        background:
+          getPriorityColor(task.priority),
+        boxShadow:
+          `0 0 8px ${
+            getPriorityColor(
+              task.priority)}80`,
+        flexShrink: 0
+      }}/>
+
+      {/* Options button */}
+      <div
+        onClick={() => onEdit(task)}
         style={{
-          width: '3rem',
-          height: '3rem',
-          borderRadius: '50%',
-          border: '1px solid rgba(255,255,255,0.1)',
-          background: 'rgba(255,255,255,0.02)',
-          color: 'var(--text-main)',
+          width: '32px',
+          height: '32px',
+          borderRadius: '10px',
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid ' +
+            'rgba(255,255,255,0.06)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          transition: 'all 0.2s',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-        }}
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: '1.5rem' }}>add</span>
-      </button>
+          flexShrink: 0
+        }}>
+        <svg width="14" height="14"
+          viewBox="0 0 24 24"
+          fill="rgba(255,255,255,0.4)">
+          <circle cx="12" cy="5" r="2"/>
+          <circle cx="12" cy="12" r="2"/>
+          <circle cx="12" cy="19" r="2"/>
+        </svg>
+      </div>
     </div>
-  );
+  )
+}
+
+
+const triggerGlobalRefresh = () => {
+  window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
+  console.log('Global refresh triggered');
 };
 
 const Dashboard: React.FC = () => {
@@ -342,94 +325,80 @@ const Dashboard: React.FC = () => {
   const [detailTask, setDetailTask] = useState<Task | null>(null); // New details state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Business');
+  const [category, setCategory] = useState('General');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const { t } = useLanguage();
 
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [focusedField, setFocusedField] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [isExiting, setIsExiting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const [isSidebarHidden, setIsSidebarHidden] = useState(() => {
+  const [isSidebarHidden] = useState(() => {
     return localStorage.getItem('sidebarHidden') === 'true';
   });
-  const [quote, setQuote] = useState('');
-  const [error, setError] = useState('');
+  const [exitingTaskIds, setExitingTaskIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    const handleOpenCreateTask = () => setShowModal(true);
+    window.addEventListener('open-create-task', handleOpenCreateTask);
+    return () => window.removeEventListener('open-create-task', handleOpenCreateTask);
+  }, []);
+  const [toast, setToast] = useState<string | null>(null);
+  const [taskCompleteToast, setTaskCompleteToast] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [topToastVisible, setTopToastVisible] = useState(false);
+  const topToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showTopToast = () => {
+    if (topToastTimerRef.current) clearTimeout(topToastTimerRef.current);
+    setTopToastVisible(true);
+    topToastTimerRef.current = setTimeout(() => setTopToastVisible(false), 1500);
+  };
   const [imageUrl, setImageUrl] = useState('');
   const { user } = useAuth();
+  const isCreatingTask = useRef(false);
 
+  const fetchTasks = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!user?.id) return;
+      if (isCreatingTask.current) {
+        console.log('fetchTasks blocked — task creation in progress');
+        return;
+      }
+      const stale = await loadTasksListStale<Task>(user.id);
+      if (stale !== null) setTasks(stale as Task[]);
 
-  const getDynamicQuote = useCallback((currentTasks: Task[]) => {
-    const totalTasks = currentTasks.length;
-    
-    if (totalTasks === 0) {
-      return "Start by creating your first task 🚀";
-    }
+      const expired =
+        options?.force ||
+        (await isCacheExpired(CACHE_KEYS.tasks_list, CACHE_EXPIRY_MINUTES.tasks_list));
+      if (!expired) return;
 
-    const completedTasks = currentTasks.filter(t => t.status === 'completed').length;
-    const score = Math.floor((completedTasks / totalTasks) * 100);
+      const { data, error: fetchError } = await supabase
+        .from('tasks')
+        .select('id, title, description, status, category, priority, createdAt, updatedAt, order_index, image_url')
+        .eq('userId', user.id)
+        .order('order_index', { ascending: true });
 
-    if (score <= 20) {
-      const items = [
-        "Wow… creating tasks is your hobby, not completing them?",
-        "At this rate, even procrastination is disappointed.",
-        "Zero percent? That's not a score, that's a cry for help.",
-        "Your to-do list is starting to look like a history book."
-      ];
-      return items[Math.floor(Math.random() * items.length)];
-    }
-
-    if (score <= 40) {
-      const items = [
-        "Good start… but are we stopping here?",
-        "You’re halfway to being serious. Keep going.",
-        "A slow start is still a start, but let's pick up the pace.",
-        "Don't stop now, you're just starting to be useful."
-      ];
-      return items[Math.floor(Math.random() * items.length)];
-    }
-
-    if (score <= 60) {
-      const items = [
-        "Not bad. But you can definitely do better.",
-        "Consistency is missing. Fix that.",
-        "Aggressively average. Let's aim higher.",
-        "You're doing 'just enough' to not feel guilty. I see you."
-      ];
-      return items[Math.floor(Math.random() * items.length)];
-    }
-
-    if (score <= 80) {
-      const items = [
-        "Now this looks promising. Keep the momentum.",
-        "Discipline is kicking in. Don’t slow down.",
-        "Solid work. You're outperforming 80% of the population right now.",
-        "The momentum is real. Ride the wave."
-      ];
-      return items[Math.floor(Math.random() * items.length)];
-    }
-
-    const items = [
-      "Excellent. This is what focus looks like. 🔥",
-      "You’re doing what most people avoid. Respect. 👑",
-      "Absolute beast mode. Almost perfect.",
-      "Clean sweep! Are you even human or just a well-coded bot?"
-    ];
-    return items[Math.floor(Math.random() * items.length)];
-  }, []);
-
-  const fetchTasks = useCallback(async () => {
-    if (!user?.id) return;
-    const { data, error: fetchError } = await supabase
-      .from('tasks')
-      .select('id, title, description, status, category, priority, createdAt, updatedAt, order_index, image_url')
-      .eq('userId', user.id)
-      .order('order_index', { ascending: true });
-
-    if (fetchError) console.error('Supabase fetch error:', fetchError);
-    else if (data) setTasks(data as Task[]);
-  }, [user?.id]);
+      if (fetchError) console.error('Supabase fetch error:', fetchError);
+      else if (data) {
+        setTasks(prev => {
+          const map = new Map(data.map((t: any) => [t.id, t]));
+          for (const local of prev) {
+            if (local.id.length > 30 && !map.has(local.id)) {
+              if (Date.now() - new Date(local.createdAt).getTime() < 30000) {
+                map.set(local.id, local);
+              }
+            }
+          }
+          return Array.from(map.values()) as Task[];
+        });
+        void persistTasksList(user.id, data as Task[]);
+      }
+    },
+    [user?.id],
+  );
 
   const fetchCategories = useCallback(async () => {
     if (!user?.id) return;
@@ -458,7 +427,7 @@ const Dashboard: React.FC = () => {
         table: 'tasks',
         filter: `userId=eq.${user.id}`
       }, () => {
-        fetchTasks();
+        void fetchTasks({ force: true });
       })
       .subscribe();
 
@@ -491,8 +460,22 @@ const Dashboard: React.FC = () => {
   }, [location.search]);
 
   useEffect(() => {
-    setQuote(getDynamicQuote(tasks));
-  }, [tasks, getDynamicQuote]);
+    const h = () => void fetchTasks({ force: true });
+    window.addEventListener(AFTER_SYNC_FLUSH_EVENT, h);
+    return () => window.removeEventListener(AFTER_SYNC_FLUSH_EVENT, h);
+  }, [fetchTasks]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(id);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!taskCompleteToast) return;
+    const id = window.setTimeout(() => setTaskCompleteToast(null), 2000);
+    return () => window.clearTimeout(id);
+  }, [taskCompleteToast]);
 
   const openModal = (task?: Task) => {
     if (task) {
@@ -514,522 +497,1008 @@ const Dashboard: React.FC = () => {
     setShowModal(true);
   };
 
+  const handleAddTaskFabClick = () => {
+    openModal();
+  };
   const uploadImage = async (file: File) => {
-    setIsUploading(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `${user?.id}/${fileName}`;
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = `${user?.id}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('task-images')
-        .upload(filePath, file);
+    const { error: uploadError } = await supabase.storage
+      .from('task-images')
+      .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+    if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('task-images')
-        .getPublicUrl(filePath);
+    const { data: { publicUrl } } = supabase.storage
+      .from('task-images')
+      .getPublicUrl(filePath);
 
-      return publicUrl;
-    } catch (err: any) {
-      console.error('Supabase Storage Error:', err);
-      throw new Error(err.message || 'Storage connection failed');
-    } finally {
-      setIsUploading(false);
-    }
+    return publicUrl;
   };
 
   const closeModal = () => {
-    setShowModal(false);
-    setEditTask(null);
-    setTitle('');
-    setDescription('');
-    setIsAddingCategory(false);
+    setIsExiting(true);
+    setTimeout(() => {
+      setShowModal(false);
+      setIsExiting(false);
+      setEditTask(null);
+      setTitle('');
+      setDescription('');
+    }, 400);
   };
 
-  const handleCreateOrUpdate = async (e: React.FormEvent) => {
+  const showTaskSaveToast = useCallback(() => {
+    setToast('Could not save. Try again.');
+  }, []);
+
+  const handleCreateOrUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return;
+    const titleTrim = title.trim();
+    if (!titleTrim) return;
 
-    let currentImageUrl = imageUrl;
-    
-    if (imageFile) {
-      try {
-        currentImageUrl = await uploadImage(imageFile);
-      } catch (err: any) {
-        setError(`Image upload failed: ${err.message}. Please ensure the 'task-images' bucket exists and is public in Supabase.`);
-        return;
-      }
-    }
+    setError(null);
+    setIsLoading(true);
 
-    const taskData = {
-      title,
-      description,
+    const snapshot = {
+      title: titleTrim,
+      description: description.trim(),
       category,
       priority,
-      image_url: currentImageUrl,
-      updatedAt: new Date().toISOString()
+      imageUrl,
+      imageFile,
+      editTask,
+      customCategoriesSnapshot: [...customCategories],
     };
 
-    try {
-      // Ensure category is persisted
-      if (category && !customCategories.includes(category) && !['Personal', 'Content', 'Health', 'Business'].includes(category)) {
-        await supabase
-          .from('categories')
-          .insert([{ userId: user.id, name: category }])
-          .select();
-        // Optimistic update of local categories
-        setCustomCategories(prev => [...prev, category]);
-      }
+    // Close modal early for optimistic feel if NOT editing? 
+    // Actually the user spec has an "Adding..." state, so I should probably wait 
+    // or close after success. The original logic closed it immediately.
+    // I'll keep the immediate close but use isLoading for the button *before* it closes 
+    // or if submission fails.
+    
+    // Wait, let's keep the modal OPEN until success or error if we want to show loading.
+    // Original: closeModal();
 
-      if (editTask) {
-        setTasks(prev => prev.map(t => t.id === editTask.id ? { ...t, ...taskData } : t));
+    const persistEdit = async () => {
+      const et = snapshot.editTask;
+      if (!et) return;
+      const editId = et.id;
+      const previewUrl = snapshot.imageFile
+        ? URL.createObjectURL(snapshot.imageFile)
+        : snapshot.imageUrl;
+      const optimisticPatch = {
+        title: snapshot.title,
+        description: snapshot.description,
+        category: snapshot.category,
+        priority: snapshot.priority,
+        image_url: previewUrl || undefined,
+        updatedAt: new Date().toISOString(),
+      };
+      setTasks(prev =>
+        prev.map(t => (t.id === editId ? { ...t, ...optimisticPatch } : t)),
+      );
+
+      try {
+        let finalImageUrl = snapshot.imageUrl;
+        if (snapshot.imageFile) {
+          try {
+            finalImageUrl = await uploadImage(snapshot.imageFile);
+          } catch (uploadErr) {
+            console.error('Task image upload failed:', uploadErr);
+            if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+            await fetchTasks({ force: true });
+            showTaskSaveToast();
+            return;
+          }
+        }
+
+        if (
+          snapshot.category &&
+          !snapshot.customCategoriesSnapshot.includes(snapshot.category) &&
+          !['Personal', 'Content', 'Health', 'Business'].includes(snapshot.category)
+        ) {
+          await supabase
+            .from('categories')
+            .insert([{ userId: user.id, name: snapshot.category }])
+            .select();
+          setCustomCategories(prev =>
+            prev.includes(snapshot.category) ? prev : [...prev, snapshot.category],
+          );
+        }
+
+        const payload = {
+          title: snapshot.title,
+          description: snapshot.description,
+          category: snapshot.category,
+          priority: snapshot.priority,
+          image_url: finalImageUrl || null,
+          updatedAt: new Date().toISOString(),
+        };
         const { error: updateError } = await supabase
           .from('tasks')
-          .update(taskData)
-          .eq('id', editTask.id);
+          .update(payload)
+          .eq('id', editId);
         if (updateError) throw updateError;
-      } else {
-        const newTask = {
-          ...taskData,
-          userId: user.id,
-          status: 'pending',
-          order_index: tasks.length + 1,
-          createdAt: new Date().toISOString()
-        };
+        if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+        setTasks(prev =>
+          prev.map(t =>
+            t.id === editId ? { ...t, ...payload, image_url: finalImageUrl || undefined } : t,
+          ),
+        );
+        void invalidateUserStatsCache();
+        triggerGlobalRefresh();
+        void setTasks((prev) => {
+          if (user?.id) {
+            persistTasksList(user.id, prev);
+            void ProductivityService.recalculate(user.id);
+          }
+          return prev;
+        });
+        setIsLoading(false);
+        closeModal();
+      } catch (err: any) {
+        console.error('Task update failed:', err);
+        setError(err.message || 'Failed to update task');
+        setIsLoading(false);
+        if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+        const online = await isOnline();
+        if (!online && user?.id) {
+          const patch = {
+            title: snapshot.title,
+            description: snapshot.description,
+            category: snapshot.category,
+            priority: snapshot.priority,
+            image_url: snapshot.imageUrl || null,
+            updatedAt: new Date().toISOString(),
+          };
+          await enqueueSync({
+            action: 'update',
+            entity: 'task',
+            data: { id: editId, patch },
+            timestamp: Date.now(),
+          });
+          void setTasks((prev) => {
+            persistTasksList(user.id, prev);
+            void ProductivityService.recalculate(user.id);
+            return prev;
+          });
+          void invalidateUserStatsCache();
+          triggerGlobalRefresh();
+          return;
+        }
+        await fetchTasks({ force: true });
+        showTaskSaveToast();
+      }
+    };
 
-        const { error: insertError } = await supabase
+    const persistInsert = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      // Optimistic Update
+      const tempId = crypto.randomUUID();
+      const optimisticTask: Task = {
+        id: tempId,
+        title: snapshot.title,
+        description: snapshot.description,
+        category: snapshot.category,
+        priority: snapshot.priority,
+        image_url: undefined, // temporary, will update if image uploads
+        status: 'pending',
+        order_index: tasks.length + 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setTasks(prev => {
+        const next = [...prev, optimisticTask];
+        if (user?.id) {
+          persistTasksList(user.id, next);
+          void ProductivityService.recalculate(user.id);
+        }
+        return next;
+      });
+      
+      closeModal(); // UX: close instantly
+
+      try {
+        let finalImageUrl = snapshot.imageUrl;
+        if (snapshot.imageFile) {
+          finalImageUrl = await uploadImage(snapshot.imageFile);
+        }
+
+        const { error: insertError, data } = await supabase
           .from('tasks')
-          .insert([newTask]);
+          .insert([{
+            title: snapshot.title,
+            description: snapshot.description,
+            category: snapshot.category,
+            priority: snapshot.priority,
+            image_url: finalImageUrl || null,
+            userId: user!.id,
+            status: 'pending' as const,
+            order_index: tasks.length + 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }])
+          .select()
+          .single();
 
         if (insertError) throw insertError;
+        
+        // Swap temp ID with real ID quietly
+        const newTask = (data as unknown) as Task;
+        setTasks(prev => {
+          const next = prev.map(t => t.id === tempId ? newTask : t);
+          if (user?.id) persistTasksList(user.id, next);
+          return next;
+        });
+
+        void invalidateUserStatsCache();
+        triggerGlobalRefresh();
+      } catch (err: any) {
+        console.error('Task insert failed:', err);
+        // Rollback on failure
+        setTasks(prev => {
+          const next = prev.filter(t => t.id !== tempId);
+          if (user?.id) {
+            persistTasksList(user.id, next);
+            void ProductivityService.recalculate(user.id);
+          }
+          return next;
+        });
+      } finally {
+        setIsLoading(false);
       }
-      closeModal();
-    } catch (err: any) {
-      console.error('Error in handleCreateOrUpdate:', err);
-      setError(err.message || 'Failed to save task to cloud.');
-      fetchTasks();
-    }
+    };
+
+
+    if (snapshot.editTask) void persistEdit();
+    else persistInsert();
   };
+
+  const scheduleTaskCompletionExit = useCallback((taskId: string) => {
+    setExitingTaskIds((prev) => new Set(prev).add(taskId));
+    window.setTimeout(() => {
+      setExitingTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+    }, 520);
+  }, []);
 
   const toggleTaskStatus = async (task: Task) => {
     const newStatus = task.status === 'pending' ? 'completed' : 'pending';
 
-    // Optimistic update
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    if (newStatus === 'completed') {
+      scheduleTaskCompletionExit(task.id);
+      showTopToast();
+    }
+
+    setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, status: newStatus } : t)));
+
+    const online = await isOnline();
+    if (!online && user?.id) {
+      await enqueueSync({
+        action: 'update',
+        entity: 'task',
+        data: {
+          id: task.id,
+          patch: { status: newStatus, updatedAt: new Date().toISOString() },
+        },
+        timestamp: Date.now(),
+      });
+      void setTasks((prev) => {
+        persistTasksList(user.id, prev);
+        void ProductivityService.recalculate(user.id);
+        return prev;
+      });
+      void invalidateUserStatsCache();
+      void syncWidgetData();
+      triggerGlobalRefresh();
+      return;
+    }
 
     try {
       const { error: toggleError } = await supabase
         .from('tasks')
         .update({
           status: newStatus,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         })
         .eq('id', task.id);
       if (toggleError) throw toggleError;
+      void syncWidgetData();
+      void invalidateUserStatsCache();
+      triggerGlobalRefresh();
+      void setTasks((prev) => {
+        if (user?.id) {
+          persistTasksList(user.id, prev);
+          void ProductivityService.recalculate(user.id);
+        }
+        return prev;
+      });
     } catch (err) {
       console.error('Error toggling status:', err);
-      fetchTasks(); // Rollback/Refresh on error
+      void fetchTasks({ force: true });
     }
   };
 
   const deleteTask = async (id: string) => {
-    try {
-      // Optimistic update
-      setTasks(prev => prev.filter(t => t.id !== id));
+    // 1. Fully Optimistic
+    setTasks(prev => {
+      const next = prev.filter(t => t.id !== id);
+      if (user?.id) {
+        persistTasksList(user.id, next);
+        void ProductivityService.recalculate(user.id);
+      }
+      return next;
+    });
 
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', id);
+    const online = await isOnline();
+    if (!online && user?.id) {
+      await enqueueSync({
+        action: 'delete',
+        entity: 'task',
+        data: { id },
+        timestamp: Date.now(),
+      });
+      void invalidateUserStatsCache();
+      void syncWidgetData();
+      triggerGlobalRefresh();
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
       if (error) throw error;
+      void syncWidgetData();
+      void invalidateUserStatsCache();
+      triggerGlobalRefresh();
     } catch (err) {
       console.error('Error deleting task:', err);
-      fetchTasks();
+      // Rollback logic (force fetch since we lost the original task inline)
+      void fetchTasks({ force: true });
     }
   };
 
-  const toggleSidebar = () => {
-    setIsSidebarHidden(prev => {
-      const newVal = !prev;
-      localStorage.setItem('sidebarHidden', String(newVal));
-      return newVal;
-    });
-  };
+  // Category logic removed in favor of hardcoded glassmorphic UI
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over) return;
 
-    const activeId = active.id as string;
-    const overId = over.id as string;
 
-    const activeTask = tasks.find(t => t.id === activeId);
-    if (!activeTask) return;
 
-    // Determine if we dropped on a container or another item
-    let newPriority: 'High' | 'Medium' | 'Low' | null = null;
 
-    if (['High', 'Medium', 'Low'].includes(overId)) {
-      newPriority = overId as any;
-    } else {
-      const overTask = tasks.find(t => t.id === overId);
-      if (overTask) {
-        newPriority = overTask.priority;
-      }
-    }
 
-    if (overId === 'Done' || newPriority && newPriority !== activeTask.priority) {
-      const isDoneDrop = overId === 'Done';
-      
-      // Optimistic update
-      setTasks(prev => prev.map(t => t.id === activeId ? { 
-        ...t, 
-        priority: isDoneDrop ? t.priority : newPriority!,
-        status: isDoneDrop ? 'completed' : 'pending' as any
-      } : t));
 
-      try {
-        const updates: any = {};
-        if (isDoneDrop) updates.status = 'completed';
-        else updates.priority = newPriority;
-
-        const { error: updateError } = await supabase
-          .from('tasks')
-          .update(updates)
-          .eq('id', activeId);
-        if (updateError) throw updateError;
-      } catch (err) {
-        console.error('Task update error:', err);
-        fetchTasks();
-      }
-    } else if (activeId !== overId) {
-      // Sorting within the same container
-      const oldIndex = tasks.findIndex((t) => t.id === activeId);
-      const newIndex = tasks.findIndex((t) => t.id === overId);
-      const newTasks = arrayMove(tasks, oldIndex, newIndex);
-      setTasks(newTasks);
-
-      try {
-        const updates = newTasks.map((t, idx) => ({
-          id: t.id,
-          order_index: idx + 1
-        }));
-        const { error: reorderError } = await supabase.from('tasks').upsert(updates);
-        if (reorderError) throw reorderError;
-      } catch (err) {
-        console.error('Supabase reorder error:', err);
-        fetchTasks();
-      }
-    }
-  };
-
-  /* getTimeGreeting Deleted */
-
-  const defaultCategories = ['Personal', 'Content', 'Health', 'Business'];
-  const categories = Array.from(new Set([...defaultCategories, ...customCategories, ...tasks.map(t => t.category)]));
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 250,
-        tolerance: 5,
-      },
-    })
-  );
 
   return (
-    <div className={`page-shell dashboard-layout ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
-      <div className="aurora-bg">
-        <div className="aurora-gradient-1"></div>
-        <div className="aurora-gradient-2"></div>
+    <div className={`page-shell dashboard-page-layout ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ 
+      paddingBottom: '100px', 
+      background: '#000000', 
+      minHeight: '100vh', 
+      overflowY: 'auto',
+      position: 'relative'
+    }}>
+      
+
+      {/* STICKY HEADER WRAPPER */}
+      <div style={{ 
+        position: 'sticky', 
+        top: 0, 
+        zIndex: 50, 
+        background: '#000000', 
+        paddingTop: 'env(safe-area-inset-top, 20px)',
+        paddingBottom: '4px'
+      }}>
+        {/* GLASSMORPHIC HEADER */}
+        {(() => {
+          const pendingTasks = tasks.filter(t => t.status === 'pending')
+          const completedToday = tasks.filter(t => 
+            t.status === 'completed' && 
+            isCompletedTaskToday(t.updatedAt)
+          ).length
+          const totalTasks = tasks.length
+
+          return (
+            <>
+              {pendingTasks.length > 0 ? (
+                <div style={{
+                  margin: '16px 16px 12px 16px',
+                  background:
+                    'linear-gradient(135deg,' +
+                    'rgba(239,68,68,0.12) 0%,' +
+                    'rgba(185,28,28,0.08) 100%)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  border: '1px solid ' +
+                    'rgba(239,68,68,0.4)',
+                  borderRadius: '24px',
+                  padding: '20px',
+                  boxShadow:
+                    '0 0 20px rgba(239,68,68,0.1),' +
+                    'inset 0 1px 0 ' +
+                    'rgba(255,255,255,0.05)'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{
+                      animation:
+                        'breathe 2.5s ease-in-out infinite'
+                    }}>
+                      <p style={{
+                        fontSize: '36px',
+                        fontWeight: '900',
+                        color: '#FFFFFF',
+                        margin: 0,
+                        lineHeight: 1,
+                        letterSpacing: '-1px'
+                      }}>
+                        {pendingTasks.length}
+                      </p>
+                      <p style={{
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        color: 'rgba(239,68,68,0.8)',
+                        margin: '4px 0 0 0',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase'
+                      }}>
+                        {pendingTasks.length === 1
+                          ? 'Task Pending'
+                          : 'Tasks Pending'}
+                      </p>
+                    </div>
+
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px',
+                      alignItems: 'flex-end'
+                    }}>
+                      {[
+                        {
+                          label: 'High',
+                          count: pendingTasks
+                            .filter(t =>
+                              t.priority.toLowerCase() === 'high')
+                            .length,
+                          color: '#EF4444'
+                        },
+                        {
+                          label: 'Medium',
+                          count: pendingTasks
+                            .filter(t =>
+                              t.priority.toLowerCase() === 'medium')
+                            .length,
+                          color: '#F59E0B'
+                        },
+                        {
+                          label: 'Low',
+                          count: pendingTasks
+                            .filter(t =>
+                              t.priority.toLowerCase() === 'low')
+                            .length,
+                          color: '#06B6D4'
+                        }
+                      ].filter(p => p.count > 0)
+                      .map((p, i) => (
+                        <div key={i} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <div style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: p.color,
+                            boxShadow:
+                              `0 0 6px ${p.color}`
+                          }}/>
+                          <span style={{
+                            fontSize: '11px',
+                            color: 'rgba(255,255,255,0.5)',
+                            fontWeight: '600'
+                          }}>
+                            {p.count} {p.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      marginBottom: '6px'
+                    }}>
+                      <span style={{
+                        fontSize: '10px',
+                        color: 'rgba(255,255,255,0.3)',
+                        fontWeight: '600',
+                        letterSpacing: '0.1em'
+                      }}>
+                        TODAY'S PROGRESS
+                      </span>
+                      <span style={{
+                        fontSize: '10px',
+                        color: 'rgba(255,255,255,0.5)',
+                        fontWeight: '700'
+                      }}>
+                        {completedToday}/
+                        {totalTasks} done
+                      </span>
+                    </div>
+                    <div style={{
+                      height: '4px',
+                      background: 'rgba(255,255,255,0.08)',
+                      borderRadius: '4px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        height: '100%',
+                        width: totalTasks > 0
+                          ? (completedToday /
+                             totalTasks * 100) + '%'
+                          : '0%',
+                        background:
+                          'linear-gradient(90deg,' +
+                          '#EF4444,#F59E0B)',
+                        borderRadius: '4px',
+                        transition: 'width 0.5s ease',
+                        boxShadow:
+                          '0 0 8px rgba(239,68,68,0.5)'
+                      }}/>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  margin: '16px 16px 12px 16px',
+                  background:
+                    'linear-gradient(135deg,' +
+                    'rgba(0,232,122,0.1) 0%,' +
+                    'rgba(0,100,60,0.08) 100%)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  border: '1px solid ' +
+                    'rgba(0,232,122,0.3)',
+                  borderRadius: '24px',
+                  padding: '24px 20px',
+                  textAlign: 'center',
+                  boxShadow:
+                    '0 0 24px rgba(0,232,122,0.1)'
+                }}>
+                  <p style={{
+                    fontSize: '32px',
+                    fontWeight: '900',
+                    color: '#00E87A',
+                    margin: '0 0 4px 0',
+                    letterSpacing: '-0.5px',
+                    animation:
+                      'allClearGlow 2s ease-in-out infinite'
+                  }}>
+                    All Clear ✓
+                  </p>
+                  <p style={{
+                    fontSize: '13px',
+                    color: 'rgba(255,255,255,0.4)',
+                    margin: 0,
+                    fontWeight: '500'
+                  }}>
+                    You crushed everything today 🔥
+                  </p>
+                </div>
+              )}
+
+              {/* SECTION LABEL (Also sticky) */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '8px 16px',
+                background: '#000000'
+              }}>
+                <p style={{
+                  fontSize: '10px',
+                  fontWeight: '900',
+                  color: 'rgba(255,255,255,0.3)',
+                  margin: 0,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase'
+                }}>
+                  Tasks List
+                </p>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#EF4444',
+                  opacity: 0.6
+                }}/>
+              </div>
+            </>
+          )
+        })()}
       </div>
 
-      <header className="dashboard-header" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>{t('home')}</h1>
-          <p style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.1em', marginTop: '0.25rem', textTransform: 'uppercase' }}>
-            {quote}
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {tasks.filter(t => t.status === 'pending').length > 0 && (
-            <button
-              onClick={() => openModal()}
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                background: '#10b981',
-                color: 'white',
+      <div 
+        className="bouncing-scroll"
+
+        style={{ 
+          paddingBottom: '80px',
+          marginTop: '4px'
+        }}
+      >
+        <style>{`
+          @keyframes float3D {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-15px) rotate(2deg); }
+          }
+          @keyframes spinRing {
+            from { transform: rotateX(60deg) rotateY(20deg) rotateZ(0deg); }
+            to { transform: rotateX(60deg) rotateY(20deg) rotateZ(360deg); }
+          }
+          @keyframes spinRingReverse {
+            from { transform: rotateX(70deg) rotateY(-20deg) rotateZ(360deg); }
+            to { transform: rotateX(70deg) rotateY(-20deg) rotateZ(0deg); }
+          }
+          @keyframes pulseDiamond {
+            0%, 100% { transform: rotate(45deg) scale(1); box-shadow: 0 10px 30px rgba(0, 232, 122, 0.4), inset -5px -5px 15px rgba(0,0,0,0.4), inset 5px 5px 15px rgba(255,255,255,0.4); }
+            50% { transform: rotate(45deg) scale(1.05); box-shadow: 0 15px 40px rgba(0, 232, 122, 0.6), inset -5px -5px 15px rgba(0,0,0,0.5), inset 5px 5px 15px rgba(255,255,255,0.5); }
+          }
+        `}</style>
+        {(() => {
+          const visibleTasks = tasks.filter(t => t.status === 'pending' || exitingTaskIds.has(t.id));
+          if (tasks.length === 0 || visibleTasks.length === 0) {
+            const allDone = tasks.length > 0 && tasks.every(t => t.status === 'completed');
+            return (
+              <div style={{
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: 'none',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontWeight: 'bold' }}>add</span>
-            </button>
-          )}
-          <button
-            onClick={toggleSidebar}
-            className="notification-btn desktop-only-btn"
-            title={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar (Focus Mode)"}
-            data-tooltip={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar"}
-            style={{
-              ...(isSidebarHidden ? { background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' } : {}),
-              opacity: 0.5
-            }}
-          >
-            <span className="material-symbols-outlined">
-              {isSidebarHidden ? 'side_navigation' : 'fullscreen'}
-            </span>
-          </button>
+                flex: 1,
+                padding: '40px 32px',
+                gap: '32px',
+                marginTop: '30px',
+                animation: 'fadeIn 0.5s ease-out forwards'
+              }}>
+                <div style={{
+                  position: 'relative',
+                  width: '120px',
+                  height: '120px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  animation: 'float3D 6s ease-in-out infinite'
+                }}>
+                  {/* Central 3D Diamond */}
+                  <div style={{
+                    position: 'absolute',
+                    width: '60px',
+                    height: '60px',
+                    background: 'linear-gradient(135deg, #00FF88 0%, #008844 100%)',
+                    borderRadius: '16px',
+                    animation: 'pulseDiamond 4s ease-in-out infinite',
+                    zIndex: 2
+                  }}/>
+                  
+                  {/* Outer Orbit 1 */}
+                  <div style={{
+                    position: 'absolute',
+                    width: '120px',
+                    height: '120px',
+                    borderRadius: '50%',
+                    border: '1.5px solid rgba(0, 232, 122, 0.3)',
+                    boxShadow: '0 0 15px rgba(0, 232, 122, 0.1)',
+                    animation: 'spinRingReverse 12s linear infinite',
+                    zIndex: 1
+                  }}/>
+                  
+                  {/* Outer Orbit 2 */}
+                  <div style={{
+                    position: 'absolute',
+                    width: '85px',
+                    height: '85px',
+                    borderRadius: '50%',
+                    border: '1.5px dashed rgba(255, 255, 255, 0.2)',
+                    animation: 'spinRing 8s linear infinite',
+                    zIndex: 3
+                  }}/>
+                </div>
 
-          
-        </div>
-      </header>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{
+                    fontSize: '22px',
+                    fontWeight: '900',
+                    color: '#FFFFFF',
+                    margin: '0 0 12px 0',
+                    letterSpacing: '-0.5px'
+                  }}>
+                    {allDone ? "Absolute Focus. 🔥" : "Create your first task"}
+                  </p>
+                  <p style={{
+                    fontSize: '14px',
+                    color: 'rgba(255,255,255,0.4)',
+                    margin: 0,
+                    lineHeight: 1.5,
+                    maxWidth: '260px'
+                  }}>
+                    {allDone 
+                      ? "You've crushed your entire list today. Enjoy the win or add more." 
+                      : "Zero tasks found. Start building momentum by adding one."}
+                  </p>
+                </div>
 
-      {error && (
-        <div className="glass-card" style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', borderRadius: '12px', marginBottom: '1rem' }}>
-          {error}
+                <button
+                  onClick={handleAddTaskFabClick}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    background: 'rgba(0, 232, 122, 0.1)',
+                    border: '1px solid rgba(0, 232, 122, 0.4)',
+                    borderRadius: '20px',
+                    padding: '16px 32px',
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 24px rgba(0,232,122,0.15), inset 0 1px 1px rgba(255,255,255,0.05)',
+                    transition: 'all 0.3s ease',
+                    color: '#00E87A',
+                    textTransform: 'uppercase'
+                  }}>
+                  <span style={{ fontSize: '18px', fontWeight: '300', lineHeight: 1 }}>+</span>
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '800',
+                    letterSpacing: '0.08em'
+                  }}>
+                    {allDone ? "ADD MORE" : "ADD TASK"}
+                  </span>
+                </button>
+              </div>
+            );
+          }
+
+          return visibleTasks
+            .sort((a, b) => {
+                const priorities = { 'High': 3, 'Medium': 2, 'Low': 1 };
+                if (priorities[a.priority] !== priorities[b.priority]) {
+                    return (priorities[b.priority] || 0) - (priorities[a.priority] || 0);
+                }
+                return (a.order_index || 0) - (b.order_index || 0);
+            })
+            .map(task => (
+              <TaskCard 
+                key={task.id} 
+                task={task} 
+                onComplete={() => {
+                  showTopToast();
+                  void toggleTaskStatus(task);
+                }}
+                onDelete={(id) => deleteTask(id)}
+                onEdit={(t) => openModal(t)}
+              />
+            ));
+        })()}
+      </div>
+
+
+      <BottomNav
+        isHidden={isSidebarHidden}
+        hideFloatingShelf={showModal || !!detailTask}
+      />
+
+      {toast && (
+        <div
+          role="status"
+          className="task-save-toast"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 'max(1rem, env(safe-area-inset-bottom))',
+            transform: 'translateX(-50%)',
+            zIndex: 1100,
+            padding: '0.5rem 1rem',
+            borderRadius: '999px',
+            background: 'rgba(15, 23, 42, 0.92)',
+            color: '#e2e8f0',
+            fontSize: '13px',
+            fontWeight: 600,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+            maxWidth: 'min(90vw, 320px)',
+            textAlign: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          {toast}
         </div>
       )}
 
-      <div className="priority-board" style={{
-        flex: 1,
-        paddingBottom: '2rem',
-        alignItems: 'flex-start'
-      }}>
-        {tasks.length === 0 ? (
-          <div style={{ width: '100%' }}><EmptyDashboard onAdd={() => openModal()} type="welcome" /></div>
-        ) : tasks.filter(t => t.status === 'pending').length === 0 ? (
-          <div style={{ width: '100%' }}><EmptyDashboard onAdd={() => openModal()} type="completed" /></div>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <div className="priority-grid-container" style={{ width: '100%', gap: '1.25rem' }}>
-              {(['High', 'Medium', 'Low'] as const).map(prio => {
-                const filteredTasks = tasks.filter(t => t.priority === prio && t.status === 'pending');
-                
-                if (filteredTasks.length === 0) return null;
 
-                return (
-                  <div key={prio} className="priority-column-wrapper" data-priority={prio}>
-                    <DroppableColumn
-                      id={prio}
-                      title={prio === 'High' ? 'Game Changer' : prio === 'Medium' ? 'Important' : 'Later'}
-                      tasks={filteredTasks.sort((a, b) => (a.order_index || 0) - (b.order_index || 0))}
-                      onToggle={toggleTaskStatus}
-                      onEdit={(task) => setDetailTask(task)}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </DndContext>
-        )}
-      </div>
+      {/* Top pill toast — non-blocking, slides down from notch */}
+      <style>{`
+        @keyframes topToastIn {
+          from { transform: translate(-50%, -120%); opacity: 0; }
+          to   { transform: translate(-50%, 0);    opacity: 1; }
+        }
+        @keyframes topToastOut {
+          from { transform: translate(-50%, 0);    opacity: 1; }
+          to   { transform: translate(-50%, -120%); opacity: 0; }
+        }
+        .top-toast-enter { animation: topToastIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .top-toast-exit  { animation: topToastOut 0.3s ease-in forwards; }
+      `}</style>
+      {topToastVisible !== null && (
+        <div
+          role="status"
+          className={topToastVisible ? 'top-toast-enter' : 'top-toast-exit'}
+          style={{
+            position: 'fixed',
+            top: 'calc(env(safe-area-inset-top, 16px) + 12px)',
+            left: '50%',
+            transform: 'translate(-50%, 0)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 20px 10px 14px',
+            borderRadius: '999px',
+            background: 'rgba(26, 26, 26, 0.9)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            border: '1px solid #00E87A',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 12px rgba(0,232,122,0.15)',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="8" fill="#00E87A" opacity="0.15"/>
+            <path d="M4 8.5l2.5 2.5L12 6" stroke="#00E87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.02em' }}>
+            Task secured.
+          </span>
+        </div>
+      )}
 
-      <BottomNav isHidden={isSidebarHidden} />
+
 
       {showModal && (
-        <div className="premium-modal-overlay" onClick={closeModal}>
-          <div className="bottom-sheet" onClick={e => e.stopPropagation()}>
-            <div className="sheet-handle"></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>{editTask ? t('edit_task') : t('new_task')}</h2>
-              <button onClick={closeModal} className="notification-btn"><span className="material-symbols-outlined">close</span></button>
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 700,
+          display: 'flex',
+          alignItems: 'flex-end'
+        }}>
+          {/* Backdrop */}
+          <div
+            onClick={closeModal}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.85)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)'
+            }}
+          />
+
+          {/* Modal */}
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              width: '100%',
+              background: '#000000',
+              backdropFilter: 'blur(40px)',
+              WebkitBackdropFilter: 'blur(40px)',
+              borderRadius: '32px 32px 0 0',
+              border: '1px solid rgba(0,232,122,0.4)',
+              borderBottom: 'none',
+              paddingBottom: '48px',
+              animation: isExiting 
+                ? 'taskModalDown 0.4s cubic-bezier(0.32, 0, 0.67, 0) forwards'
+                : 'taskModalUp 0.4s cubic-bezier(0.34,1.56,0.64,1), taskBorderGlow 3s ease-in-out infinite',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+
+
+          >
+            {/* Drag handle */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0 0' }}>
+              <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)' }}/>
             </div>
 
-            <form onSubmit={handleCreateOrUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <div className="input-group">
-                <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.5rem', display: 'block' }}>{t('task_name')}</label>
-                <div style={{ position: 'relative' }}>
-                  <span className="material-symbols-outlined" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#10b981', fontSize: '20px' }}>edit_note</span>
-                  <input className="form-input" value={title} onChange={e => setTitle(e.target.value)} required autoFocus placeholder="Task name..." style={{ background: 'var(--card-bg)', border: 'none', padding: '1rem 1rem 1rem 3rem', fontSize: '1.1rem', borderRadius: '1rem', color: 'var(--text-main)', width: '100%', boxSizing: 'border-box', fontWeight: 'bold' }} />
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 20px 20px' }}>
+              <div style={{ width: '40px' }}/>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px', filter: 'drop-shadow(0 0 8px rgba(0,232,122,0.8))' }}>⚡</span>
+                <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#FFFFFF', margin: 0, letterSpacing: '-0.5px', animation: 'titleGlow 3s ease-in-out infinite' }}>
+                  {editTask ? t('edit_task') : 'New Task'}
+                </h2>
+              </div>
+              <div onClick={closeModal} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round">
+                  <line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/>
+                </svg>
+              </div>
+            </div>
+
+            <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: '800', color: '#666666', letterSpacing: '0.12em', display: 'block', marginBottom: '8px' }}>TASK NAME</label>
+                <div style={{ borderRadius: '16px', background: '#121212', border: `1px solid ${focusedField === 'title' ? 'rgba(0,232,122,0.6)' : 'rgba(255,255,255,0.07)'}`, boxShadow: focusedField === 'title' ? 'inset 4px 4px 10px rgba(0,0,0,0.8), inset -1px -1px 4px rgba(255,255,255,0.02), 0 0 0 1px rgba(0,232,122,0.3), 0 0 16px rgba(0,232,122,0.15)' : 'inset 4px 4px 10px rgba(0,0,0,0.8), inset -1px -1px 4px rgba(255,255,255,0.02)', transition: 'all 0.2s ease' }}>
+                  <input type="text" placeholder="What needs to be done?" value={title} onChange={e => setTitle(e.target.value)} onFocus={() => setFocusedField('title')} onBlur={() => setFocusedField('')} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '15px', fontWeight: '600', color: '#FFFFFF', caretColor: '#00E87A', boxSizing: 'border-box' }}/>
                 </div>
               </div>
 
-              <div className="input-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', margin: 0 }}>{t('description')}</label>
-                  <button 
-                    type="button"
-                    onClick={() => document.getElementById('task-image-upload')?.click()}
-                    style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>add_photo_alternate</span>
-                    <span style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>{t('add')} Image</span>
-                  </button>
-                  <input
-                    id="task-image-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                    style={{ display: 'none' }}
-                  />
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: '800', color: '#666666', letterSpacing: '0.12em', display: 'block', marginBottom: '8px' }}>DESCRIPTION</label>
+                <div style={{ borderRadius: '16px', background: '#121212', border: `1px solid ${focusedField === 'desc' ? 'rgba(0,232,122,0.6)' : 'rgba(255,255,255,0.07)'}`, boxShadow: focusedField === 'desc' ? 'inset 4px 4px 10px rgba(0,0,0,0.8), inset -1px -1px 4px rgba(255,255,255,0.02), 0 0 0 1px rgba(0,232,122,0.3), 0 0 16px rgba(0,232,122,0.15)' : 'inset 4px 4px 10px rgba(0,0,0,0.8), inset -1px -1px 4px rgba(255,255,255,0.02)', transition: 'all 0.2s ease' }}>
+                  <textarea placeholder="Add details... (optional)" value={description} onChange={e => { setDescription(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} onFocus={() => setFocusedField('desc')} onBlur={() => setFocusedField('')} rows={1} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '14px', fontWeight: '500', color: '#FFFFFF', caretColor: '#00E87A', resize: 'none', lineHeight: 1.6, boxSizing: 'border-box', fontFamily: 'inherit', overflow: 'hidden', minHeight: '48px', transition: 'height 0.15s ease' }}/>
                 </div>
-                <textarea
-                  className="form-input editor-textarea"
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  placeholder="Details..."
-                  style={{ background: 'var(--card-bg)', border: 'none', minHeight: '120px', padding: '1rem', fontSize: '0.9rem', borderRadius: '1rem', resize: 'none', color: 'var(--text-main)', width: '100%', boxSizing: 'border-box' }}
+              </div>
+
+                <CategorySelector
+                  selected={category}
+                  onSelect={setCategory}
                 />
-                
-                {(imageFile || imageUrl) && (
-                  <div style={{ marginTop: '0.75rem', width: '60px', height: '60px', borderRadius: '0.75rem', overflow: 'hidden', position: 'relative', border: '1px solid var(--border-color)' }}>
-                    <img
-                      src={imageFile ? URL.createObjectURL(imageFile) : imageUrl}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      alt="Task"
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => { setImageFile(null); setImageUrl(''); }}
-                      style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', color: 'white', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>close</span>
-                    </button>
-                  </div>
+
+              <div>
+                <label style={{ fontSize: '10px', fontWeight: '800', color: '#666666', letterSpacing: '0.12em', display: 'block', marginBottom: '10px' }}>PRIORITY</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: '#0A0A0A', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', padding: '4px', gap: '4px', boxShadow: 'inset 3px 3px 8px rgba(0,0,0,0.6)' }}>
+                  {[{ value: 'High', label: 'High', activeColor: '#EF4444', activeBg: 'rgba(239,68,68,0.15)', activeBorder: 'rgba(239,68,68,0.5)', glow: '0 0 12px rgba(239,68,68,0.4)' }, { value: 'Medium', label: 'Medium', activeColor: '#F59E0B', activeBg: 'rgba(245,158,11,0.15)', activeBorder: 'rgba(245,158,11,0.5)', glow: '0 0 12px rgba(245,158,11,0.4)' }, { value: 'Low', label: 'Low', activeColor: '#06B6D4', activeBg: 'rgba(6,182,212,0.15)', activeBorder: 'rgba(6,182,212,0.5)', glow: '0 0 12px rgba(6,182,212,0.4)' }].map((p, i) => {
+                    const isActive = priority === p.value;
+                    return (
+                      <div key={i} onClick={() => setPriority(p.value as any)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px 8px', borderRadius: '12px', cursor: 'pointer', background: isActive ? p.activeBg : 'transparent', border: isActive ? `1px solid ${p.activeBorder}` : '1px solid transparent', boxShadow: isActive ? p.glow : 'none', transition: 'all 0.25s ease', animation: isActive ? 'segmentSlide 0.2s ease' : 'none' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isActive ? p.activeColor : 'rgba(255,255,255,0.2)', boxShadow: isActive ? `0 0 8px ${p.activeColor}` : 'none', transition: 'all 0.2s ease', flexShrink: 0 }}/>
+                        <span style={{ fontSize: '13px', fontWeight: '800', color: isActive ? p.activeColor : 'rgba(255,255,255,0.3)', transition: 'color 0.2s ease', letterSpacing: '-0.2px' }}>{p.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {error && <p style={{ fontSize: '13px', color: '#EF4444', margin: 0, textAlign: 'center', fontWeight: '500' }}>{error}</p>}
+              <button
+                type="button"
+                onClick={handleCreateOrUpdate}
+                disabled={isLoading || !title.trim()}
+                style={{ width: '100%', height: '58px', borderRadius: '20px', border: 'none', cursor: isLoading || !title.trim() ? 'not-allowed' : 'pointer', fontSize: '15px', fontWeight: '900', color: '#000000', letterSpacing: '0.06em', background: isLoading || !title.trim() ? 'rgba(0,232,122,0.3)' : 'linear-gradient(90deg, #00E87A 0%, #00FF88 30%, #00E87A 60%, #00C563 100%)', backgroundSize: '200% auto', animation: !isLoading && title.trim() ? 'addTaskShimmer 2s linear infinite' : 'none', boxShadow: !isLoading && title.trim() ? '0 0 24px rgba(0,232,122,0.4), 0 4px 16px rgba(0,0,0,0.4)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transform: 'translateY(0)', transition: 'transform 0.1s ease, box-shadow 0.1s ease' }}
+                onMouseDown={e => { if (!isLoading && title.trim()) { e.currentTarget.style.transform = 'translateY(2px)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(0,232,122,0.3), 0 2px 8px rgba(0,0,0,0.4)'; } }}
+                onMouseUp={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+              >
+                {isLoading ? (
+                  <>
+                    <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2.5px solid rgba(0,0,0,0.3)', borderTop: '2.5px solid #000', animation: 'spin 0.8s linear infinite' }}/>
+                    Saving...
+                  </>
+                ) : (
+                  <><span>⚡</span><span>{editTask ? 'UPDATE TASK' : 'ADD TASK'}</span></>
                 )}
-              </div>
-
-              <div className="input-group">
-                <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.75rem', display: 'block' }}>{t('categories')}</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {categories.map(cat => {
-                    const isActive = category === cat;
-                    const catColors: any = {
-                      Personal: { bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.3)', text: '#fbbf24' },
-                      Content: { bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.3)', text: '#60a5fa' },
-                      Health: { bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.3)', text: '#f87171' },
-                      Business: { bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)', text: '#10b981' }
-                    };
-                    const colors = catColors[cat] || { bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.3)', text: '#94a3b8' };
-
-                    return (
-                      <button 
-                        key={cat} 
-                        type="button" 
-                        onClick={() => { setCategory(cat); setIsAddingCategory(false); }} 
-                        style={{ 
-                          padding: '0.6rem 1.25rem', 
-                          fontSize: '0.75rem', 
-                          fontWeight: 900, 
-                          borderRadius: '1rem',
-                          border: '2px solid',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          background: isActive ? colors.bg : 'rgba(255,255,255,0.02)',
-                          borderColor: isActive ? colors.text : 'transparent',
-                          color: isActive ? colors.text : '#64748b',
-                          opacity: isActive ? 1 : 0.6,
-                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {cat}
-                      </button>
-                    );
-                  })}
-                  {!isAddingCategory ? (
-                    <button type="button" onClick={() => setIsAddingCategory(true)} className="tag-btn" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', fontWeight: 900, padding: '0.6rem 1.25rem', borderRadius: '1rem', fontSize: '0.75rem', border: 'none', cursor: 'pointer' }}>+ {t('add')}</button>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '0.5rem', width: '100%', marginTop: '0.5rem' }}>
-                      <input type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Category..." style={{ background: 'var(--card-bg)', border: '1px solid rgba(16, 185, 129, 0.4)', borderRadius: '1rem', padding: '0.75rem 1.25rem', color: 'var(--text-main)', flex: 1, fontWeight: 'bold' }} autoFocus />
-                      <button type="button" onClick={() => { if (newCategoryName.trim()) { setCustomCategories(prev => [...prev, newCategoryName.trim()]); setCategory(newCategoryName.trim()); setNewCategoryName(''); setIsAddingCategory(false); } }} className="tag-btn active" style={{ padding: '0.75rem 1.5rem', borderRadius: '1rem', background: '#10b981', color: '#064e3b', fontWeight: 900 }}>{t('add')}</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="input-group">
-                <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#64748b', marginBottom: '0.75rem', display: 'block' }}>{t('priority')}</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
-                  {(['High', 'Medium', 'Low'] as const).map(value => {
-                    const isActive = priority === value;
-                    const prioColors: any = {
-                      High: { text: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
-                      Medium: { text: '#fbbf24', bg: 'rgba(245, 158, 11, 0.1)' },
-                      Low: { text: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' }
-                    };
-                    const colors = prioColors[value];
-                    
-                    return (
-                      <button
-                        key={value} 
-                        type="button" 
-                        onClick={() => setPriority(value)}
-                        style={{
-                          padding: '0.85rem 0.5rem', 
-                          borderRadius: '1.25rem', 
-                          fontWeight: 900, 
-                          fontSize: '0.65rem', 
-                          textTransform: 'uppercase', 
-                          letterSpacing: '0.1em', 
-                          border: '2px solid',
-                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                          background: isActive ? colors.bg : 'rgba(255,255,255,0.02)',
-                          borderColor: isActive ? colors.text : 'transparent',
-                          color: isActive ? colors.text : '#64748b', 
-                          cursor: 'pointer', 
-                          opacity: isActive ? 1 : 0.5
-                        }}
-                      >
-                        {value}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ paddingTop: '1rem' }}>
-                <button 
-                  type="submit" 
-                  disabled={isUploading}
-                  className="glow-btn-primary" 
-                  style={{ 
-                    width: '100%', 
-                    height: '4rem', 
-                    borderRadius: '1.25rem', 
-                    fontSize: '0.9rem', 
-                    fontWeight: 900, 
-                    textTransform: 'uppercase', 
-                    letterSpacing: '0.1em', 
-                    gap: '0.75rem',
-                    opacity: isUploading ? 0.7 : 1
-                  }}
-                >
-                  {isUploading ? (
-                    <>
-                      <span className="material-symbols-outlined rotating" style={{ fontSize: '24px' }}>sync</span>
-                      <span>Uploading...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>{editTask ? 'save' : 'add_task'}</span>
-                      <span>{editTask ? t('update_milestone') : t('save_task')}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+              </button>
+            </div>
           </div>
         </div>
       )}
       {detailTask && (
         <div className="premium-modal-overlay" onClick={() => setDetailTask(null)}>
           <div className="bottom-sheet task-detail-sheet" onClick={e => e.stopPropagation()} style={{ padding: '2rem' }}>
+
+
             <div className="sheet-handle"></div>
 
             
@@ -1148,6 +1617,275 @@ const Dashboard: React.FC = () => {
       )}
 
       <style>{`
+        @keyframes breathe {
+          0%,100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.6;
+            transform: scale(0.97);
+          }
+        }
+        @keyframes allClearGlow {
+          0%,100% {
+            text-shadow:
+              0 0 8px rgba(0,232,122,0.4);
+          }
+          50% {
+            text-shadow:
+              0 0 20px rgba(0,232,122,0.8),
+              0 0 40px rgba(0,232,122,0.3);
+          }
+        }
+        @keyframes checkPop {
+          0% { transform: scale(0.8) }
+          60% { transform: scale(1.2) }
+          100% { transform: scale(1) }
+        }
+        @keyframes neonPop {
+          0% {
+            box-shadow:
+              0 0 0 0 rgba(0,232,122,0.8);
+          }
+          100% {
+            box-shadow:
+              0 0 0 16px rgba(0,232,122,0);
+          }
+        }
+        @keyframes ghostPulse {
+          0%, 100% { opacity: 0.4 }
+          50% { opacity: 0.7 }
+        }
+        @keyframes borderFlash {
+          0% { opacity: 1; transform: scale(1.02) }
+          100% { opacity: 0; transform: scale(1) }
+        }
+        @keyframes progressShimmer {
+          0% { opacity: 0.5; transform: scaleX(0); transform-origin: left }
+          50% { opacity: 1; transform: scaleX(1); transform-origin: left }
+          51% { opacity: 1; transform: scaleX(1); transform-origin: right }
+          100% { opacity: 0.5; transform: scaleX(0); transform-origin: right }
+        }
+        @keyframes taskModalDown {
+          from { transform: translateY(0); opacity: 1 }
+          to { transform: translateY(100%); opacity: 0 }
+        }
+        @keyframes sparkle {
+          0%,100% {
+            filter:
+              drop-shadow(0 0 8px
+              rgba(0,232,122,0.6));
+            transform: rotate(0deg) scale(1);
+          }
+          25% {
+            filter:
+              drop-shadow(0 0 16px
+              rgba(0,232,122,1));
+            transform: rotate(5deg) scale(1.1);
+          }
+          75% {
+            filter:
+              drop-shadow(0 0 12px
+              rgba(0,232,122,0.8));
+            transform: rotate(-5deg) scale(1.05);
+          }
+        }
+        @keyframes shimmerBtn {
+          0% { background-position: -200% }
+          100% { background-position: 200% }
+        }
+        .dashboard-task-summary {
+          display: flex;
+          flex-direction: row;
+          align-items: stretch;
+          width: 100%;
+          max-width: 720px;
+          margin: 0 auto 12px;
+          box-sizing: border-box;
+          padding: 12px 16px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+        }
+        .dashboard-task-summary__item {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          gap: 2px;
+        }
+        .dashboard-task-summary__ic {
+          font-size: 18px !important;
+          font-variation-settings: 'FILL' 0, 'wght' 500;
+          line-height: 1;
+          margin-bottom: 2px;
+        }
+        .dashboard-task-summary__val {
+          font-family: 'Syne', system-ui, sans-serif;
+          font-size: 18px;
+          font-weight: 700;
+          color: #ffffff;
+          line-height: 1.2;
+        }
+        .dashboard-task-summary__lbl {
+          font-family: 'DM Sans', system-ui, sans-serif;
+          font-size: 10px;
+          font-weight: 500;
+          color: rgba(255, 255, 255, 0.4);
+          letter-spacing: 0.02em;
+        }
+        .dashboard-task-summary__divider {
+          width: 1px;
+          align-self: stretch;
+          min-height: 44px;
+          background: rgba(255, 255, 255, 0.08);
+          flex-shrink: 0;
+        }
+        .dashboard-task-summary__item--add {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          gap: 2px;
+          background: rgba(0, 232, 122, 0.06);
+          border: none;
+          border-radius: 10px;
+          padding: 8px 4px;
+          margin: 0;
+          cursor: pointer;
+          font: inherit;
+          transition: transform 120ms ease, background 120ms ease;
+        }
+        .dashboard-task-summary__item--add:active {
+          transform: scale(0.95);
+          background: rgba(0, 232, 122, 0.1);
+        }
+        .dashboard-task-summary__add-ic {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: #00e87a;
+          color: #000000;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 4px 12px rgba(0, 232, 122, 0.3);
+        }
+        .dashboard-task-summary__add-ic .material-symbols-outlined {
+          font-size: 20px !important;
+          font-variation-settings: 'FILL' 0, 'wght' 300;
+          line-height: 1;
+        }
+        .dashboard-task-summary__lbl--add {
+          color: #00e87a !important;
+          margin-top: 4px;
+        }
+
+        @keyframes tasksEmptyFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .task-card-sticky-accent {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 3px;
+          border-radius: 3px 0 0 3px;
+          pointer-events: none;
+          z-index: 1;
+        }
+        .task-card-sticky-cat {
+          display: inline-block;
+          padding: 3px 8px;
+          border-radius: 8px;
+          font-family: 'DM Sans', system-ui, sans-serif;
+          font-size: 10px;
+          font-weight: 500;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.45);
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .task-card-sticky--pressing {
+          background: rgba(255, 255, 255, 0.07) !important;
+        }
+        .task-swipe-stack {
+          position: relative;
+          overflow: hidden;
+          border-radius: 16px;
+        }
+        .task-swipe-reveal-bg {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          background: linear-gradient(135deg, #00e87a, #00c563);
+          border-radius: 0 16px 16px 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease;
+          transform-origin: right center;
+        }
+        .task-swipe-reveal-bg--pulse {
+          animation: taskSwipeGreenPulse 0.2s ease;
+        }
+        .task-swipe-reveal-bg--fade {
+          opacity: 0;
+        }
+        @keyframes taskSwipeGreenPulse {
+          0%,
+          100% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.05);
+          }
+        }
+        .task-swipe-complete-label {
+          position: absolute;
+          right: 20px;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          pointer-events: none;
+          text-align: center;
+        }
+        .task-swipe-done-txt {
+          font-family: 'DM Sans', system-ui, sans-serif;
+          font-size: 11px;
+          font-weight: 700;
+          color: #ffffff;
+        }
+        .task-swipe-check-pop {
+          animation: taskSwipeCheckPop 0.2s ease;
+        }
+        @keyframes taskSwipeCheckPop {
+          0%,
+          100% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.15);
+          }
+        }
         .task-card {
           background: rgba(30, 41, 59, 0.4);
           border: 1px solid rgba(255, 255, 255, 0.05);
@@ -1155,15 +1893,30 @@ const Dashboard: React.FC = () => {
         }
         
         /* Light Mode Overrides for Home Page Cards */
-        .light-mode .task-card {
-          background: #ffffff !important;
+        .light-mode .task-card,
+        .light-mode .task-card-sticky {
+          background: #f8fafc !important;
           border: 1px solid rgba(0, 0, 0, 0.08) !important;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
         }
         .light-mode .task-card:hover {
           background: #ffffff !important;
           border-color: rgba(16, 185, 129, 0.2) !important;
           box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06) !important;
+        }
+        .light-mode .task-card-sticky-title {
+          color: #0f172a !important;
+        }
+        .light-mode .task-card-sticky-desc {
+          color: rgba(15, 23, 42, 0.45) !important;
+        }
+        .light-mode .task-card-sticky-cat {
+          color: rgba(15, 23, 42, 0.5) !important;
+          background: rgba(15, 23, 42, 0.05) !important;
+          border-color: rgba(15, 23, 42, 0.1) !important;
+        }
+        .light-mode .task-card-sticky--pressing {
+          background: rgba(15, 23, 42, 0.06) !important;
         }
         .light-mode .priority-column {
           background: rgba(0, 0, 0, 0.02) !important;
@@ -1218,6 +1971,30 @@ const Dashboard: React.FC = () => {
           .task-card-title {
             -webkit-line-clamp: 2; /* Ensure 2 lines max on mobile */
           }
+        }
+
+        @keyframes taskModalUp {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes taskBorderGlow {
+          0%,100% { box-shadow: 0 0 16px rgba(0,232,122,0.15), 0 -4px 40px rgba(0,0,0,0.8); }
+          50% { box-shadow: 0 0 32px rgba(0,232,122,0.25), 0 -4px 40px rgba(0,0,0,0.8); }
+        }
+        @keyframes titleGlow {
+          0%,100% { text-shadow: 0 0 8px rgba(0,232,122,0.3); }
+          50% { text-shadow: 0 0 16px rgba(0,232,122,0.6), 0 0 32px rgba(0,232,122,0.2); }
+        }
+        @keyframes addTaskShimmer {
+          0% { background-position: -200% center }
+          100% { background-position: 200% center }
+        }
+        @keyframes segmentSlide {
+          from { opacity: 0.7 }
+          to { opacity: 1 }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg) }
         }
 
         @keyframes sheetZoomIn {

@@ -10,8 +10,8 @@ export const calculateProductivityScore = ({
   routinesProgress,
   goalsProgress,
 }: ProductivityScoreInput): number => {
-  // Weights: Routines (60%), Tasks (20%), Goals (20%)
-  const weightedScore = (routinesProgress * 0.6) + (tasksProgress * 0.2) + (goalsProgress * 0.2);
+  // Weights: Routines (50%), Goals (30%), Tasks (20%)
+  const weightedScore = (routinesProgress * 0.5) + (goalsProgress * 0.3) + (tasksProgress * 0.2);
   return Math.round(weightedScore);
 };
 

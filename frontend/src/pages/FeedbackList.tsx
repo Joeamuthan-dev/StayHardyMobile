@@ -11,8 +11,9 @@ const FeedbackList: React.FC = () => {
     const fetchFeedbacks = async () => {
       const { data } = await supabase
         .from('feedback')
-        .select('*')
-        .order('createdAt', { ascending: false });
+        .select('id, userName, message, type, createdAt')
+        .order('createdAt', { ascending: false })
+        .limit(50);
       
       if (data) setFeedbacks(data);
       setLoading(false);
@@ -43,9 +44,12 @@ const FeedbackList: React.FC = () => {
       <header className="dashboard-header" style={{ marginBottom: '2.5rem' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 900, margin: 0, color: 'white' }}>User Feed</h1>
-          <p style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '0.25rem' }}>
-            Community Voices
-          </p>
+          <div className="page-header-marquee-wrap" style={{ marginTop: '0.35rem' }}>
+            <div className="page-header-marquee" aria-label="Community Voices">
+              <span>Community Voices</span>
+              <span aria-hidden="true">Community Voices</span>
+            </div>
+          </div>
         </div>
       </header>
 

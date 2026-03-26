@@ -1,11 +1,37 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { BarChart2 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useLoading } from '../context/LoadingContext';
+import { storage } from '../utils/storage';
+// import { canAccessStatsAndRoutine } from '../lib/lifetimeAccess';
 import { supabase } from '../supabase';
 import { calculateProductivityScore } from '../utils/productivity';
-import WhyStayHardyModal from '../components/WhyStayHardyModal';
+import { syncWidgetData } from '../lib/syncWidgetData';
+import { ProductivityService, type ProductivityScoreData } from '../lib/ProductivityService';
+import { isCacheExpired } from '../lib/cacheManager';
+import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
+import {
+  loadTasksListStale,
+  persistTasksList,
+  loadGoalsListStale,
+  persistGoalsList,
+  loadRoutinesRawStale,
+  persistRoutinesRaw,
+  loadRoutineLogsListStale,
+  persistRoutineLogsList,
+} from '../lib/listCaches';
+
+type HomeRoutineRow = { id: string; title: string; days: string[] };
+import SupportModal from '../components/SupportModal';
+import {
+  ensureFirstOpenDate,
+  shouldShowAutomaticSupportPopup,
+  markSupportPopupShown,
+  isCompletedTaskToday,
+} from '../lib/supportPopup';
 
 interface Task {
   id: string;
@@ -33,103 +59,259 @@ interface Goal {
   name: string;
   targetDate: string;
   status: 'pending' | 'completed';
-  progress: number;
+  progress?: number;
   createdAt: string;
 }
 
+// CircularProgress removed
+
 const HomeDashboard: React.FC = () => {
-  const [isSidebarHidden, setIsSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
-  const toggleSidebar = () => { setIsSidebarHidden(prev => { const next = !prev; localStorage.setItem('sidebarHidden', next.toString()); return next; }); };
+  const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const { language } = useLanguage();
-  const getTimeGreeting = () => {
+  const _getTimeGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return language === 'Tamil' ? 'போருக்குத் தயார்' : 'Awaken — Grind Starts';
     if (hour < 18) return language === 'Tamil' ? 'தொடர்ந்து முன்னேறு' : 'Stay Relentless';
     return language === 'Tamil' ? 'வெற்றியுடன் முடி' : 'Earn Your Rest';
-  };
+  }; void _getTimeGreeting;
+  /** Time-of-day label for welcome line only (not the motivational title). */
+  const _getWelcomeGreeting = () => {
+    const hour = new Date().getHours();
+    if (language === 'Tamil') {
+      if (hour >= 5 && hour < 12) return 'காலை வணக்கம்';
+      if (hour >= 12 && hour < 17) return 'மதிய வணக்கம்';
+      if (hour >= 17 && hour < 21) return 'இனிய மாலை';
+      return 'வணக்கம்';
+    }
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    if (hour >= 17 && hour < 21) return 'Good evening';
+    return 'Hey';
+  }; void _getWelcomeGreeting;
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUserProfile } = useAuth();
+  const { setLoading } = useLoading();
 
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [imgError, setImgError] = useState(false);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [routineLogs, setRoutineLogs] = useState<RoutineLog[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [isIntroOpen, setIsIntroOpen] = useState(false);
-  const [isFirstTime, setIsFirstTime] = useState(false);
+  const [pendingHabitsCount, setPendingHabitsCount] = useState(0);
+  const [totalHabitsTodayFresh, setTotalHabitsTodayFresh] = useState(0); void totalHabitsTodayFresh;
+  const [completedHabitsTodayFresh, setCompletedHabitsTodayFresh] = useState(0); void completedHabitsTodayFresh;
 
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [supportGateReady, setSupportGateReady] = useState(false);
+  const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
 
+  const hasCheckedAuth = useRef(false);
 
+  useEffect(() => {
+    if (hasCheckedAuth.current) return;
+    hasCheckedAuth.current = true;
+
+    const checkAuth = async () => {
+      // First check Preferences (instant)
+      const savedLogin = await storage.get('user_session');
+      if (savedLogin && savedLogin !== '') return; // already good
+
+      // Then check Supabase session
+      const { data: { session } } =
+        await supabase.auth.getSession();
+      if (!session) {
+        navigate('/login', { replace: true });
+      }
+    };
+
+    checkAuth();
+  }, [navigate]);
+
+  const fetchPendingHabits = useCallback(async () => {
+    if (!user?.id) return;
+    const today = new Date().toISOString().split('T')[0];
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const todayName = dayNames[new Date().getDay()];
+
+    const { data: todayHabits } = await supabase
+      .from('routines')
+      .select('id')
+      .eq('user_id', user.id)
+      .contains('days', [todayName]);
+
+    const totalToday = todayHabits?.length || 0;
+
+    const { data: completedLogs } = await supabase
+      .from('routine_logs')
+      .select('routine_id')
+      .eq('user_id', user.id)
+      .eq('completed_at', today);
+
+    const completedToday = completedLogs?.length || 0;
+    const pending = totalToday - completedToday;
+
+    setPendingHabitsCount(Math.max(0, pending));
+    setTotalHabitsTodayFresh(totalToday);
+    setCompletedHabitsTodayFresh(completedToday);
+  }, [user?.id]);
+
+  const fetchHabitActivityFresh = useCallback(async () => {
+    if (!user?.id) return;
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const startDate = sevenDaysAgo.toISOString().split('T')[0];
+
+    const { data: logs } = await supabase
+      .from('routine_logs')
+      .select('completed_at')
+      .eq('user_id', user.id)
+      .gte('completed_at', startDate);
+
+    setRoutineLogs((logs as RoutineLog[]) || []);
+  }, [user?.id]);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
+    setLoading(true);
+    try {
 
-    // Fetch Tasks
-    const { data: tasksData } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('userId', user.id);
-    if (tasksData) setTasks(tasksData);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // Fetch Routines
-    const { data: routinesData } = await supabase
-      .from('routines')
-      .select('*')
-      .eq('user_id', user.id);
-    if (routinesData) setRoutines(routinesData);
-
-    // Fetch Routine Logs for the last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const startDayStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
+    const startDayStr =
+      thirtyDaysAgo.getFullYear() +
+      '-' +
+      String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(thirtyDaysAgo.getDate()).padStart(2, '0');
 
-    const { data: logsData } = await supabase
-      .from('routine_logs')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('completed_at', startDayStr);
-    if (logsData) setRoutineLogs(logsData);
+    const stTasks = await loadTasksListStale<Task>(user.id);
+    if (stTasks !== null) setTasks(stTasks as Task[]);
+    const stGoals = await loadGoalsListStale<Goal>(user.id);
+    if (stGoals !== null) setGoals(stGoals as Goal[]);
+    const stRoutines = await loadRoutinesRawStale<HomeRoutineRow>(user.id);
+    if (stRoutines !== null) setRoutines(stRoutines as Routine[]);
+    const stLogs = await loadRoutineLogsListStale<RoutineLog>(user.id);
+    if (stLogs) {
+      setRoutineLogs(stLogs.filter((l) => l.completed_at >= startDayStr));
+    }
 
-    // Fetch Goals
-    const { data: goalsData } = await supabase
-      .from('goals')
-      .select('*')
-      .eq('userId', user.id)
-      .order('createdAt', { ascending: false });
-    if (goalsData) setGoals(goalsData);
-  }, [user?.id]);
+    const cachedScore = await ProductivityService.getStoredScore(user.id);
+    if (cachedScore) {
+      setScoreData(cachedScore);
+    }
+
+    const tasksExp = await isCacheExpired(CACHE_KEYS.tasks_list, CACHE_EXPIRY_MINUTES.tasks_list);
+    const routinesExp = await isCacheExpired(CACHE_KEYS.routines_list, CACHE_EXPIRY_MINUTES.routines_list);
+    const logsExp = await isCacheExpired(CACHE_KEYS.routine_logs_list, CACHE_EXPIRY_MINUTES.routines_list);
+
+    const [tasksRes, routinesRes, logsRes, goalsRes] = await Promise.all([
+      tasksExp
+        ? supabase
+            .from('tasks')
+            .select('id, title, status, priority, createdAt, updatedAt, category')
+            .eq('userId', user.id)
+        : Promise.resolve({ data: null, error: null }),
+      routinesExp
+        ? supabase.from('routines').select('id, title, days').eq('user_id', user.id)
+        : Promise.resolve({ data: null, error: null }),
+      logsExp
+        ? supabase
+            .from('routine_logs')
+            .select('routine_id, completed_at')
+            .eq('user_id', user.id)
+            .gte('completed_at', startDayStr)
+        : Promise.resolve({ data: null, error: null }),
+      supabase
+        .from('goals')
+        .select('id, name, status, targetDate, createdAt')
+        .eq('userId', user.id)
+        .order('createdAt', { ascending: false })
+    ]);
+
+    if (tasksExp && tasksRes.data) {
+      const tasksData = tasksRes.data;
+      setTasks(tasksData as Task[]);
+      void persistTasksList(user.id, tasksData);
+    }
+
+    if (routinesExp && routinesRes.data) {
+      const routinesData = routinesRes.data;
+      setRoutines(routinesData as Routine[]);
+      void persistRoutinesRaw(user.id, routinesData as HomeRoutineRow[]);
+    }
+
+    if (logsExp && logsRes.data) {
+      const logsData = logsRes.data as RoutineLog[];
+      const asLogs = logsData.filter((l) => l.completed_at >= startDayStr);
+      setRoutineLogs(asLogs);
+      const mergedMap = new Map<string, RoutineLog>();
+      for (const l of stLogs ?? []) mergedMap.set(`${l.routine_id}|${l.completed_at}`, l);
+      for (const l of asLogs) mergedMap.set(`${l.routine_id}|${l.completed_at}`, l);
+      void persistRoutineLogsList(user.id, [...mergedMap.values()]);
+    }
+
+    if (goalsRes.error) console.error('Error fetching goals:', goalsRes.error);
+    if (goalsRes.data) {
+      const goalsData = goalsRes.data;
+      setGoals(goalsData as Goal[]);
+      void persistGoalsList(user.id, goalsData as Goal[]);
+    }
+
+    void syncWidgetData();
+    } catch (err) {
+      console.error('Error fetching data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, setLoading, refreshUserProfile]);
+
+  useEffect(() => {
+    const handleScoreUpdated = (e: any) => {
+      setScoreData(e.detail);
+    };
+    window.addEventListener('productivity_sync', handleScoreUpdated);
+    return () => window.removeEventListener('productivity_sync', handleScoreUpdated);
+  }, []);
 
   useEffect(() => {
     fetchData();
-    
-    // First-time intro logic (Only show once globally per user)
-    const checkAndShowIntro = async () => {
-      // Small delay to let user load fully if needed
-      if (!user) return;
-      
-      const { data } = await supabase.auth.getUser();
-      const hasSeenIntro = data.user?.user_metadata?.has_seen_stay_hardy_intro;
-      
-      if (!hasSeenIntro) {
-        setTimeout(() => {
-          setIsFirstTime(true);
-          setIsIntroOpen(true);
-        }, 1500); // Slight delay for better entrance
-      }
-    };
-    checkAndShowIntro();
-  }, [fetchData, user]);
 
-  const handleCloseIntro = async () => {
-    setIsIntroOpen(false);
-    
-    // Save to database so it never shows again across devices
-    if (user?.id) {
-      await supabase.auth.updateUser({
-        data: { has_seen_stay_hardy_intro: true }
-      });
-    }
-  };
-  
+    if (!user?.id) return;
+
+    const goalsChannel = supabase
+      .channel('home_goals_changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'goals', 
+        filter: `userId=eq.${user.id}` 
+      }, () => void fetchData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(goalsChannel);
+    };
+  }, [fetchData, user?.id]);
+
+  useEffect(() => {
+    const handler = () => {
+      console.log('Home refreshing from global event...');
+      void fetchPendingHabits();
+      void fetchHabitActivityFresh();
+      void fetchData();
+    };
+    window.addEventListener('stayhardy_refresh', handler);
+    return () => window.removeEventListener('stayhardy_refresh', handler);
+  }, [user?.id, fetchData, fetchPendingHabits, fetchHabitActivityFresh]);
+
+  useEffect(() => {
+    void fetchPendingHabits();
+    void fetchHabitActivityFresh();
+  }, [user?.id, fetchPendingHabits, fetchHabitActivityFresh]);
+
   // Automatic Daily Reset Check at Midnight
   useEffect(() => {
     const checkMidnight = () => {
@@ -150,16 +332,17 @@ const HomeDashboard: React.FC = () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const localTodayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+  const _dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); void _dateStr;
 
   const pendingTasks = tasks.filter(t => t.status === 'pending');
 
-  const topPendingTasks = [...pendingTasks].sort((a, b) => {
+  const _topPendingTasks = [...pendingTasks].sort((a, b) => {
     const pA = a.priority === 'High' ? 3 : a.priority === 'Medium' ? 2 : 1;
     const pB = b.priority === 'High' ? 3 : b.priority === 'Medium' ? 2 : 1;
     return pB - pA;
-  }).slice(0, 2);
+  }).slice(0, 2); void _topPendingTasks;
 
-  const upcomingReminders = useMemo(() => {
+  const _upcomingReminders = useMemo(() => {
     try {
       const key = `reminders_${user?.id || 'guest'}`;
       const stored = localStorage.getItem(key);
@@ -174,14 +357,14 @@ const HomeDashboard: React.FC = () => {
         .filter(r => r.date >= todayStr && r.date <= limitStr)
         .sort((a, b) => a.date.localeCompare(b.date));
     } catch { return []; }
-  }, [user?.id]);
+  }, [user?.id]); void _upcomingReminders;
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const todayDate = new Date();
   const currentDayName = daysOfWeek[todayDate.getDay()];
-  const activeRoutinesTodayCount = routines.filter(r => r.days?.includes(currentDayName)).length;
+  const activeRoutinesTodayCount = scoreData?.routines_total ?? routines.filter(r => r.days?.includes(currentDayName)).length;
 
-  const completedRoutinesToday = routineLogs.filter(l => l.completed_at === localTodayStr).length;
+  const completedRoutinesToday = scoreData?.routines_completed ?? routineLogs.filter(l => l.completed_at === localTodayStr).length;
 
   let currentStreak = 0;
   const uniqueLogDaysSet = new Set(routineLogs.map(l => l.completed_at));
@@ -191,41 +374,34 @@ const HomeDashboard: React.FC = () => {
     const checkStr = new Date(checkDate.getTime() - (checkDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
     const checkDayName = daysOfWeek[checkDate.getDay()];
     const scheduledThatDay = routines.filter(r => r.days?.includes(checkDayName)).length;
-    
     if (uniqueLogDaysSet.has(checkStr)) {
       currentStreak++;
     } else {
-      if (i === 0) continue; // Today missing doesn't break streak yet
-      if (scheduledThatDay === 0) continue; // Not scheduled, doesn't break streak
-      break; // Scheduled but missed
+      if (i === 0) continue;
+      if (scheduledThatDay === 0) continue;
+      break;
     }
   }
 
 
 
 
-
   // Productivity Chart Data
-  const totalTasksCount = tasks.length;
-  const completedTasksCount = tasks.filter(t => t.status === 'completed').length;
-  const tasksProgress = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+  // Use DB calculated scores with client-side fallback
+  const tasksProgress = scoreData?.tasks_progress ?? (tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100) : 0);
+  
+  const routinesProgress = scoreData?.routines_progress ?? (activeRoutinesTodayCount > 0 ? Math.round((completedRoutinesToday / activeRoutinesTodayCount) * 100) : 0);
 
-  const routinesProgress = activeRoutinesTodayCount > 0 ? Math.round((completedRoutinesToday / activeRoutinesTodayCount) * 100) : 0;
+  const avgGoalProgress = scoreData?.goals_progress ?? (goals.length > 0 
+    ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / goals.length) 
+    : 0);
 
-  const totalGoalsCount = goals.length;
-  const avgGoalProgress = totalGoalsCount > 0 
-    ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / totalGoalsCount) 
-    : 0;
-
-
-  // Productivity logic with weights: Routines (60%), Tasks (20%), Goals (20%)
-  const overallProgress = calculateProductivityScore({
+  const overallProgress = scoreData?.overall_score ?? calculateProductivityScore({
     tasksProgress,
     routinesProgress,
     goalsProgress: avgGoalProgress
   });
 
-  const [activeQuote, setActiveQuote] = useState<string | null>(null);
   // Dynamic data for 5% intervals
   const progressIntervals = [
     { min: 0, tag: 'Warming Up', quote: 'Every journey starts with a single pulse.' },
@@ -251,618 +427,532 @@ const HomeDashboard: React.FC = () => {
     { min: 100, tag: 'Stayed Hardy', quote: 'You stayed Hardy. You won today.' },
   ];
 
-  const currentProgressData = [...progressIntervals].reverse().find(i => overallProgress >= i.min) || progressIntervals[0];
+  const _currentProgressData = [...progressIntervals].reverse().find(i => overallProgress >= i.min) || progressIntervals[0];
 
-  const getMotivationalTagline = () => currentProgressData.quote;
-  const getStatusTagline = () => currentProgressData.tag;
+  const _getMotivationalTagline = () => _currentProgressData.quote; void _getMotivationalTagline;
+  const _getStatusTagline = () => _currentProgressData.tag; void _getStatusTagline;
 
-  const showQuote = () => {
-    let quote = "";
-    if (overallProgress <= 20) {
-      quote = "Every journey starts with the first step.";
-    } else if (overallProgress <= 50) {
-      quote = "Keep running. Momentum is building.";
-    } else if (overallProgress <= 80) {
-      quote = "You are making strong progress.";
-    } else if (overallProgress < 100) {
-      quote = "Almost there. Stay Hardy.";
-    } else {
-      quote = "You made it today. Great work.";
+  const _hubStatusPillClass =
+    overallProgress < 34 ? 'hub-status-pill--low' : overallProgress < 67 ? 'hub-status-pill--mid' : 'hub-status-pill--high'; void _hubStatusPillClass;
+
+  const ringR = 30;
+  const ringC = 2 * Math.PI * ringR;
+  const routineFrac =
+    activeRoutinesTodayCount > 0 ? Math.min(1, completedRoutinesToday / activeRoutinesTodayCount) : 0;
+  const _ringOffset = ringC - routineFrac * ringC; void _ringOffset;
+
+  /* const pendingGoalsSorted = useMemo(
+    () =>
+      [...goals]
+        .filter((g) => g.status === 'pending' && g.targetDate)
+        .sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime())
+        .slice(0, 5),
+    [goals],
+  ); */
+
+  const _streakSubtext =
+    currentStreak <= 10 ? 'Building the habit ⚡' : currentStreak <= 30 ? 'Momentum locked in ⚡' : 'Unstoppable rhythm ⚡'; void _streakSubtext;
+
+  const displayFirstName = useMemo(() => {
+    const raw = (user?.name?.split(' ')[0] || 'Operator');
+    const capped = raw.length > 12 ? raw.slice(0, 12) : raw;
+    if (capped.length === 0) return capped;
+    return capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
+  }, [user?.name]);
+
+  useEffect(() => {
+    ensureFirstOpenDate();
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setSupportGateReady(false);
+      return;
     }
-    setActiveQuote(quote);
-  };
+    setSupportGateReady(false);
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (cancelled) return;
+      const seen = !!data.user?.user_metadata?.has_seen_stay_hardy_intro;
+      if (!seen) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      if (cancelled) return;
+      setSupportGateReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
-  const handleRunnerAction = () => {
-    showQuote();
-    // For mobile or click, we might want it to persist slightly longer or auto-dismiss
-    setTimeout(() => setActiveQuote(null), 3000);
-  };
+  useEffect(() => {
+    if (!user?.id || !supportGateReady) return;
+    const tasksToday = tasks.filter(
+      (t) => t.status === 'completed' && isCompletedTaskToday(t.updatedAt)
+    ).length;
+    if (
+      !shouldShowAutomaticSupportPopup({
+        tasksCompletedToday: tasksToday,
+        routineStreak: currentStreak,
+        goalCount: goals.length,
+      })
+    ) {
+      return;
+    }
+    markSupportPopupShown();
+    const t = window.setTimeout(() => setShowSupportModal(true), 1200);
+    return () => window.clearTimeout(t);
+  }, [user?.id, supportGateReady, tasks, goals.length, currentStreak]);
+
+  // const [activeActivityTab, setActiveActivityTab] = useState<'Tasks' | 'Habits'>('Tasks');
+  const [activeSection, setActiveSection] = useState(0);
+
+  const calcBestStreak = useCallback((logs: RoutineLog[]) => {
+    if (!logs?.length) return 0;
+    const dates = [...new Set(logs.map(l => l.completed_at))].sort();
+    let best = 1, current = 1;
+    for (let i = 1; i < dates.length; i++) {
+      const prev = new Date(dates[i-1]);
+      const curr = new Date(dates[i]);
+      const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
+      if (diff === 1) { current++; best = Math.max(best, current); } else { current = 1; }
+    }
+    return best;
+  }, []);
+
+  const bestStreakDays = useMemo(() => calcBestStreak(routineLogs), [routineLogs, calcBestStreak]);
 
 
-  
-  return (
-    <div className={`page-shell ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
+
+  const getLast7DaysHabits = useCallback(() => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const result: { day: string; date: string; count: number }[] = [];
+    const now = new Date();
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = days[(d.getDay() + 6) % 7];
+      const count = routineLogs?.filter(log => log.completed_at === dateStr).length || 0;
+
+      result.push({ day: dayName, date: dateStr, count });
+    }
+    return result;
+  }, [routineLogs]);
+
+
+  const completedTasksTotal = useMemo(() => tasks.filter(t => t.status === 'completed' && isCompletedTaskToday(t.updatedAt)).length, [tasks]);
+  // const completedHabitsTotal = useMemo(() => routineLogs.filter(l => l.completed_at === localTodayStr).length, [routineLogs, localTodayStr]);
+
+  const activeGoalsCount = useMemo(() => goals.filter(g => g.status === 'pending').length, [goals]);
+  const completedGoalsCount = useMemo(() => goals.filter(g => g.status === 'completed').length, [goals]);
+
+  const pendingCount = pendingTasks.length || 0;
+
+  const sections = [
+    {
+      label: 'Tasks',
+      leftStat: { icon: '📋', label: 'To Do', value: `${pendingCount} Tasks` },
+      rightStat: { icon: '✓', label: 'Done', value: `${completedTasksTotal} Tasks` }
+    },
+    {
+      label: 'Goals',
+      leftStat: { icon: '🎯', label: 'Active', value: `${activeGoalsCount} Goals` },
+      rightStat: { icon: '🏆', label: 'Done', value: `${completedGoalsCount} Goals` }
+    },
+    {
+      label: 'Habits',
+      leftStat: { icon: '🔄', label: 'Today', value: `${completedRoutinesToday}/${activeRoutinesTodayCount}` },
+      rightStat: { icon: '🔥', label: 'Streak', value: `${currentStreak} Days` }
+    }
+  ];
+
+  const currentSection = sections[activeSection];
+
+  const AnimatedAvatar = () => (
+    <div style={{
+      width: '36px',
+      height: '36px',
+      minWidth: '36px',
+      minHeight: '36px',
+      borderRadius: '50%',
+      background: '#1a1a2e',
+      border: '2px solid #000',
+      overflow: 'hidden',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+      animation: 'bobHead 2s ease-in-out infinite'
+    }}>
+      <svg viewBox="0 0 36 36" width="36" height="36">
+        <circle cx="18" cy="13" r="7" fill="#FBBF24"/>
+        <ellipse cx="18" cy="8" rx="7" ry="4" fill="#92400E"/>
+        <circle cx="15" cy="13" r="1.2" fill="#1F2937"/>
+        <circle cx="21" cy="13" r="1.2" fill="#1F2937"/>
+        <path d="M15 16.5 Q18 18.5 21 16.5" stroke="#1F2937" strokeWidth="1" fill="none" strokeLinecap="round"/>
+        <ellipse cx="18" cy="28" rx="8" ry="6" fill="#3B82F6"/>
+      </svg>
       <style>{`
-        @media (min-width: 769px) { .shortcut-btn-label { display: block !important; } }
-        @media (max-width: 768px) { 
-          .shortcut-btn-label { display: none !important; } 
-          .shortcut-btn { position: relative; }
-          .shortcut-btn:active::after { content: attr(data-label); position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #0b0f19; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 0.7rem; white-space: nowrap; z-index: 100; font-weight: 800; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
-        }
-
-        @keyframes runner-run {
-          0%, 100% { transform: scaleX(-1) translateY(0) rotate(0); }
-          50% { transform: scaleX(-1) translateY(-3px) rotate(-3deg); }
-        }
-        .runner-indicator {
-          position: absolute;
-          top: 0;
-          transition: left 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-          z-index: 100;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          cursor: pointer;
-          -webkit-tap-highlight-color: transparent;
-          transform: translateY(-90%) translateX(-50%);
-        }
-        .runner-icon {
-          font-size: 1.8rem;
-          filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
-          animation: runner-run 1.2s infinite ease-in-out;
-          display: block;
-          user-select: none;
-          line-height: 1;
-          transform: scaleX(-1);
-        }
-        .runner-3d-shadow {
-          width: 14px;
-          height: 3px;
-          background: rgba(0, 0, 0, 0.4);
-          border-radius: 50%;
-          filter: blur(1.5px);
-          opacity: 0.5;
-        }
-        .quote-bubble {
-          position: absolute;
-          bottom: 100%;
-          left: 50%;
-          transform: translateX(-50%);
-          background: #ffffff;
-          color: #000000;
-          padding: 6px 12px;
-          border-radius: 12px;
-          font-size: 0.7rem;
-          font-weight: 900;
-          white-space: nowrap;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-          animation: quote-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          margin-bottom: 12px;
-          z-index: 101;
-        }
-        .quote-bubble::after {
-          content: "";
-          position: absolute;
-          top: 100%;
-          left: 50%;
-          transform: translateX(-50%);
-          border-width: 6px;
-          border-style: solid;
-          border-color: #ffffff transparent transparent transparent;
-        }
-        @keyframes quote-pop {
-          0% { opacity: 0; transform: translateX(-50%) scale(0.5); }
-          100% { opacity: 1; transform: translateX(-50%) scale(1); }
-        }
-        .journey-track {
-          position: relative;
-          height: 16px;
-          background: rgba(255, 255, 255, 0.03);
-          border-radius: 20px;
-          margin: 60px 0 30px;
-          overflow: visible;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
-          display: flex;
-          align-items: center;
-        }
-        .journey-segment {
-          height: 100%;
-          transition: width 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-          position: relative;
-        }
-        .journey-milestone {
-          position: absolute;
-          width: 4px;
-          height: 4px;
-          background: rgba(255, 255, 255, 0.2);
-          border-radius: 50%;
-          top: 50%;
-          transform: translateY(-50%);
-        }
-        .home-arrival-message {
-          position: absolute;
-          top: -45px;
-          right: -20px;
-          background: #10b981;
-          color: #ffffff;
-          padding: 4px 10px;
-          border-radius: 8px;
-          font-size: 0.65rem;
-          font-weight: 950;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-          animation: quote-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          white-space: nowrap;
-        }
-        .home-arrival-message::after {
-          content: "";
-          position: absolute;
-          top: 100%;
-          right: 25px;
-          border-width: 5px;
-          border-style: solid;
-          border-color: #10b981 transparent transparent transparent;
-        }
-        .journey-segment::after {
-          content: "";
-          position: absolute;
-          top: 0; right: 0; bottom: 0; left: 0;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-          animation: flow 2s infinite linear;
-        }
-        @keyframes flow {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        .journey-label {
-          position: absolute;
-          top: 20px;
-          font-size: 0.6rem;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          white-space: nowrap;
-          opacity: 0.6;
-        }
-        .productivity-journey-container {
-          padding: 1.5rem;
-          background: rgba(0, 0, 0, 0.3);
-          border-radius: 1.5rem;
-          border: 1px solid rgba(255, 255, 255, 0.03);
-          margin-top: 0.5rem;
-          width: 100%;
-          box-sizing: border-box;
-        }
-        @media (max-width: 480px) {
-          .chart-wrapper {
-            width: 180px;
-            height: 180px;
-          }
-        }
-        .legend-container {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          width: 100%;
-        }
-        .legend-card {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1rem 1.25rem;
-          background: #000000;
-          border-radius: 1.25rem;
-          border: 1px solid rgba(255, 255, 255, 0.04);
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          cursor: pointer;
-        }
-        .legend-card:hover {
-          transform: translateX(6px);
-          background: #050508;
-          border-color: rgba(255, 255, 255, 0.1);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-        }
-
-        /* ── Routine Snapshot Styles ── */
-        .routine-snapshot-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 1rem;
-        }
-        @media (max-width: 480px) {
-          .routine-snapshot-grid { grid-template-columns: 1fr; }
-        }
-
-        .snapshot-card {
-          display: flex;
-          align-items: center;
-          gap: 1.25rem;
-          background: #000000 !important;
-          padding: 1.25rem;
-          border-radius: 1.25rem;
-          border: 1px solid rgba(255, 255, 255, 0.03);
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          cursor: pointer;
-        }
-        .snapshot-card:hover {
-          transform: translateY(-4px);
-          background: #050508 !important;
-        }
-
-        .snapshot-icon-container {
-          width: 42px;
-          height: 42px;
-          border-radius: 14px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .progress-card { border-color: rgba(16, 185, 129, 0.15); }
-        .progress-card:hover { border-color: rgba(16, 185, 129, 0.5); box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1); }
-        
-        .streak-card { border-color: rgba(239, 68, 68, 0.15); }
-        .streak-card:hover { border-color: rgba(239, 68, 68, 0.5); box-shadow: 0 4px 20px rgba(239, 68, 68, 0.1); }
-        .streak-card .snapshot-icon-container { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-        .streak-card .snapshot-icon-container .material-symbols-outlined { font-variation-settings: "'FILL' 1"; }
-
-        .snapshot-value { font-size: 1.25rem; font-weight: 900; color: #ffffff; }
-        .snapshot-value.highlighted { color: #f87171; }
-        .snapshot-label { font-size: 0.6rem; font-weight: 900; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; margin-top: 0.2rem; }
-
-        /* ── Goals Progress Styles ── */
-        .goal-progress-card {
-          background: #000000 !important;
-          padding: 1.25rem;
-          border-radius: 1.25rem;
-          border: 1px solid rgba(255, 255, 255, 0.03);
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .goal-progress-card:hover {
-          transform: translateY(-4px);
-          border-color: rgba(59, 130, 246, 0.4);
-          box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
-        }
-
-        /* ── Modern Dashboard Overrides ── */
-        .neon-box {
-          background: rgba(8, 8, 12, 0.5);
-          backdrop-filter: blur(20px) saturate(160%);
-          border-radius: 1.5rem;
-          padding: 1.5rem;
-          margin-bottom: 0.75rem;
-          position: relative;
-          overflow: hidden;
-        }
-        .neon-box::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          border-radius: 1.5rem;
-          padding: 1px;
-          background: linear-gradient(135deg, #00f2fe 0%, #a855f7 50%, #ff4b2b 100%);
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-          opacity: 0.3;
-          transition: opacity 0.3s ease;
-        }
-
-        .clickable-neon-box {
-          cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .clickable-neon-box:hover {
-          transform: translateY(-4px);
-          background: rgba(12, 12, 18, 0.6) !important;
-        }
-        .clickable-neon-box:hover::before {
-          opacity: 0.6;
-        }
-
-
-        .focus-tile {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem !important;
-          padding: 1rem 1.25rem !important;
-          border-radius: 1.25rem !important;
-        }
-
-        @media (max-width: 650px) {
-          .upcoming-goals-grid { grid-template-columns: 1fr !important; }
-        }
-
-        @media (min-width: 769px) {
-          .desktop-split-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
-            align-items: stretch;
-          }
-        .inner-task-row:hover {
-          background: rgba(255, 255, 255, 0.05) !important;
-          border-color: rgba(255, 255, 255, 0.1) !important;
-          transform: translateX(4px);
-        }
-        .reminder-row-link {
-          transition: all 0.2s ease;
-        }
-        .reminder-row-link:hover {
-          background: rgba(16, 185, 129, 0.08) !important;
-          border-color: rgba(16, 185, 129, 0.2) !important;
-          transform: translateX(4px);
-        }
-
-        @media (max-width: 768px) {
-          .status-tagline-container {
-            display: none !important;
-          }
+        @keyframes bobHead {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-1px); }
         }
       `}</style>
-      <div className="aurora-bg">
-        <div className="aurora-gradient-1"></div>
-        <div className="aurora-gradient-2"></div>
-      </div>
-      
-      <header className="dashboard-header" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0.5rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-main)', margin: 0 }}>
-             {getTimeGreeting()}, {user?.name?.split(' ')[0] || 'User'}
-          </h1>
-          <p style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 900, letterSpacing: '0.05em', marginTop: '0.3rem', textTransform: 'uppercase' }}>
-            {(() => {
-              const now = new Date();
-              const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
-              const month = now.toLocaleDateString('en-US', { month: 'long' });
-              const day = now.getDate();
-              return `Today is ${dayName}, ${month} ${day}`;
-            })()}
-          </p>
-          
+    </div>
+  );
+
+  const HeroFire = () => (
+    <>
+      <style>{`
+        @keyframes heroFlicker {
+          0%, 100% { transform: scaleY(1) scaleX(1); filter: drop-shadow(0 0 4px rgba(0,232,122,0.8)); }
+          25% { transform: scaleY(1.1) scaleX(0.95); filter: drop-shadow(0 0 6px rgba(0,232,122,1)); }
+          75% { transform: scaleY(0.95) scaleX(1.05); filter: drop-shadow(0 0 3px rgba(0,200,100,0.6)); }
+        }
+      `}</style>
+      <span style={{
+        fontSize: '16px',
+        display: 'inline-block',
+        animation: 'heroFlicker 1.5s ease-in-out infinite',
+        WebkitFilter: 'hue-rotate(100deg) drop-shadow(0 0 4px rgba(0,232,122,0.8))',
+        filter: 'hue-rotate(100deg) drop-shadow(0 0 6px rgba(0,232,122,0.9))'
+      }}>
+        🔥
+      </span>
+    </>
+  );
+
+  const pendingHabitsToday = pendingHabitsCount;
+  const isPro = user?.isPro === true || user?.role === 'admin';
+
+  return (
+    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: '110px', paddingBottom: '100px', overflowY: 'auto' }}>
+      <style>{`
+        .light-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(circle at 70% 30%, rgba(0,232,122,0.15) 0%, transparent 60%), radial-gradient(circle at 20% 80%, rgba(99,102,241,0.1) 0%, transparent 50%);
+          pointer-events: none;
+        }
+        .green-card {
+          background: radial-gradient(circle at 80% 20%, rgba(255,255,255,0.3) 0%, transparent 50%), #CCFF00 !important;
+        }
+      `}</style>
+
+
+
+      {/* SECTION 1 — HERO GREETING CARD */}
+      <section className="light-card" style={{
+        margin: '0 16px 12px 16px',
+        borderRadius: '28px',
+        padding: '20px 20px 32px 20px',
+        background: 'linear-gradient(135deg, #e8f5e9 0%, #f0fdf4 30%, #e0f2fe 60%, #f0e6ff 100%)',
+        position: 'relative',
+        minHeight: 'fit-content'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#000000' }} />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: '#000000', opacity: 0.6 }}>Overview</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button
-            onClick={toggleSidebar}
-            className="notification-btn desktop-only-btn"
-            title={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar (Focus Mode)"}
-            data-tooltip={isSidebarHidden ? "Show Sidebar" : "Hide Sidebar"}
-            style={{
-              ...(isSidebarHidden ? { background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' } : {}),
-              opacity: 0.5
-            }}
-          >
-            <span className="material-symbols-outlined">
-              {isSidebarHidden ? 'side_navigation' : 'fullscreen'}
-            </span>
+
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '10px', 
+          marginBottom: '8px',
+          flexWrap: 'nowrap',
+          overflow: 'hidden'
+        }}>
+          <span style={{ 
+            fontSize: 'max(24px, min(32px, 8vw))', 
+            fontWeight: 800, 
+            color: '#000000', 
+            letterSpacing: '-1px',
+            whiteSpace: 'nowrap'
+          }}>Hello</span>
+          <span style={{ 
+            fontSize: 'max(24px, min(32px, 8vw))', 
+            fontWeight: 800, 
+            color: '#000000', 
+            letterSpacing: '-1px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}>{displayFirstName}!</span>
+          <button type="button" onClick={() => navigate('/settings')} style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', flexShrink: 0 }}>
+            {user?.avatarUrl && !imgError ? (
+              <img 
+                src={user.avatarUrl} 
+                alt="" 
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  minWidth: '36px',
+                  minHeight: '36px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '2px solid #000',
+                  flexShrink: 0,
+                  display: 'block'
+                }}
+                onError={(e: any) => {
+                  e.target.style.display = 'none';
+                  setImgError(true);
+                }}
+              />
+            ) : (
+              <AnimatedAvatar />
+            )}
           </button>
         </div>
-      </header>
 
-      <main style={{ paddingBottom: '6rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0 0.5rem' }}>
-        
-        {/* 1. Today's Focus Outer Neon Box */}
-        <div className="neon-box">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Today's Focus</h2>
-          </div>
-
-          <div className="productivity-journey-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2.5rem' }}>
-              <div>
-                <span style={{ fontSize: '0.65rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Score</span>
-                <div style={{ fontSize: '2.2rem', fontWeight: 950, color: '#ffffff', lineHeight: 1, marginTop: '0.2rem' }}>
-                   {overallProgress}%
-                </div>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.75rem', fontWeight: 600, margin: '0.5rem 0 0', fontStyle: 'italic' }}>
-                  {getMotivationalTagline()}
-                </p>
-              </div>
-              <div className="status-tagline-container" style={{ textAlign: 'right' }}>
-                <div style={{ padding: '0.4rem 0.8rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {getStatusTagline()}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="journey-track">
-              {/* Milesone indicators for cleaner structure */}
-              <div className="journey-milestone" style={{ left: '25%' }}></div>
-              <div className="journey-milestone" style={{ left: '50%' }}></div>
-              <div className="journey-milestone" style={{ left: '75%' }}></div>
-
-              {/* Runner Character */}
-              <div 
-                className="runner-indicator" 
-                style={{ left: `${overallProgress}%` }} 
-                onClick={handleRunnerAction}
-                onMouseEnter={showQuote}
-                onMouseLeave={() => setActiveQuote(null)}
-                onTouchStart={handleRunnerAction}
-              >
-                {activeQuote && <div className="quote-bubble" style={{ bottom: '130%', marginBottom: '8px' }}>{activeQuote}</div>}
-                <span className="runner-icon">🏃</span>
-              </div>
-
-              {/* Progress Segments - Weighted Visualization */}
-              <div className="journey-segment" style={{ width: `${tasksProgress * 0.2}%`, background: 'linear-gradient(90deg, #3b82f6, #60a5fa)', borderTopLeftRadius: '20px', borderBottomLeftRadius: '20px', boxShadow: '0 0 15px rgba(59, 130, 246, 0.3)' }}></div>
-              <div className="journey-segment" style={{ width: `${routinesProgress * 0.6}%`, background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px rgba(16, 185, 129, 0.3)' }}></div>
-              <div className="journey-segment" style={{ width: `${avgGoalProgress * 0.2}%`, background: 'linear-gradient(90deg, #ef4444, #f87171)', borderTopRightRadius: overallProgress === 100 ? '20px' : 0, borderBottomRightRadius: overallProgress === 100 ? '20px' : 0, boxShadow: '0 0 15px rgba(239, 68, 68, 0.3)' }}></div>
-
-                {overallProgress === 100 && <div className="home-arrival-message" style={{ top: '-40px' }}>You are home</div>}
-              </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginTop: '1.5rem', padding: '0 0.5rem' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }}></div>
-                 <span style={{ color: '#94a3b8', fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tasks</span>
-               </div>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></div>
-                 <span style={{ color: '#94a3b8', fontSize: '0.66rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Routines</span>
-               </div>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }}></div>
-                 <span style={{ color: '#94a3b8', fontSize: '0.66rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Goals</span>
-               </div>
-            </div>
-          </div>
-
-          {/* Inner Tasks List Row inside container box row frame */}
-          {topPendingTasks.length > 0 && (
-            <p style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 800, margin: '1rem 0 0.25rem 0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Top 2 Pending Tasks
-            </p>
-          )}
-          <div className="inner-tasks-grid" style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem' }}>
-            {topPendingTasks.length > 0 ? topPendingTasks.map((t, index) => {
-              const taglines = ["Still waiting 👀", "Pending... don't ignore 😏", "This needs your attention"];
-              const taglinePos = (t.id.length + index) % taglines.length;
-              const dynamicTagline = taglines[taglinePos];
-              
-              return (
-                <div key={t.id} className="inner-task-row" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.75rem 0.85rem', borderRadius: '0.85rem', border: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer', transition: 'all 0.2s ease' }} onClick={() => navigate('/dashboard')}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '1rem', color: '#10b981', opacity: 0.7, flexShrink: 0, marginTop: '0.1rem' }}>assignment</span>
-                  <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
-                    <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, marginTop: '0.15rem' }}>{dynamicTagline}</div>
-                  </div>
-                  {/* Priority is intentionally hidden from this view */}
-                </div>
-              );
-            }) : <div style={{ fontSize: '0.75rem', color: '#64748b', textAlign: 'center', padding: '0.75rem' }}>No pending actions today.</div>}
-          </div>
-
-          {/* Upcoming Reminders Hook below task list setup grid frame */}
-          {upcomingReminders.length > 0 && (
-            <div style={{ marginTop: '0.4rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.03)' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 900, color: '#10b981', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Upcoming Reminders (3 Days)</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
-                {upcomingReminders.map((r, i) => (
-                  <Link key={i} to="/calendar" className="reminder-row-link" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: '#e2e8f0', background: 'rgba(255,255,255,0.01)', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.01)', cursor: 'pointer', textDecoration: 'none', width: '100%', boxSizing: 'border-box' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', maxWidth: '75%', overflow: 'hidden' }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: '#10b981', opacity: 0.8 }}>notifications</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 700 }}>{r.title}</span>
-                    </div>
-                    <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 800 }}>{r.date.split('-').slice(1).join('/')}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
+        <div style={{ fontSize: '24px', fontWeight: 700, color: '#000000', lineHeight: 1.3, marginBottom: '20px', letterSpacing: '-0.5px' }}>
+          {pendingHabitsToday > 0 ? (
+            <>You have <span onClick={() => navigate('/routine')} style={{ fontWeight: '900', color: '#000000', textDecoration: 'underline', textDecorationStyle: 'dotted', cursor: 'pointer' }}>{pendingHabitsToday} habits</span> due today</>
+          ) : (
+            <>You're all <span style={{ fontWeight: '900' }}>caught up</span> today 🎉</>
           )}
         </div>
 
-        {/* Desktop Split Grid wrapper starting node down to Goal Snap closes inclusive triggers flawlessly forwards */}
-        <div className="desktop-split-grid">
-
-        {/* 2. Today Routine Neon Box */}
-        <div className="neon-box clickable-neon-box" onClick={() => navigate('/routine')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Today Routine</h2>
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: '#EF4444', fontSize: '14px' }}>🎯</span>
+            <span style={{ fontSize: '13px', color: 'rgba(0,0,0,0.5)', fontWeight: 500 }}>Goals:</span>
+            <span style={{ fontSize: '13px', color: '#000000', fontWeight: 700 }}>{goals.filter(g => g.status === 'completed').length}/{goals.length}</span>
           </div>
+          <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(0,0,0,0.3)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <HeroFire />
+            <span style={{ fontSize: '13px', color: 'rgba(0,0,0,0.5)', fontWeight: 500 }}>Streak</span>
+            <span style={{ fontSize: '13px', color: '#000000', fontWeight: 700 }}>{currentStreak} Days</span>
+          </div>
+        </div>
+      </section>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-            <div className="neon-inner-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.01)', padding: '0.85rem 1rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)' }}>
-              <div style={{ position: 'relative', width: '40px', height: '40px', flexShrink: 0 }}>
-                <svg width="40" height="40" viewBox="0 0 40 40">
-                  <circle cx="20" cy="20" r="15" fill="transparent" stroke="rgba(255,255,255,0.04)" strokeWidth="3"></circle>
-                  <circle cx="20" cy="20" r="15" fill="transparent" stroke="#10b981" strokeWidth="3" strokeDasharray={`${activeRoutinesTodayCount > 0 ? ((completedRoutinesToday || 0) / activeRoutinesTodayCount) * 100 : 0} ${100 - (activeRoutinesTodayCount > 0 ? ((completedRoutinesToday || 0) / activeRoutinesTodayCount) * 100 : 0)}`} strokeDashoffset="22" strokeLinecap="round" />
+      {/* SECTION 2 — DAILY PROGRESS CARD */}
+      <section className="green-card" style={{
+        margin: '0 16px 12px 16px',
+        borderRadius: '24px',
+        padding: '24px',
+        position: 'relative',
+        minHeight: 'fit-content'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span style={{ fontSize: '42px', fontWeight: 900, color: '#000000', letterSpacing: '-2px', lineHeight: 1 }}>{Math.max(0, Math.min(100, overallProgress))}%</span>
+            {overallProgress > 0 && <span style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '10px', padding: '2px 8px', fontSize: '10px', fontWeight: 700, color: '#00', marginLeft: '8px' }}>+5%</span>}
+          </div>
+          <button onClick={() => navigate('/stats')} style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
+            <BarChart2 size={18} color="#CCFF00" strokeWidth={2.5} />
+          </button>
+        </div>
+
+        <div style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(0,0,0,0.55)', marginBottom: '16px' }}>Productivity Score</div>
+
+        {/* CYCLING GROUPS ROW */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '14px', fontWeight: '700', color: '#00' }}>{currentSection.label}</span>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button onClick={() => setActiveSection((activeSection - 1 + 3) % 3)} style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '1.5px solid rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#000000', fontSize: '16px', fontWeight: '900' }}>‹</button>
+            <button onClick={() => setActiveSection((activeSection + 1) % 3)} style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '1.5px solid rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#000000', fontSize: '16px', fontWeight: '900' }}>›</button>
+          </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: '5px', height: '5px', borderRadius: '50%', background: i === activeSection ? '#000' : 'rgba(0,0,0,0.25)' }} />
+            ))}
+          </div>
+        </div>
+
+        {activeSection === 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%', marginTop: '8px' }}>
+            {/* TO DO */}
+            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.5)" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
+                <span style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>To Do</span>
+              </div>
+              <span style={{ fontSize: '28px', fontWeight: '900', color: '#000000', lineHeight: 1 }}>{pendingTasks.length}</span>
+              <span style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', fontWeight: '500' }}>tasks pending</span>
+            </div>
+            {/* DONE */}
+            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.5)" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Done</span>
+              </div>
+              <span style={{ fontSize: '28px', fontWeight: '900', color: '#000000', lineHeight: 1 }}>{completedTasksTotal}</span>
+              <span style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', fontWeight: '500' }}>completed today</span>
+            </div>
+          </div>
+        )}
+
+        {activeSection === 1 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%', marginTop: '8px' }}>
+            {/* ACTIVE */}
+            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Active</div>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{activeGoalsCount}</div>
+              <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', marginTop: '4px' }}>in progress</div>
+            </div>
+            {/* DONE */}
+            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Done</div>
+              <div style={{ fontSize: '28px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{completedGoalsCount}</div>
+              <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', marginTop: '4px' }}>achieved 🏆</div>
+            </div>
+          </div>
+        )}
+
+        {activeSection === 2 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%', marginTop: '8px' }}>
+            {/* TODAY — Circular Progress */}
+            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Today</div>
+              <div style={{ position: 'relative', width: '56px', height: '56px' }}>
+                <svg width="56" height="56" viewBox="0 0 56 56">
+                  <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="4"/>
+                  <circle cx="28" cy="28" r="22" fill="none" stroke="#000000" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 22}`} strokeDashoffset={`${2 * Math.PI * 22 * (1 - (totalHabitsTodayFresh > 0 ? completedHabitsTodayFresh / totalHabitsTodayFresh : 0))}`} transform="rotate(-90 28 28)" style={{ transition: 'stroke-dashoffset 0.5s ease' }}/>
                 </svg>
-                <span className="material-symbols-outlined" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '1rem', color: '#10b981', fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '1rem', fontWeight: 900, color: '#ffffff' }}>
-                   {completedRoutinesToday || 0} / {activeRoutinesTodayCount || 0}
-                </div>
-                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: '0.1rem' }}>
-                   Completed
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{completedHabitsTodayFresh}</span>
+                  <span style={{ fontSize: '8px', color: 'rgba(0,0,0,0.4)', fontWeight: '600' }}>/{totalHabitsTodayFresh}</span>
                 </div>
               </div>
+              <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', textAlign: 'center' }}>habits done</div>
             </div>
-
-            <div className="neon-inner-card" style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.01)', padding: '0.85rem 1rem', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.01)' }}>
-              <div style={{ width: '40px', height: '40px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
-                <span className="material-symbols-outlined fire-animation" style={{ fontSize: '1.2rem', fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
-              </div>
-              <div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>{currentStreak} Day Streak</div>
-                <div style={{ fontSize: '0.7rem', color: '#f87171', fontWeight: 700, marginTop: '0.1rem' }}>Keep it going! 🔥</div>
-              </div>
+            {/* BEST STREAK */}
+            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Best Streak</div>
+              <div style={{ fontSize: '32px', lineHeight: 1, filter: 'hue-rotate(100deg) drop-shadow(0 0 4px rgba(0,200,100,0.6))' }}>🔥</div>
+              <div style={{ fontSize: '24px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{bestStreakDays}</div>
+              <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)' }}>days record</div>
             </div>
           </div>
-        </div>
+        )}
+      </section>
 
-        {/* 3. Upcoming Goals Snapshot Neon Box */}
-        <div className="neon-box clickable-neon-box" onClick={() => navigate('/goals')}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h2 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 900, textTransform: 'uppercase', color: '#ffffff', letterSpacing: '0.05em' }}>Goals Due Soon</h2>
+      {/* SECTION 3 — SMOOTH LINE CHART activity-card */}
+      {(() => {
+        const habitsData = getLast7DaysHabits();
+        const width = 300;
+        const height = 80;
+        const padding = 10;
+        const maxVal = Math.max(1, ...habitsData.map(d => d.count));
 
-          </div>
+        const points = habitsData.map((d, i) => ({
+          x: padding + (i / (habitsData.length - 1)) * (width - padding * 2),
+          y: height - padding - (d.count / maxVal) * (height - padding * 2),
+          day: d.day,
+          count: d.count,
+          isToday: i === habitsData.length - 1
+        }));
 
-          <div className="upcoming-goals-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem' }}>
-            {([...goals].filter(g => g.status === 'pending').sort((a, b) => {
-               if (!a.targetDate) return 1;
-               if (!b.targetDate) return -1;
-               return new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime();
-            }).slice(0, 2).map(goal => {
+        const pathD = points.reduce((acc, point, i) => {
+          if (i === 0) return `M ${point.x} ${point.y}`;
+          const prev = points[i - 1];
+          const cpX = (prev.x + point.x) / 2;
+          return acc + ` C ${cpX} ${prev.y} ${cpX} ${point.y} ${point.x} ${point.y}`;
+        }, '');
 
-               
-                const calToday = new Date();
-                calToday.setHours(0, 0, 0, 0);
-                const calTarget = new Date(goal.targetDate);
-                calTarget.setHours(0, 0, 0, 0);
-                const diffDays = Math.ceil((calTarget.getTime() - calToday.getTime()) / (1000 * 60 * 60 * 24));
-                const isUrgent = goal.targetDate && diffDays < 10;
-                let daysLeftStr = 'No due date';
-                if (goal.targetDate) {
-                  if (diffDays === 0) daysLeftStr = 'Overdue Today';
-                  else if (diffDays < 0) daysLeftStr = `${Math.abs(diffDays)} Days Overdue`;
-                  else daysLeftStr = `${diffDays} Days Left`;
-                }
+        const areaPath = pathD + ` L ${points[points.length - 1]?.x} ${height} L ${points[0]?.x} ${height} Z`;
 
-               return (
-                  <div key={goal.id} className="neon-inner-card goal-card-inner" style={{ padding: '0.85rem', background: isUrgent ? 'rgba(239, 68, 68, 0.08)' : 'rgba(255,255,255,0.01)', borderRadius: '1.25rem', border: isUrgent ? '1px solid rgba(239, 68, 68, 0.2)' : '1px solid rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', gap: '0.75rem', transition: 'all 0.3s ease' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ width: '28px', height: '28px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', flexShrink: 0 }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '1rem', fontVariationSettings: "'FILL' 1" }}>track_changes</span>
-                      </div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{goal.name}</div>
-                    </div>
+        return (
+          <div style={{ position: 'relative' }}>
+            {/* Card Content */}
+            <div style={{
+              filter: !isPro ? 'blur(6px)' : 'none',
+              pointerEvents: !isPro ? 'none' : 'auto',
+              userSelect: !isPro ? 'none' : 'auto',
+              transition: 'filter 0.3s ease'
+            }}>
+              <section style={{
+                margin: '0 16px 10px 16px',
+                borderRadius: '24px',
+                padding: '20px',
+                background: 'linear-gradient(135deg, #1a3ae0 0%, #2563eb 100%)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
+                  <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>Habit Activity</span>
+                </div>
 
+                <div style={{ position: 'relative', marginTop: '8px' }}>
+                  <p style={{ fontSize: '20px', fontWeight: '900', color: '#FFFFFF', marginBottom: '12px', letterSpacing: '-0.5px' }}>
+                    {habitsData.reduce((s, d) => s + d.count, 0)} Done
+                  </p>
 
+                  <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '70px' }} preserveAspectRatio="none">
+                    {points.map((p, i) => (
+                      <line key={i} x1={p.x} y1={0} x2={p.x} y2={height} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                    ))}
+                    <path d={areaPath} fill="rgba(255,255,255,0.08)" />
+                    <path d={pathD} fill="none" stroke="#86EFAC" strokeWidth="2.5" strokeLinecap="round" />
+                    {points[points.length - 1] && (
+                      <rect x={points[points.length - 1].x - 14} y={0} width={28} height={height} rx={8} fill="rgba(134,239,172,0.2)" />
+                    )}
+                    {points.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r={p.isToday ? 5 : 3} fill={p.isToday ? '#FFFFFF' : 'rgba(255,255,255,0.4)'} />
+                    ))}
+                    {points[points.length - 1] && (
+                      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={2.5} fill="#1a3ae0" />
+                    )}
+                  </svg>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.65rem' }}>
-                      <div style={{ color: isUrgent ? '#ef4444' : '#00f2fe', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                        <span className="material-symbols-outlined" style={{ fontSize: '0.75rem' }}>schedule</span>
-                        {daysLeftStr}
-                      </div>
-                    </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
+                    {habitsData.map((d, i) => (
+                      <span key={i} style={{ fontSize: '10px', color: i === habitsData.length - 1 ? '#FFFFFF' : 'rgba(255,255,255,0.4)', fontWeight: i === habitsData.length - 1 ? '700' : '500', flex: 1, textAlign: 'center' }}>
+                        {d.day}
+                      </span>
+                    ))}
                   </div>
-               );
-            }))}
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                    {/* Weekly date range removed for cleaner look */}
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            {/* Premium Overlay for non-pro */}
+            {!isPro && (
+              <div style={{
+                position: 'absolute',
+                inset: '0 16px 10px 16px',
+                borderRadius: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                background: 'rgba(8,12,10,0.5)',
+                backdropFilter: 'blur(2px)'
+              }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </div>
+                <p style={{ fontSize: '13px', fontWeight: '700', color: '#FFFFFF', margin: 0, textAlign: 'center' }}>Premium Feature</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0, textAlign: 'center', padding: '0 20px' }}>Upgrade to see habit activity</p>
+                <div onClick={() => navigate('/lifetime-access')} style={{ background: '#00E87A', color: '#000', fontSize: '11px', fontWeight: '800', padding: '7px 18px', borderRadius: '20px', cursor: 'pointer', letterSpacing: '0.06em' }}>
+                  UPGRADE →
+                </div>
+              </div>
+            )}
           </div>
-          {goals.filter(g => g.status === 'pending').length === 0 && <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'center', padding: '1rem' }}>No active goals. Time to set some!</div>}
-        </div>
+        );
+      })()}
 
-        </div>
-
-
-
-
-
-
-      </main>
       <BottomNav isHidden={isSidebarHidden} />
-      <WhyStayHardyModal 
-        isOpen={isIntroOpen} 
-        onClose={handleCloseIntro} 
-        isFirstTime={isFirstTime}
-      />
+      <SupportModal isOpen={showSupportModal} onClose={() => setShowSupportModal(false)} />
     </div>
   );
 };
