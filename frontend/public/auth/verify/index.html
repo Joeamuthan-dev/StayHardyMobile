@@ -100,12 +100,12 @@
             font-size: 14px;
             color: rgba(255, 255, 255, 0.4);
             line-height: 1.8;
-            margin-bottom: 36px;
+            margin-bottom: 28px;
             padding: 0 8px;
         }
 
         .btn {
-            display: inline-block;
+            display: block;
             background: #00E676;
             color: #000000;
             font-size: 14px;
@@ -118,6 +118,7 @@
             border: none;
             cursor: pointer;
             width: 100%;
+            margin-bottom: 12px;
             transition: opacity 0.15s;
         }
 
@@ -125,40 +126,62 @@
             opacity: 0.9;
         }
 
-        .btn-secondary {
-            display: inline-block;
+        .btn-outline {
+            display: block;
             background: transparent;
             color: #00E676;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
             text-decoration: none;
-            padding: 12px 32px;
+            padding: 14px 40px;
             border-radius: 14px;
             letter-spacing: 0.05em;
             text-transform: uppercase;
             border: 1px solid rgba(0, 230, 118, 0.3);
             cursor: pointer;
             width: 100%;
-            margin-top: 12px;
+            margin-bottom: 12px;
             transition: all 0.15s;
         }
 
-        .btn-secondary:hover {
+        .btn-outline:hover {
             background: rgba(0, 230, 118, 0.05);
         }
 
         .divider {
             height: 1px;
             background: rgba(255, 255, 255, 0.06);
-            margin: 28px 0;
+            margin: 24px 0;
+        }
+
+        .instruction-box {
+            background: #111111;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .instruction-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            color: rgba(255, 255, 255, 0.3);
+            text-transform: uppercase;
+            margin-bottom: 14px;
+            text-align: center;
         }
 
         .step-row {
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            text-align: left;
             margin-bottom: 12px;
+        }
+
+        .step-row:last-child {
+            margin-bottom: 0;
         }
 
         .step-num {
@@ -178,15 +201,36 @@
 
         .step-text {
             font-size: 13px;
-            color: rgba(255, 255, 255, 0.45);
+            color: rgba(255, 255, 255, 0.5);
             line-height: 1.6;
+        }
+
+        .step-text strong {
+            color: rgba(255, 255, 255, 0.85);
+            font-weight: 700;
+        }
+
+        .success-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 230, 118, 0.1);
+            border: 1px solid rgba(0, 230, 118, 0.25);
+            border-radius: 20px;
+            padding: 8px 20px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #00E676;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 24px;
         }
 
         .footer {
             font-size: 10px;
             color: rgba(255, 255, 255, 0.15);
             line-height: 1.8;
-            margin-top: 28px;
+            margin-top: 24px;
         }
 
         /* States */
@@ -217,11 +261,6 @@
                 transform: rotate(360deg);
             }
         }
-
-        .error-icon {
-            font-size: 40px;
-            margin-bottom: 16px;
-        }
     </style>
 </head>
 
@@ -229,7 +268,6 @@
 
     <div class="card">
 
-        <!-- BRAND -->
         <div class="brand">Stay Hardy</div>
         <div class="tagline">The 1% starts here.</div>
 
@@ -247,35 +285,50 @@
         <!-- SUCCESS STATE -->
         <div id="state-success">
             <div class="icon">⚡</div>
+
+            <div class="success-badge">
+                ✓ Account Activated
+            </div>
+
             <div class="title">You're in the 1%.</div>
             <div class="subtitle">
-                Your Stay Hardy account is now active.
-                Open the app and sign in with your
-                email and PIN.
+                Your Stay Hardy account is now active
+                on all devices. Open the app and
+                sign in with your email and PIN.
             </div>
 
-            <a href="stayhardy://login" class="btn">
-                Open Stay Hardy →
-            </a>
+            <!-- Primary: Try deep link -->
+            <button class="btn" onclick="openApp()">
+                Open Stay Hardy App →
+            </button>
 
+            <!-- Fallback: Manual instructions -->
             <div class="divider"></div>
 
-            <div class="step-row">
-                <div class="step-num">1</div>
-                <div class="step-text">
-                    Account activated on all devices
+            <div class="instruction-box">
+                <div class="instruction-title">
+                    If button doesn't open the app
                 </div>
-            </div>
-            <div class="step-row">
-                <div class="step-num">2</div>
-                <div class="step-text">
-                    Open Stay Hardy on your phone
+                <div class="step-row">
+                    <div class="step-num">1</div>
+                    <div class="step-text">
+                        <strong>Find Stay Hardy</strong> on
+                        your Android phone or tablet
+                    </div>
                 </div>
-            </div>
-            <div class="step-row">
-                <div class="step-num">3</div>
-                <div class="step-text">
-                    Sign in with your email + PIN
+                <div class="step-row">
+                    <div class="step-num">2</div>
+                    <div class="step-text">
+                        <strong>Open the app</strong> and
+                        tap Sign In
+                    </div>
+                </div>
+                <div class="step-row">
+                    <div class="step-num">3</div>
+                    <div class="step-text">
+                        <strong>Enter your email + PIN</strong>
+                        — you're good to go ✓
+                    </div>
                 </div>
             </div>
 
@@ -286,18 +339,39 @@
 
         <!-- ERROR STATE -->
         <div id="state-error">
-            <div class="error-icon">🔒</div>
+            <div style="font-size:40px;margin-bottom:16px;">
+                🔒
+            </div>
             <div class="title" style="color:#ff4444;font-size:22px;">
                 Link expired or invalid.
             </div>
             <div class="subtitle">
                 This activation link has expired or
-                already been used. Request a new one
-                from the app.
+                already been used. Open Stay Hardy
+                and request a new one.
             </div>
-            <a href="stayhardy://login" class="btn">
-                Back to Stay Hardy →
-            </a>
+            <div class="instruction-box" style="margin-top:20px;">
+                <div class="step-row">
+                    <div class="step-num">1</div>
+                    <div class="step-text">
+                        Open <strong>Stay Hardy</strong> app
+                    </div>
+                </div>
+                <div class="step-row">
+                    <div class="step-num">2</div>
+                    <div class="step-text">
+                        Tap <strong>Sign In</strong> with
+                        your email
+                    </div>
+                </div>
+                <div class="step-row">
+                    <div class="step-num">3</div>
+                    <div class="step-text">
+                        Tap <strong>Resend activation mail
+                        </strong> if prompted
+                    </div>
+                </div>
+            </div>
             <div class="footer" style="margin-top:20px;">
                 Links expire after 24 hours.
             </div>
@@ -306,24 +380,56 @@
     </div>
 
     <script>
-        // Your Supabase project details
-        var SUPABASE_URL = 'https://tiavhmbpplerffdjmodw.supabase.co';
+        var SUPABASE_URL =
+            'https://tiavhmbpplerffdjmodw.supabase.co';
+        var SUPABASE_ANON_KEY = 'sb_publishable_H-eSK_By-dYJRD6DQvhzDA_W11z7-PQ';
 
         function show(id) {
-            document.getElementById('state-loading').style.display = 'none';
-            document.getElementById('state-success').style.display = 'none';
-            document.getElementById('state-error').style.display = 'none';
-            document.getElementById(id).style.display = 'block';
+            document.getElementById('state-loading')
+                .style.display = 'none';
+            document.getElementById('state-success')
+                .style.display = 'none';
+            document.getElementById('state-error')
+                .style.display = 'none';
+            document.getElementById(id)
+                .style.display = 'block';
+        }
+
+        function openApp() {
+            // Try multiple deep link formats
+            var deepLinks = [
+                'stayhardy://login',
+                'stayhardy://auth/callback',
+                'intent://login#Intent;scheme=stayhardy;package=com.stayhardy.app;end'
+            ];
+
+            // Try Android intent first
+            var isAndroid = /android/i.test(navigator.userAgent);
+            var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+            if (isAndroid) {
+                // Android intent URL — most reliable
+                window.location.href =
+                    'intent://login#Intent;scheme=stayhardy;' +
+                    'package=com.stayhardy.app;end';
+            } else if (isIOS) {
+                window.location.href = 'stayhardy://login';
+            } else {
+                // Desktop — show instructions
+                alert(
+                    'Please open Stay Hardy on your ' +
+                    'mobile device and sign in with ' +
+                    'your email and PIN.'
+                );
+            }
         }
 
         async function verifyToken() {
             try {
-                // Get the full URL hash and query params
                 var hash = window.location.hash.substring(1);
                 var query = window.location.search.substring(1);
                 var params = {};
 
-                // Parse hash params (Supabase puts tokens in hash)
                 if (hash) {
                     hash.split('&').forEach(function (pair) {
                         var parts = pair.split('=');
@@ -332,7 +438,6 @@
                     });
                 }
 
-                // Also parse query params as fallback
                 if (query) {
                     query.split('&').forEach(function (pair) {
                         var parts = pair.split('=');
@@ -341,25 +446,31 @@
                     });
                 }
 
-                console.log('Verify params:', JSON.stringify(params));
+                console.log('Params:', JSON.stringify(params));
 
                 var accessToken = params['access_token'];
-                var refreshToken = params['refresh_token'];
-                var type = params['type'];
                 var tokenHash = params['token_hash'];
                 var token = params['token'];
+                var type = params['type'];
+                var errorDesc = params['error_description'];
 
-                // Method 1: access_token in URL (implicit flow)
+                // Check for error in URL
+                if (params['error'] || errorDesc) {
+                    console.error('URL error:', errorDesc);
+                    show('state-error');
+                    return;
+                }
+
+                // Method 1: access_token present (implicit flow)
                 if (accessToken) {
-                    console.log('Found access_token — implicit flow');
+                    console.log('access_token found — success');
                     show('state-success');
                     return;
                 }
 
-                // Method 2: token_hash (PKCE flow)
+                // Method 2: token_hash (verify with Supabase)
                 if (tokenHash || token) {
-                    console.log('Found token_hash — verifying with Supabase');
-                    var verifyToken = tokenHash || token;
+                    var verifyTokenVal = tokenHash || token;
                     var verifyType = type || 'signup';
 
                     var response = await fetch(
@@ -368,10 +479,10 @@
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'apikey': getAnonKey()
+                                'apikey': SUPABASE_ANON_KEY
                             },
                             body: JSON.stringify({
-                                token_hash: verifyToken,
+                                token_hash: verifyTokenVal,
                                 type: verifyType
                             })
                         }
@@ -383,36 +494,29 @@
                     if (response.ok && result.access_token) {
                         show('state-success');
                     } else {
-                        console.error('Verify failed:', JSON.stringify(result));
                         show('state-error');
                     }
                     return;
                 }
 
-                // No token found — check if already verified
-                // (user may have clicked link twice)
-                if (type === 'signup' || type === 'email') {
+                // No token — show success anyway
+                // (may have already been verified)
+                if (type === 'signup' ||
+                    type === 'email' ||
+                    type === 'recovery') {
                     show('state-success');
                     return;
                 }
 
                 // Nothing found
-                console.warn('No token params found in URL');
                 show('state-error');
 
             } catch (err) {
-                console.error('Verification error:', err);
+                console.error('Error:', err);
                 show('state-error');
             }
         }
 
-        function getAnonKey() {
-            // Your Supabase anon key
-            // Replace this with your actual anon key
-            return 'sb_publishable_H-eSK_By-dYJRD6DQvhzDA_W11z7-PQ';
-        }
-
-        // Run on page load
         verifyToken();
     </script>
 
