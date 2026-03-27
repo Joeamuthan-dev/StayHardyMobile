@@ -19,7 +19,7 @@ const ForgotPIN: React.FC = () => {
     try {
       const { error: resetError } =
         await supabase.auth.resetPasswordForEmail(email.trim(), {
-          redirectTo: 'https://stayhardy.com/#/reset-pin',
+          redirectTo: 'https://stayhardy.com/auth/reset',
         });
       if (resetError) throw resetError;
       setSent(true);

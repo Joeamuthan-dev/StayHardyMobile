@@ -19,86 +19,46 @@ const ResetPin: React.FC = () => {
   useEffect(() => {
     const extractAndVerifyToken = async () => {
       try {
-        console.log('[ResetPin] Starting manual token extraction...');
-        const hashPart = window.location.hash;
+        const hash = window.location.hash;
+        // hash = "#access_token=xxx&refresh_token=xxx&type=recovery"
         
-        let tokenString = '';
+        const params = new URLSearchParams(hash.substring(1));
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const type = params.get('type');
         
-        // Method 1: Try to extract from hash (Supabase usually puts it here)
-        if (hashPart.includes('access_token')) {
-          // If using HashRouter, hash might look like #/reset-pin?access_token=...
-          // or just #access_token=... if redirect was weird
-          if (hashPart.includes('?')) {
-            tokenString = hashPart.split('?')[1];
-          } else {
-            // Might be #access_token=...
-            tokenString = hashPart.substring(1);
-          }
-        }
+        console.log('[ResetPIN] URL hash:', hash);
+        console.log('[ResetPIN] access_token:', accessToken);
+        console.log('[ResetPIN] type:', type);
         
-        // Method 2: Check window.location.search as fallback
-        if (!tokenString && window.location.search.includes('access_token')) {
-          tokenString = window.location.search.substring(1);
-        }
-        
-        if (tokenString) {
-          console.log('[ResetPin] Token string found. Parsing parameters...');
-          const params = new URLSearchParams(tokenString);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-          const type = params.get('type');
-          
-          if (accessToken && type === 'recovery') {
-            console.log('[ResetPin] Valid recovery token detected. Authenticating session...');
-            const { data, error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken || '',
-            });
-            
-            if (sessionError) {
-              console.error('[ResetPin] setSession error:', sessionError);
-              setVerificationStatus('error');
-              setErrorMessage('Reset link is invalid or expired. Please request a new one.');
-              return;
-            }
-            
-            if (data.session) {
-              console.log('[ResetPin] Session verified successfully.');
-              setVerificationStatus('verified');
-              return;
-            }
-          }
-        }
-        
-        // Method 3: Fallback listener for onAuthStateChange
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          async (event, session) => {
-            if (event === 'PASSWORD_RECOVERY' && session) {
-              console.log('[ResetPin] Event PASSWORD_RECOVERY detected via listener.');
-              setVerificationStatus('verified');
-            }
-          }
-        );
-        
-        // Safety timeout (3 seconds)
-        const timeout = setTimeout(() => {
-          setVerificationStatus(prev => {
-            if (prev === 'verifying') {
-              console.warn('[ResetPin] Verification timeout exceeded.');
-              setErrorMessage('Could not verify reset link. Please request a new one.');
-              return 'error';
-            }
-            return prev;
+        if (accessToken && type === 'recovery') {
+          console.log('[ResetPin] Valid recovery token detected. Authenticating session...');
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
           });
-        }, 5000); // 5 seconds for slower networks
+          
+          if (sessionError) {
+            console.error('[ResetPIN] setSession error:', sessionError);
+            setVerificationStatus('error');
+            setErrorMessage('Reset link is invalid or expired.');
+            return;
+          }
+          
+          if (data.session) {
+            console.log('[ResetPIN] Session verified successfully.');
+            setVerificationStatus('verified');
+            return;
+          }
+        }
         
-        return () => {
-          subscription.unsubscribe();
-          clearTimeout(timeout);
-        };
+        // If we get here, no valid token found
+        console.warn('[ResetPIN] No valid token found in URL hash.');
+        setVerificationStatus('error');
+        setErrorMessage('Could not verify reset link. Please request a new one.');
         
       } catch (err) {
-        console.error('[ResetPin] unexpected error:', err);
+        console.error('[ResetPIN] unexpected error:', err);
         setVerificationStatus('error');
         setErrorMessage('Something went wrong. Please try again.');
       }

@@ -290,6 +290,7 @@ const AppCore: React.FC = () => {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-pin" element={<ForgotPIN />} />
           <Route path="/reset-pin" element={<ResetPIN />} />
+          <Route path="/auth/reset" element={<ResetPIN />} />
           <Route path="/paywall" element={<Paywall />} />
           
           {/* Protected Hubs */}
