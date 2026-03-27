@@ -40,7 +40,7 @@ import Settings from './pages/Settings';
 import Planner from './pages/Planner';
 import Goals from './pages/Goals';
 import ForgotPIN from './pages/ForgotPin';
-import ResetPIN from './pages/ResetPin';
+import ResetPassword from './pages/ResetPassword';
 import AuthVerify from './pages/AuthVerify';
 import Tips from './pages/Tips';
 import Feedback from './pages/Feedback';
@@ -290,9 +290,10 @@ const AppCore: React.FC = () => {
           <Route path="/signup" element={<SignUp />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-pin" element={<ForgotPIN />} />
-          <Route path="/reset-pin" element={<ResetPIN />} />
-          <Route path="/auth/reset" element={<ResetPIN />} />
+          <Route path="/reset-pin" element={<ResetPassword />} />
+          <Route path="/auth/reset" element={<ResetPassword />} />
           <Route path="/auth/verify" element={<AuthVerify />} />
+          <Route path="/auth/callback" element={<Navigate to="/login" replace />} />
           <Route path="/paywall" element={<Paywall />} />
           
           {/* Protected Hubs */}
