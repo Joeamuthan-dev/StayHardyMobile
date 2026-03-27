@@ -4,38 +4,118 @@ import { supabase } from '../supabase';
 import { hashPin } from '../utils/pinUtils';
 import { padPinForAuth } from '../utils/pinUtils';
 
-const ResetPIN: React.FC = () => {
+const ResetPin: React.FC = () => {
   const navigate = useNavigate();
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
+  
+  // New verification state
+  const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'verified' | 'error'>('verifying');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Supabase automatically handles the token from URL
-    // and sets the session — we just need to wait for it
-    const { data: authListener } =
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'PASSWORD_RECOVERY' && session) {
-          setSessionReady(true);
+    const extractAndVerifyToken = async () => {
+      try {
+        console.log('[ResetPin] Starting manual token extraction...');
+        const hashPart = window.location.hash;
+        
+        let tokenString = '';
+        
+        // Method 1: Try to extract from hash (Supabase usually puts it here)
+        if (hashPart.includes('access_token')) {
+          // If using HashRouter, hash might look like #/reset-pin?access_token=...
+          // or just #access_token=... if redirect was weird
+          if (hashPart.includes('?')) {
+            tokenString = hashPart.split('?')[1];
+          } else {
+            // Might be #access_token=...
+            tokenString = hashPart.substring(1);
+          }
         }
-      });
-    return () => authListener.subscription.unsubscribe();
+        
+        // Method 2: Check window.location.search as fallback
+        if (!tokenString && window.location.search.includes('access_token')) {
+          tokenString = window.location.search.substring(1);
+        }
+        
+        if (tokenString) {
+          console.log('[ResetPin] Token string found. Parsing parameters...');
+          const params = new URLSearchParams(tokenString);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          const type = params.get('type');
+          
+          if (accessToken && type === 'recovery') {
+            console.log('[ResetPin] Valid recovery token detected. Authenticating session...');
+            const { data, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            });
+            
+            if (sessionError) {
+              console.error('[ResetPin] setSession error:', sessionError);
+              setVerificationStatus('error');
+              setErrorMessage('Reset link is invalid or expired. Please request a new one.');
+              return;
+            }
+            
+            if (data.session) {
+              console.log('[ResetPin] Session verified successfully.');
+              setVerificationStatus('verified');
+              return;
+            }
+          }
+        }
+        
+        // Method 3: Fallback listener for onAuthStateChange
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            if (event === 'PASSWORD_RECOVERY' && session) {
+              console.log('[ResetPin] Event PASSWORD_RECOVERY detected via listener.');
+              setVerificationStatus('verified');
+            }
+          }
+        );
+        
+        // Safety timeout (3 seconds)
+        const timeout = setTimeout(() => {
+          setVerificationStatus(prev => {
+            if (prev === 'verifying') {
+              console.warn('[ResetPin] Verification timeout exceeded.');
+              setErrorMessage('Could not verify reset link. Please request a new one.');
+              return 'error';
+            }
+            return prev;
+          });
+        }, 5000); // 5 seconds for slower networks
+        
+        return () => {
+          subscription.unsubscribe();
+          clearTimeout(timeout);
+        };
+        
+      } catch (err) {
+        console.error('[ResetPin] unexpected error:', err);
+        setVerificationStatus('error');
+        setErrorMessage('Something went wrong. Please try again.');
+      }
+    };
+    
+    extractAndVerifyToken();
   }, []);
 
   const handleResetPIN = async () => {
+    if (verificationStatus !== 'verified') return;
+    
     if (pin.length !== 4) {
       setError('PIN must be exactly 4 digits.');
       return;
     }
     if (pin !== confirmPin) {
-      setError('PINs do not match. Try again.');
-      return;
-    }
-    if (!/^\d{4}$/.test(pin)) {
-      setError('PIN must contain only numbers.');
+      setError("PINs don't match.");
       return;
     }
 
@@ -43,18 +123,16 @@ const ResetPIN: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Update Supabase Auth password (padded PIN)
-      const paddedPin = padPinForAuth(pin);
-      const { error: updateError } =
-        await supabase.auth.updateUser({
-          password: paddedPin,
-        });
-      if (updateError) throw updateError;
+      // 1. Get current user (guaranteed to be authenticated if verified)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Session expired. Please request a new reset link.');
 
-      // 2. Get current user
-      const { data: { user } } =
-        await supabase.auth.getUser();
-      if (!user) throw new Error('Session expired.');
+      // 2. Update Supabase Auth password (padded PIN)
+      const paddedPin = padPinForAuth(pin);
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: paddedPin,
+      });
+      if (updateError) throw updateError;
 
       // 3. Update PIN hash in public.users
       const hashedPin = await hashPin(pin);
@@ -65,27 +143,17 @@ const ResetPIN: React.FC = () => {
       if (dbError) throw dbError;
 
       setSuccess(true);
-
-      // Redirect to login after 2 seconds
       setTimeout(() => navigate('/login'), 2000);
 
     } catch (err: any) {
-      setError(
-        err?.message ||
-        'Reset failed. The link may have expired. Try again.'
-      );
+      setError(err?.message || 'Update failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // PIN input renderer (4 digit boxes)
-  const renderPINInput = (
-    value: string,
-    onChange: (v: string) => void,
-    placeholder: string
-  ) => (
-    <div style={{ marginBottom: '20px' }}>
+  const renderPINInput = (value: string, placeholder: string) => (
+    <div style={{ marginBottom: '20px', width: '100%' }}>
       <p style={{
         fontSize: '11px',
         fontWeight: '700',
@@ -93,6 +161,7 @@ const ResetPIN: React.FC = () => {
         letterSpacing: '0.1em',
         textTransform: 'uppercase',
         marginBottom: '10px',
+        textAlign: 'center',
       }}>
         {placeholder}
       </p>
@@ -126,26 +195,11 @@ const ResetPIN: React.FC = () => {
           </div>
         ))}
       </div>
-      {/* Hidden input for keyboard */}
-      <input
-        type="number"
-        inputMode="numeric"
-        maxLength={4}
-        value={value}
-        onChange={e => {
-          const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-          onChange(v);
-        }}
-        style={{
-          position: 'absolute',
-          opacity: 0,
-          pointerEvents: 'none',
-          width: '1px',
-          height: '1px',
-        }}
-      />
     </div>
   );
+
+  const pinsMatch = pin.length === 4 && confirmPin.length === 4 && pin === confirmPin;
+  const showMatchError = confirmPin.length === 4 && pin !== confirmPin;
 
   return (
     <div style={{
@@ -159,9 +213,7 @@ const ResetPIN: React.FC = () => {
       paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
       boxSizing: 'border-box',
     }}>
-
       {success ? (
-        /* Success state */
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -169,9 +221,7 @@ const ResetPIN: React.FC = () => {
           textAlign: 'center',
           paddingTop: '40px',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>
-            ✅
-          </div>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>✅</div>
           <h2 style={{
             fontFamily: 'Syne, sans-serif',
             fontWeight: '800',
@@ -186,13 +236,11 @@ const ResetPIN: React.FC = () => {
             color: 'rgba(255,255,255,0.45)',
             lineHeight: '1.6',
           }}>
-            Your PIN has been reset successfully.
-            Redirecting to login...
+            Your PIN has been reset successfully. Redirecting to login...
           </p>
         </div>
       ) : (
         <>
-          {/* Icon */}
           <div style={{
             width: '64px',
             height: '64px',
@@ -237,147 +285,164 @@ const ResetPIN: React.FC = () => {
             Choose a new 4-digit PIN for your vault.
           </p>
 
-          {!sessionReady && (
-            <p style={{
-              fontSize: '13px',
-              color: 'rgba(255,255,255,0.3)',
-              marginBottom: '20px',
-              textAlign: 'center',
-            }}>
-              Verifying your reset link...
-            </p>
-          )}
-
-          {/* New PIN input */}
-          <div
-            onClick={() => {
-              const input = document.getElementById('pin-input-1');
-              if (input) input.focus();
-            }}
-            style={{ width: '100%', position: 'relative' }}
-          >
-            {renderPINInput(pin, setPin, 'New PIN')}
-            <input
-              id="pin-input-1"
-              type="number"
-              inputMode="numeric"
-              value={pin}
-              onChange={e => {
-                const v = e.target.value
-                  .replace(/\D/g, '').slice(0, 4);
-                setPin(v);
-              }}
-              style={{
-                position: 'absolute',
-                top: 0, left: 0,
-                width: '100%', height: '100%',
-                opacity: 0,
-                cursor: 'pointer',
-              }}
-            />
-          </div>
-
-          {/* Confirm PIN input */}
-          <div
-            onClick={() => {
-              const input = document.getElementById('pin-input-2');
-              if (input) input.focus();
-            }}
-            style={{ width: '100%', position: 'relative' }}
-          >
-            {renderPINInput(
-              confirmPin, setConfirmPin, 'Confirm new PIN'
-            )}
-            <input
-              id="pin-input-2"
-              type="number"
-              inputMode="numeric"
-              value={confirmPin}
-              onChange={e => {
-                const v = e.target.value
-                  .replace(/\D/g, '').slice(0, 4);
-                setConfirmPin(v);
-              }}
-              style={{
-                position: 'absolute',
-                top: 0, left: 0,
-                width: '100%', height: '100%',
-                opacity: 0,
-                cursor: 'pointer',
-              }}
-            />
-          </div>
-
-          {/* Error */}
-          {error && (
-            <p style={{
-              fontSize: '13px',
-              color: '#EF4444',
-              margin: '-8px 0 16px 0',
-              fontWeight: '500',
-              textAlign: 'center',
-            }}>
-              {error}
-            </p>
-          )}
-
-          {/* Submit */}
-          <button
-            onClick={handleResetPIN}
-            disabled={
-              loading ||
-              !sessionReady ||
-              pin.length !== 4 ||
-              confirmPin.length !== 4
-            }
-            style={{
-              width: '100%',
-              height: '56px',
-              borderRadius: '16px',
-              border: 'none',
-              background:
-                loading || !sessionReady ||
-                pin.length !== 4 || confirmPin.length !== 4
-                  ? 'rgba(0,230,118,0.3)'
-                  : '#00E676',
-              color: '#000000',
-              fontFamily: 'Syne, sans-serif',
-              fontWeight: '800',
-              fontSize: '15px',
-              letterSpacing: '0.05em',
-              cursor:
-                loading || !sessionReady ||
-                pin.length !== 4 || confirmPin.length !== 4
-                  ? 'not-allowed' : 'pointer',
+          {verificationStatus === 'verifying' && (
+            <div style={{
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              boxShadow:
-                !loading && sessionReady &&
-                pin.length === 4 && confirmPin.length === 4
-                  ? '0 0 24px rgba(0,230,118,0.3)'
-                  : 'none',
-              transition: 'all 0.2s ease',
-              marginTop: '8px',
-            }}
-          >
-            {loading ? (
-              <>
-                <div style={{
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  border: '2.5px solid rgba(0,0,0,0.3)',
-                  borderTop: '2.5px solid #000',
-                  animation: 'spin 0.8s linear infinite',
-                }}/>
-                Updating...
-              </>
-            ) : (
-              'Update PIN'
-            )}
-          </button>
+              gap: '12px',
+              marginBottom: '40px'
+            }}>
+              <div style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                border: '3px solid rgba(0,230,118,0.2)',
+                borderTop: '3px solid #00E676',
+                animation: 'spin 0.8s linear infinite',
+              }}/>
+              <p style={{
+                fontSize: '13px',
+                color: 'rgba(255,255,255,0.3)',
+                textAlign: 'center',
+              }}>
+                Verifying your reset link...
+              </p>
+            </div>
+          )}
+
+          {verificationStatus === 'error' && (
+            <div style={{
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid rgba(239,68,68,0.2)',
+              borderRadius: '16px',
+              padding: '16px',
+              marginBottom: '32px',
+              textAlign: 'center',
+              width: '100%'
+            }}>
+              <p style={{
+                fontSize: '14px',
+                color: '#EF4444',
+                fontWeight: '500',
+                margin: 0
+              }}>
+                {errorMessage || 'Verification failed.'}
+              </p>
+              <button 
+                onClick={() => navigate('/forgot-pin')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  textDecoration: 'underline',
+                  marginTop: '12px',
+                  cursor: 'pointer'
+                }}
+              >
+                Request a new link
+              </button>
+            </div>
+          )}
+
+          {verificationStatus === 'verified' && (
+            <>
+              {/* PIN input containers */}
+              <div style={{ width: '100%', position: 'relative' }}>
+                {renderPINInput(pin, 'New PIN')}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={pin}
+                  onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  style={{
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                    opacity: 0, cursor: 'pointer', zIndex: 10
+                  }}
+                />
+              </div>
+
+              <div style={{ width: '100%', position: 'relative', marginTop: '10px' }}>
+                {renderPINInput(confirmPin, 'Confirm new PIN')}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={confirmPin}
+                  onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  style={{
+                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                    opacity: 0, cursor: 'pointer', zIndex: 10
+                  }}
+                />
+                
+                {showMatchError && (
+                  <p style={{
+                    fontSize: '12px',
+                    color: '#EF4444',
+                    marginTop: '-15px',
+                    textAlign: 'center',
+                    fontWeight: '500'
+                  }}>
+                    PINs don't match
+                  </p>
+                )}
+              </div>
+
+              {/* Submit Error */}
+              {error && (
+                <p style={{
+                  fontSize: '13px',
+                  color: '#EF4444',
+                  margin: '16px 0',
+                  fontWeight: '500',
+                  textAlign: 'center',
+                }}>
+                  {error}
+                </p>
+              )}
+
+              {/* Submit */}
+              <button
+                onClick={handleResetPIN}
+                disabled={loading || !pinsMatch}
+                style={{
+                  width: '100%',
+                  height: '56px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: !pinsMatch || loading ? 'rgba(0,230,118,0.3)' : '#00E676',
+                  color: '#000000',
+                  fontFamily: 'Syne, sans-serif',
+                  fontWeight: '800',
+                  fontSize: '15px',
+                  letterSpacing: '0.05em',
+                  cursor: !pinsMatch || loading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                  boxShadow: pinsMatch && !loading ? '0 0 24px rgba(0,230,118,0.3)' : 'none',
+                  transition: 'all 0.2s ease',
+                  marginTop: '16px',
+                }}
+              >
+                {loading ? (
+                  <>
+                    <div style={{
+                      width: '18px', height: '18px', borderRadius: '50%',
+                      border: '2.5px solid rgba(0,0,0,0.3)', borderTop: '2.5px solid #000',
+                      animation: 'spin 0.8s linear infinite',
+                    }}/>
+                    Updating...
+                  </>
+                ) : (
+                  'Update PIN'
+                )}
+              </button>
+            </>
+          )}
         </>
       )}
 
@@ -390,4 +455,4 @@ const ResetPIN: React.FC = () => {
   );
 };
 
-export default ResetPIN;
+export default ResetPin;
