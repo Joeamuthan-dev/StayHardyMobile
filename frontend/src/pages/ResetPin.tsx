@@ -12,7 +12,7 @@ const ResetPin: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
-  // New verification state
+  // Verification states
   const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'verified' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -20,19 +20,37 @@ const ResetPin: React.FC = () => {
     const extractAndVerifyToken = async () => {
       try {
         const hash = window.location.hash;
-        // hash = "#access_token=xxx&refresh_token=xxx&type=recovery"
-        
         const params = new URLSearchParams(hash.substring(1));
+
+        // 1. CHECK FOR ERROR PARAMS FIRST (Supabase error redirection)
+        const supabaseError = params.get('error');
+        const errorCode = params.get('error_code');
+        const errorDescription = params.get('error_description');
+
+        if (supabaseError) {
+          console.error('[ResetPIN] Recovery error detected:', { supabaseError, errorCode, errorDescription });
+          
+          if (errorCode === 'otp_expired' || errorDescription?.toLowerCase().includes('expired')) {
+            setVerificationStatus('error');
+            setErrorMessage('This reset link has expired. Please request a new one.');
+          } else {
+            setVerificationStatus('error');
+            // Convert + to space in description if needed
+            const cleanDescription = errorDescription?.replace(/\+/g, ' ') || 'Invalid reset link. Please request a new one.';
+            setErrorMessage(cleanDescription);
+          }
+          return;
+        }
+
+        // 2. CHECK FOR SUCCESS TOKEN
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         const type = params.get('type');
         
-        console.log('[ResetPIN] URL hash:', hash);
-        console.log('[ResetPIN] access_token:', accessToken);
-        console.log('[ResetPIN] type:', type);
+        console.log('[ResetPIN] URL hash parsing:', { hasToken: !!accessToken, type });
         
         if (accessToken && type === 'recovery') {
-          console.log('[ResetPin] Valid recovery token detected. Authenticating session...');
+          console.log('[ResetPIN] Valid recovery token detected. Authenticating session...');
           const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || '',
@@ -52,13 +70,13 @@ const ResetPin: React.FC = () => {
           }
         }
         
-        // If we get here, no valid token found
-        console.warn('[ResetPIN] No valid token found in URL hash.');
+        // 3. NO TOKEN AND NO ERROR - UNKNOWN STATE
+        console.warn('[ResetPIN] No valid token or error found in URL hash.');
         setVerificationStatus('error');
         setErrorMessage('Could not verify reset link. Please request a new one.');
         
       } catch (err) {
-        console.error('[ResetPIN] unexpected error:', err);
+        console.error('[ResetPIN] Unexpected extraction error:', err);
         setVerificationStatus('error');
         setErrorMessage('Something went wrong. Please try again.');
       }
@@ -83,7 +101,7 @@ const ResetPin: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Get current user (guaranteed to be authenticated if verified)
+      // 1. Get current authenticated user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Session expired. Please request a new reset link.');
 
@@ -273,36 +291,47 @@ const ResetPin: React.FC = () => {
 
           {verificationStatus === 'error' && (
             <div style={{
-              background: 'rgba(239,68,68,0.1)',
+              background: 'rgba(239,68,68,0.08)',
               border: '1px solid rgba(239,68,68,0.2)',
-              borderRadius: '16px',
-              padding: '16px',
+              borderRadius: '20px',
+              padding: '24px',
               marginBottom: '32px',
               textAlign: 'center',
-              width: '100%'
+              width: '100%',
+              boxSizing: 'border-box'
             }}>
+              <div style={{
+                fontSize: '24px',
+                marginBottom: '12px'
+              }}>
+                ⚠️
+              </div>
               <p style={{
-                fontSize: '14px',
+                fontSize: '15px',
                 color: '#EF4444',
-                fontWeight: '500',
-                margin: 0
+                fontWeight: '600',
+                margin: '0 0 20px 0',
+                lineHeight: '1.5'
               }}>
                 {errorMessage || 'Verification failed.'}
               </p>
               <button 
                 onClick={() => navigate('/forgot-pin')}
                 style={{
-                  background: 'none',
+                  width: '100%',
+                  height: '48px',
+                  background: '#00E676',
                   border: 'none',
-                  color: '#FFFFFF',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  textDecoration: 'underline',
-                  marginTop: '12px',
-                  cursor: 'pointer'
+                  borderRadius: '12px',
+                  color: '#000000',
+                  fontSize: '14px',
+                  fontWeight: '800',
+                  fontFamily: 'Syne, sans-serif',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 20px rgba(0,230,118,0.2)'
                 }}
               >
-                Request a new link
+                Request New Link
               </button>
             </div>
           )}
@@ -363,7 +392,7 @@ const ResetPin: React.FC = () => {
                 </p>
               )}
 
-              {/* Submit */}
+              {/* Submit Button */}
               <button
                 onClick={handleResetPIN}
                 disabled={loading || !pinsMatch}
