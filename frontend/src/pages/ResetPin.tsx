@@ -4,45 +4,43 @@ import { supabase } from '../supabase';
 import { hashPin } from '../utils/pinUtils';
 import { padPinForAuth } from '../utils/pinUtils';
 
+type VerificationStatus = 'verifying' | 'verified' | 'error' | 'success';
+
 const ResetPin: React.FC = () => {
   const navigate = useNavigate();
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   
   // Verification states
-  const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'verified' | 'error'>('verifying');
+  const [status, setStatus] = useState<VerificationStatus>('verifying');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const extractAndVerifyToken = async () => {
       try {
+        // Step 1: Parse URL hash
         const hash = window.location.hash;
         const params = new URLSearchParams(hash.substring(1));
 
-        // 1. CHECK FOR ERROR PARAMS FIRST (Supabase error redirection)
-        const supabaseError = params.get('error');
+        // Step 2: Check for error FIRST
+        const error = params.get('error');
         const errorCode = params.get('error_code');
         const errorDescription = params.get('error_description');
-
-        if (supabaseError) {
-          console.error('[ResetPIN] Recovery error detected:', { supabaseError, errorCode, errorDescription });
-          
-          if (errorCode === 'otp_expired' || errorDescription?.toLowerCase().includes('expired')) {
-            setVerificationStatus('error');
-            setErrorMessage('This reset link has expired. Please request a new one.');
-          } else {
-            setVerificationStatus('error');
-            // Convert + to space in description if needed
-            const cleanDescription = errorDescription?.replace(/\+/g, ' ') || 'Invalid reset link. Please request a new one.';
-            setErrorMessage(cleanDescription);
-          }
+        
+        if (error) {
+          const message = errorCode === 'otp_expired'
+            ? 'This reset link has expired. Please request a new one.'
+            : errorDescription?.replace(/\+/g, ' ')
+              || 'Invalid reset link. Please request a new one.';
+          console.error('[ResetPIN] Recovery error:', { error, errorCode, message });
+          setStatus('error');
+          setErrorMessage(message);
           return;
         }
 
-        // 2. CHECK FOR SUCCESS TOKEN
+        // Step 3: Extract success token
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
         const type = params.get('type');
@@ -56,28 +54,46 @@ const ResetPin: React.FC = () => {
             refresh_token: refreshToken || '',
           });
           
-          if (sessionError) {
+          if (sessionError || !data.session) {
             console.error('[ResetPIN] setSession error:', sessionError);
-            setVerificationStatus('error');
+            setStatus('error');
             setErrorMessage('Reset link is invalid or expired.');
             return;
           }
           
-          if (data.session) {
-            console.log('[ResetPIN] Session verified successfully.');
-            setVerificationStatus('verified');
-            return;
-          }
+          console.log('[ResetPIN] Session verified successfully.');
+          setStatus('verified');
+          return;
         }
         
-        // 3. NO TOKEN AND NO ERROR - UNKNOWN STATE
-        console.warn('[ResetPIN] No valid token or error found in URL hash.');
-        setVerificationStatus('error');
-        setErrorMessage('Could not verify reset link. Please request a new one.');
+        // Fallback: listen for PASSWORD_RECOVERY event
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+          if (event === 'PASSWORD_RECOVERY' && session) {
+            console.log('[ResetPIN] PASSWORD_RECOVERY event detected via listener.');
+            setStatus('verified');
+          }
+        });
+        
+        // Safety timeout — never hang forever (4 seconds)
+        const timeout = setTimeout(() => {
+          setStatus(prev => {
+            if (prev === 'verifying') {
+              console.warn('[ResetPIN] Verification timeout exceeded.');
+              setErrorMessage('Could not verify reset link. Please request a new one.');
+              return 'error';
+            }
+            return prev;
+          });
+        }, 4000);
+        
+        return () => {
+          subscription.unsubscribe();
+          clearTimeout(timeout);
+        };
         
       } catch (err) {
         console.error('[ResetPIN] Unexpected extraction error:', err);
-        setVerificationStatus('error');
+        setStatus('error');
         setErrorMessage('Something went wrong. Please try again.');
       }
     };
@@ -86,45 +102,50 @@ const ResetPin: React.FC = () => {
   }, []);
 
   const handleResetPIN = async () => {
-    if (verificationStatus !== 'verified') return;
+    if (status !== 'verified') return;
     
     if (pin.length !== 4) {
-      setError('PIN must be exactly 4 digits.');
+      setSubmitError('PIN must be exactly 4 digits.');
       return;
     }
     if (pin !== confirmPin) {
-      setError("PINs don't match.");
+      setSubmitError("PINs don't match.");
       return;
     }
 
     setLoading(true);
-    setError(null);
+    setSubmitError(null);
 
     try {
-      // 1. Get current authenticated user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Session expired. Please request a new reset link.');
-
-      // 2. Update Supabase Auth password (padded PIN)
-      const paddedPin = padPinForAuth(pin);
+      // Step 5: Submit handler
+      const paddedPin = padPinForAuth(pin); // Should be 'SH' + pin
+      const hashedPin = await hashPin(pin); // SHA-256
+      
+      // Update Supabase Auth password
       const { error: updateError } = await supabase.auth.updateUser({
-        password: paddedPin,
+        password: paddedPin
       });
+      
       if (updateError) throw updateError;
-
-      // 3. Update PIN hash in public.users
-      const hashedPin = await hashPin(pin);
-      const { error: dbError } = await supabase
-        .from('users')
-        .update({ pin: hashedPin })
-        .eq('id', user.id);
-      if (dbError) throw dbError;
-
-      setSuccess(true);
-      setTimeout(() => navigate('/login'), 2000);
+      
+      // Update public.users pin hash
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        await supabase
+          .from('users')
+          .update({ pin: hashedPin })
+          .eq('id', session.user.id);
+      }
+      
+      // Success
+      setStatus('success');
+      setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 2000);
 
     } catch (err: any) {
-      setError(err?.message || 'Update failed. Please try again.');
+      console.error('[ResetPIN] Update failed:', err);
+      setSubmitError(err?.message || 'Update failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -191,7 +212,7 @@ const ResetPin: React.FC = () => {
       paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
       boxSizing: 'border-box',
     }}>
-      {success ? (
+      {status === 'success' ? (
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -199,22 +220,22 @@ const ResetPin: React.FC = () => {
           textAlign: 'center',
           paddingTop: '40px',
         }}>
-          <div style={{ fontSize: '48px', marginBottom: '20px' }}>✅</div>
+          <div style={{ fontSize: '64px', marginBottom: '24px' }}>✅</div>
           <h2 style={{
             fontFamily: 'Syne, sans-serif',
             fontWeight: '800',
-            fontSize: '24px',
+            fontSize: '28px',
             color: '#FFFFFF',
             margin: '0 0 12px 0',
           }}>
-            PIN Updated!
+            PIN Updated Successfully!
           </h2>
           <p style={{
-            fontSize: '14px',
+            fontSize: '15px',
             color: 'rgba(255,255,255,0.45)',
             lineHeight: '1.6',
           }}>
-            Your PIN has been reset successfully. Redirecting to login...
+            Redirecting to login...
           </p>
         </div>
       ) : (
@@ -251,37 +272,27 @@ const ResetPin: React.FC = () => {
             Reset your PIN
           </h1>
 
-          <p style={{
-            fontFamily: 'Syne, sans-serif',
-            fontSize: '15px',
-            fontWeight: 400,
-            color: 'rgba(255,255,255,0.5)',
-            margin: '0 0 40px 0',
-            lineHeight: '1.6',
-            textAlign: 'center',
-          }}>
-            Choose a new 4-digit PIN for your vault.
-          </p>
-
-          {verificationStatus === 'verifying' && (
+          {/* STATE: verifying */}
+          {status === 'verifying' && (
             <div style={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: '12px',
-              marginBottom: '40px'
+              justifyContent: 'center',
+              marginTop: '60px',
+              gap: '16px',
             }}>
               <div style={{
-                width: '24px',
-                height: '24px',
+                width: '32px',
+                height: '32px',
                 borderRadius: '50%',
                 border: '3px solid rgba(0,230,118,0.2)',
                 borderTop: '3px solid #00E676',
                 animation: 'spin 0.8s linear infinite',
               }}/>
               <p style={{
-                fontSize: '13px',
-                color: 'rgba(255,255,255,0.3)',
+                fontSize: '14px',
+                color: 'rgba(255,255,255,0.4)',
                 textAlign: 'center',
               }}>
                 Verifying your reset link...
@@ -289,34 +300,30 @@ const ResetPin: React.FC = () => {
             </div>
           )}
 
-          {verificationStatus === 'error' && (
+          {/* STATE: error */}
+          {status === 'error' && (
             <div style={{
               background: 'rgba(239,68,68,0.08)',
               border: '1px solid rgba(239,68,68,0.2)',
               borderRadius: '20px',
               padding: '24px',
-              marginBottom: '32px',
+              marginTop: '40px',
               textAlign: 'center',
               width: '100%',
               boxSizing: 'border-box'
             }}>
-              <div style={{
-                fontSize: '24px',
-                marginBottom: '12px'
-              }}>
-                ⚠️
-              </div>
+              <div style={{ fontSize: '24px', marginBottom: '12px' }}>⚠️</div>
               <p style={{
                 fontSize: '15px',
                 color: '#EF4444',
                 fontWeight: '600',
-                margin: '0 0 20px 0',
+                margin: '0 0 24px 0',
                 lineHeight: '1.5'
               }}>
                 {errorMessage || 'Verification failed.'}
               </p>
               <button 
-                onClick={() => navigate('/forgot-pin')}
+                onClick={() => navigate('/forgot-pin', { replace: true })}
                 style={{
                   width: '100%',
                   height: '48px',
@@ -336,8 +343,21 @@ const ResetPin: React.FC = () => {
             </div>
           )}
 
-          {verificationStatus === 'verified' && (
+          {/* STATE: verified */}
+          {status === 'verified' && (
             <>
+              <p style={{
+                fontFamily: 'Syne, sans-serif',
+                fontSize: '15px',
+                fontWeight: 400,
+                color: 'rgba(255,255,255,0.5)',
+                margin: '0 0 40px 0',
+                lineHeight: '1.6',
+                textAlign: 'center',
+              }}>
+                Choose a new 4-digit PIN for your vault.
+              </p>
+
               {/* PIN input containers */}
               <div style={{ width: '100%', position: 'relative' }}>
                 {renderPINInput(pin, 'New PIN')}
@@ -380,7 +400,7 @@ const ResetPin: React.FC = () => {
               </div>
 
               {/* Submit Error */}
-              {error && (
+              {submitError && (
                 <p style={{
                   fontSize: '13px',
                   color: '#EF4444',
@@ -388,7 +408,7 @@ const ResetPin: React.FC = () => {
                   fontWeight: '500',
                   textAlign: 'center',
                 }}>
-                  {error}
+                  {submitError}
                 </p>
               )}
 
