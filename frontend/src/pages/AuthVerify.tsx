@@ -4,29 +4,42 @@ import { supabase } from '../supabase';
 
 /**
  * AuthVerify handles the /auth/verify route on the web.
- * It extracts Supabase recovery/signup tokens from the URL fragment,
- * establishes a session, and then redirects to Login.
+ * It extracts tokens from various URL formats, establishes a session,
+ * and then redirects to Login.
  */
 const AuthVerify: React.FC = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
+  const getTokenParams = () => {
+    // 1. Try hash first
+    const hash = window.location.hash;
+    if (hash.includes('access_token')) {
+      return new URLSearchParams(hash.substring(hash.indexOf('access_token')));
+    }
+    // 2. Try search params
+    const search = window.location.search;
+    if (search.includes('access_token')) {
+      return new URLSearchParams(search.substring(1));
+    }
+    // 3. Try full URL string parsing
+    const fullUrl = window.location.href;
+    if (fullUrl.includes('access_token')) {
+      const tokenPart = fullUrl.split('access_token')[1];
+      return new URLSearchParams('access_token' + tokenPart);
+    }
+    return null;
+  };
+
   useEffect(() => {
     const handleVerification = async () => {
       try {
-        const hash = window.location.hash;
-        const search = window.location.search;
-        
-        // Extract params from hash (Supabase default) or search
-        const params = new URLSearchParams(hash.substring(1) || search.substring(1));
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
-        const type = params.get('type');
-
-        console.log('[AuthVerify] Parsing URL...', { type, hasAccessToken: !!accessToken });
+        const params = getTokenParams();
+        const accessToken = params?.get('access_token');
+        const refreshToken = params?.get('refresh_token');
 
         if (accessToken) {
-          console.log('[AuthVerify] Attempting to set session...');
+          console.log('[AuthVerify] Valid token detected. Setting session...');
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || '',
@@ -34,10 +47,7 @@ const AuthVerify: React.FC = () => {
 
           if (sessionError) throw sessionError;
 
-          console.log('[AuthVerify] Verification successful. Redirecting to Login...');
-          
-          // Sign out locally to ensure user enters their PIN on the Login screen
-          // similar to native AuthDeepLinkHandler logic
+          console.log('[AuthVerify] Session established. Redirecting to Login...');
           await supabase.auth.signOut({ scope: 'local' });
           
           navigate('/login', { 
@@ -47,8 +57,7 @@ const AuthVerify: React.FC = () => {
           return;
         }
 
-        // Check for error params from Supabase
-        const supabaseError = params.get('error_description');
+        const supabaseError = params?.get('error_description');
         if (supabaseError) {
           setError(supabaseError.replace(/\+/g, ' '));
           return;
@@ -56,7 +65,7 @@ const AuthVerify: React.FC = () => {
 
         setError('No valid verification token found. Please request a new link.');
       } catch (err: any) {
-        console.error('[AuthVerify] Processing failed:', err);
+        console.error('[AuthVerify] Verification failed:', err);
         setError(err?.message || 'Verification failed. Please try again.');
       }
     };
@@ -66,54 +75,27 @@ const AuthVerify: React.FC = () => {
 
   return (
     <div style={{
-      minHeight: '100vh',
-      background: '#000000',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '24px',
+      minHeight: '100vh', background: '#000', display: 'flex',
+      flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px',
     }}>
       {!error ? (
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            border: '3px solid rgba(0,230,118,0.2)',
-            borderTop: '3px solid #00E676',
-            animation: 'spin 0.8s linear infinite',
-            margin: '0 auto 20px',
+            width: '40px', height: '40px', borderRadius: '50%', border: '3px solid rgba(0,230,118,0.2)',
+            borderTop: '3px solid #00E676', animation: 'spin 0.8s linear infinite', margin: '0 auto 20px',
           }}/>
-          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '14px' }}>
-            Activating your account...
-          </p>
+          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '14px' }}>Activating your account...</p>
         </div>
       ) : (
         <div style={{
-          background: 'rgba(239,68,68,0.08)',
-          border: '1px solid rgba(239,68,68,0.2)',
-          borderRadius: '20px',
-          padding: '24px',
-          textAlign: 'center',
-          maxWidth: '400px',
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+          borderRadius: '20px', padding: '24px', textAlign: 'center', maxWidth: '400px',
         }}>
           <div style={{ fontSize: '24px', marginBottom: '12px' }}>⚠️</div>
-          <p style={{ color: '#EF4444', fontWeight: '600', marginBottom: '20px' }}>
-            {error}
-          </p>
+          <p style={{ color: '#EF4444', fontWeight: '600', marginBottom: '20px' }}>{error}</p>
           <button 
             onClick={() => navigate('/login', { replace: true })}
-            style={{
-              width: '100%',
-              height: '48px',
-              background: '#00E676',
-              border: 'none',
-              borderRadius: '12px',
-              color: '#000',
-              fontWeight: '800',
-              cursor: 'pointer',
-            }}
+            style={{ width: '100%', height: '48px', background: '#00E676', border: 'none', borderRadius: '12px', color: '#000', fontWeight: '800', cursor: 'pointer' }}
           >
             Back to Login
           </button>
