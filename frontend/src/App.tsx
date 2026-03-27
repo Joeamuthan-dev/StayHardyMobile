@@ -50,6 +50,7 @@ import HomeDashboard from './pages/HomeDashboard';
 import Calendar from './pages/Calendar';
 import StayHardyUpdatesPage from './pages/StayHardyUpdatesPage';
 import WhyStayHardy from './pages/WhyStayHardy';
+import Paywall from './pages/Paywall';
 
 // Black screen fallback — matches app background
 const BlackScreen = () => (
@@ -88,7 +89,7 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
           onClick={() => setSidebarOpen(true)}
           style={{
             position: 'fixed',
-            top: '16px',
+            top: 'calc(env(safe-area-inset-top, 0px) + 16px)',
             left: '16px',
             zIndex: 1500,
             width: '40px',
@@ -186,7 +187,7 @@ const AdminRoute = () => {
 
 const AppCore: React.FC = () => {
   const navigate = useNavigate();
-  const { initAuth, initBiometric } = useAuth();
+  const { initAuth } = useAuth();
   const { initRevenueCat } = useSubscription();
   const [authReady, setAuthReady] = useState(false);
   
@@ -271,13 +272,12 @@ const AppCore: React.FC = () => {
       try {
         await initAuth();
         await initRevenueCat();
-        await initBiometric();
       } catch (err) {
         console.error('Core Initialization Failure:', err);
       }
     };
     initApp();
-  }, [initAuth, initBiometric, initRevenueCat]);
+  }, [initAuth, initRevenueCat]);
 
   // Don't render routes until auth state is known
   if (!authReady) {
@@ -307,6 +307,7 @@ const AppCore: React.FC = () => {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/forgot-pin" element={<ForgotPin />} />
           <Route path="/reset-pin" element={<ResetPin />} />
+          <Route path="/paywall" element={<Paywall />} />
           
           {/* Protected Hubs */}
           <Route element={<ProtectedRouteBase />}>

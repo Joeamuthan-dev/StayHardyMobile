@@ -378,8 +378,10 @@ const Dashboard: React.FC = () => {
         console.log('fetchTasks blocked — task creation in progress');
         return;
       }
-      const stale = await loadTasksListStale<Task>(user.id);
-      if (stale !== null) setTasks(stale as Task[]);
+      const cachedTasks = await loadTasksListStale<Task>(user.id);
+      if (cachedTasks !== null) {
+        setTasks(cachedTasks);
+      }
 
       const expired =
         options?.force ||
@@ -403,9 +405,10 @@ const Dashboard: React.FC = () => {
               }
             }
           }
-          return Array.from(map.values()) as Task[];
+          const mergedTasks = Array.from(map.values()) as Task[];
+          void persistTasksList(user.id, mergedTasks);
+          return mergedTasks;
         });
-        void persistTasksList(user.id, data as Task[]);
       }
     },
     [user?.id],
@@ -588,9 +591,11 @@ const Dashboard: React.FC = () => {
         image_url: previewUrl || undefined,
         updatedAt: new Date().toISOString(),
       };
-      setTasks(prev =>
-        prev.map(t => (t.id === editId ? { ...t, ...optimisticPatch } : t)),
-      );
+      setTasks(prev => {
+        const updated = prev.map(t => (t.id === editId ? { ...t, ...optimisticPatch } : t));
+        void persistTasksList(user.id, updated);
+        return updated;
+      });
 
       try {
         let finalImageUrl = snapshot.imageUrl;
@@ -634,11 +639,13 @@ const Dashboard: React.FC = () => {
           .eq('id', editId);
         if (updateError) throw updateError;
         if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
-        setTasks(prev =>
-          prev.map(t =>
+        setTasks(prev => {
+          const updated = prev.map(t =>
             t.id === editId ? { ...t, ...payload, image_url: finalImageUrl || undefined } : t,
-          ),
-        );
+          );
+          void persistTasksList(user.id, updated);
+          return updated;
+        });
         void invalidateUserStatsCache();
         triggerGlobalRefresh();
         void setTasks((prev) => {
@@ -783,14 +790,19 @@ const Dashboard: React.FC = () => {
   }, []);
 
   const toggleTaskStatus = async (task: Task) => {
-    const newStatus = task.status === 'pending' ? 'completed' : 'pending';
+    const newStatus: 'pending' | 'completed' = task.status === 'pending' ? 'completed' : 'pending';
 
     if (newStatus === 'completed') {
       scheduleTaskCompletionExit(task.id);
       showTopToast();
     }
 
-    setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, status: newStatus } : t)));
+    const nextTasks = tasks.map(t => (t.id === task.id ? { ...t, status: newStatus } : t));
+    setTasks(nextTasks);
+    if (user?.id) {
+      void persistTasksList(user.id, nextTasks);
+      void ProductivityService.recalculate(user.id);
+    }
 
     const online = await isOnline();
     if (!online && user?.id) {
@@ -888,7 +900,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className={`page-shell dashboard-page-layout ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ 
-      paddingTop: '64px',
+      paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)',
       paddingBottom: '120px', 
       background: '#000000', 
       minHeight: '100vh', 
@@ -903,7 +915,7 @@ const Dashboard: React.FC = () => {
         top: 0, 
         zIndex: 50, 
         background: '#000000', 
-        paddingTop: 'env(safe-area-inset-top, 20px)',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
         paddingBottom: '4px'
       }}>
         {/* GLASSMORPHIC HEADER */}

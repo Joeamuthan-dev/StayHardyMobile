@@ -8,7 +8,6 @@ export type CachedUserProfile = {
   user_name: string;
   user_email: string;
   user_avatar_url: string;
-  biometric_enabled?: boolean;
   push_notifications_enabled?: boolean;
   pro_member: boolean;
   theme?: string;
@@ -34,7 +33,7 @@ type AuthLike = {
 export async function saveUserProfileCache(
   user: AuthLike,
   extras?: Partial<
-    Pick<CachedUserProfile, 'biometric_enabled' | 'push_notifications_enabled' | 'theme' | 'timezone'>
+    Pick<CachedUserProfile, 'push_notifications_enabled' | 'theme' | 'timezone'>
   >,
 ): Promise<void> {
   const body: CachedUserProfile = {

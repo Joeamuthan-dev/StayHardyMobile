@@ -322,6 +322,53 @@ const Feedback: React.FC = () => {
       )}
 
 
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '16px 20px',
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}>
+        <button
+          onClick={() => navigate('/settings')}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24"
+            fill="none" stroke="white" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </button>
+
+        <span style={{
+          fontSize: '16px',
+          fontWeight: '700',
+          color: '#FFFFFF',
+          fontFamily: 'Syne, sans-serif'
+        }}>
+          SEND FEEDBACK
+        </span>
+
+        <div style={{ width: '40px' }} />
+      </div>
+
       <main className="fb-main">
         <div className="fb-card">
           {!showSuccess ? (

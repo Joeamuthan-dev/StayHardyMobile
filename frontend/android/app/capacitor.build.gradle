@@ -18,7 +18,6 @@ dependencies {
     implementation project(':capacitor-preferences')
     implementation project(':capacitor-push-notifications')
     implementation project(':capacitor-splash-screen')
-    implementation project(':capgo-capacitor-native-biometric')
     implementation project(':revenuecat-purchases-capacitor')
     implementation project(':revenuecat-purchases-capacitor-ui')
     implementation project(':capacitor-secure-storage-plugin')

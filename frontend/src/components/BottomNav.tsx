@@ -28,6 +28,7 @@ const triggerHapticHeavy = async () => {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { canAccessStatsAndRoutine, shouldShowLifetimeUpsell } from '../lib/lifetimeAccess';
 import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
 import { isAdminHubUser } from '../config/adminOwner';
@@ -83,7 +84,18 @@ const BottomNav: React.FC<{
   const location = useLocation();
   const { t } = useLanguage();
   const { logout, user } = useAuth();
-  const isPro = user?.isPro === true || user?.role === 'admin';
+  const { isPro: isSubscribed } = useSubscription();
+
+  // Read fast cache for instant role resolution
+  const isFastPro = React.useMemo(() => {
+    try {
+      return localStorage.getItem('cached_is_pro') === 'true';
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const isPro = isSubscribed || isFastPro || user?.isPro === true || user?.role === 'admin';
   const { settings: appSettings } = useAppSettings();
   const displayLifetimePrice = React.useMemo(() => {
     const p = appSettings.pro_price;
@@ -149,7 +161,7 @@ const BottomNav: React.FC<{
   const pathNorm = location.pathname.replace(/\/+$/, '') || '/';
   const hideFloatingShelfByRoute = pathNorm === '/settings' || pathNorm === '/lifetime-access';
 
-  const premium = canAccessStatsAndRoutine(user);
+  const premium = isPro || canAccessStatsAndRoutine(user);
   const upsell = shouldShowLifetimeUpsell(user);
 
   const desktopNavItems = React.useMemo(() => {
@@ -256,7 +268,7 @@ const BottomNav: React.FC<{
 
               {/* HABITS */}
               <div
-                onClick={() => navigate(isPro ? '/routine' : '/paywall')}
+                onClick={() => navigate('/routine')}
                 className="flex flex-col items-center gap-1 flex-1 cursor-pointer py-1 relative"
               >
                 {!isPro && (
@@ -342,7 +354,7 @@ const BottomNav: React.FC<{
 
               {/* STATS */}
               <div
-                onClick={() => navigate(isPro ? '/stats' : '/paywall')}
+                onClick={() => navigate('/stats')}
                 className="flex flex-col items-center gap-1 flex-1 cursor-pointer py-1 relative"
               >
                 {!isPro && (

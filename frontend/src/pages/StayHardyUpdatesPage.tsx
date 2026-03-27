@@ -73,7 +73,7 @@ const StayHardyUpdatesPage: React.FC = () => {
   const navigate = useNavigate();
   const [updates, setUpdates] = useState<UpdateRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSidebarHidden, setIsSidebarHidden] = useState(
+  const [isSidebarHidden] = useState(
     () => localStorage.getItem('sidebarHidden') === 'true'
   );
 
@@ -124,34 +124,52 @@ const StayHardyUpdatesPage: React.FC = () => {
   return (
     <div className={`page-shell updates-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
       <div className="updates-wrap">
-        <div className="updates-top">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="notification-btn desktop-only-btn"
-            title="Back"
-            style={{ width: 36, height: 36, minWidth: 36, opacity: 0.65 }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>arrow_back</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsSidebarHidden((prev) => {
-                const next = !prev;
-                localStorage.setItem('sidebarHidden', next.toString());
-                return next;
-              });
-            }}
-            className="notification-btn desktop-only-btn"
-            title="Sidebar"
-            style={{ width: 36, height: 36, minWidth: 36, opacity: 0.45 }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-              {isSidebarHidden ? 'side_navigation' : 'fullscreen'}
-            </span>
-          </button>
-        </div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '16px 20px',
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}>
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24"
+            fill="none" stroke="white" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+        </button>
+
+        <span style={{
+          fontSize: '16px',
+          fontWeight: '700',
+          color: '#FFFFFF',
+          fontFamily: 'Syne, sans-serif'
+        }}>
+          NEWS & UPDATES
+        </span>
+
+        <div style={{ width: '40px' }} />
+      </div>
         <h1 className="updates-title">STAYHARDY UPDATES</h1>
         <p className="updates-tagline">FEATURES · FIXES · NEWS</p>
 

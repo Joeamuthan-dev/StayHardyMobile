@@ -11,8 +11,8 @@ import { processSyncQueue } from '../lib/syncQueue';
 import { hashPin, padPinForAuth } from '../utils/pinUtils';
 
 const Login: React.FC = () => {
-  const { user, loading: authLoading, setCurrentUser, markLoginComplete } = useAuth();
-  const { setLoading: setGlobalLoading } = useLoading();
+  const { setCurrentUser, markLoginComplete } = useAuth();
+  const { setLoading: _setGlobalLoading } = useLoading(); void _setGlobalLoading;
   const navigate = useNavigate();
   
   const [email, setEmail] = useState('');
@@ -59,11 +59,18 @@ const Login: React.FC = () => {
   }, []);
 
   // Sync state with auth context
+  // If user somehow has valid session on login page
+  // redirect them to home
   useEffect(() => {
-    if (user && !authLoading) {
-      navigate('/home');
-    }
-  }, [user, authLoading, navigate]);
+    const checkSession = async () => {
+      const { data: { session } } =
+        await supabase.auth.getSession();
+      if (session) {
+        navigate('/home', { replace: true });
+      }
+    };
+    checkSession();
+  }, [navigate]);
 
   const handleResend = async () => {
     setIsResending(true);
@@ -177,78 +184,96 @@ const Login: React.FC = () => {
       }
 
       console.log('[Login] Success ✅', authData.user.email);
-
-      // Update public.users pin if null
-      // This fixes users who signed up but had NULL pin due to previous insert failures
       const cleanEmail = email.trim().toLowerCase();
-      try {
-        const { data: userRecord } = await supabase
-          .from('users')
-          .select('pin, id, name, is_pro, role, avatar_url')
-          .eq('email', cleanEmail)
-          .maybeSingle();
 
-        if (userRecord && !userRecord.pin) {
-          // PIN is null — fix it silently
-          const hashedPin = await hashPin(pin);
-          await supabase
-            .from('users')
-            .update({ pin: hashedPin })
-            .eq('id', userRecord.id);
-          console.log('[Login] Fixed NULL pin silently ✅');
-        }
+      // PART 1: OPTIMISTIC CONTEXT & NAV
+      // Set a minimal user object in context immediately using authData only
+      setCurrentUser({
+        id: authData.user.id,
+        email: cleanEmail,
+        name: authData.user.user_metadata?.name || cleanEmail.split('@')[0],
+        isPro: false,
+        role: 'user',
+        avatarUrl: null,
+      } as any);
+      markLoginComplete();
 
-        if (!userRecord) {
-          // Profile missing entirely — create it
-          const hashedPin = await hashPin(pin);
-          await supabase
+      // Navigate to home immediately
+      setIsLoading(false);
+      navigate('/home', { replace: true });
+
+      // PART 2: BACKGROUND SYNC (non-awaited async IIFE)
+      (async () => {
+        try {
+          // 1. Fetch user record from public.users
+          const { data: userRecord } = await supabase
             .from('users')
-            .insert({
+            .select('pin, id, name, is_pro, role, avatar_url')
+            .eq('email', cleanEmail)
+            .maybeSingle();
+
+          // 2. Fix NULL pin
+          if (userRecord && !userRecord.pin) {
+            const hashedPin = await hashPin(pin);
+            await supabase.from('users').update({ pin: hashedPin }).eq('id', userRecord.id);
+            console.log('[Login] Fixed NULL pin silently ✅');
+          }
+
+          // 3. Create missing profile
+          if (!userRecord) {
+            const hashedPin = await hashPin(pin);
+            await supabase.from('users').insert({
               id: authData.user.id,
               email: cleanEmail,
               name: authData.user.user_metadata?.name || 'Hardy Soldier',
               pin: hashedPin,
               created_at: new Date().toISOString(),
             });
-          console.log('[Login] Created missing profile ✅');
+            console.log('[Login] Created missing profile ✅');
+          }
+
+          // 4. Update context with definitive database data
+          const cleanUser = {
+            id: authData.user.id,
+            name: userRecord?.name || authData.user.user_metadata?.name || cleanEmail.split('@')[0],
+            email: cleanEmail,
+            isPro: userRecord?.is_pro === true,
+            role: userRecord?.role || 'user',
+            avatarUrl: userRecord?.avatar_url,
+          };
+
+          setCurrentUser(cleanUser as any);
+
+          // 5. Write multiple storage caches
+          await storage.set('cached_user_profile_' + cleanUser.id, JSON.stringify({
+            user_id: cleanUser.id,
+            user_name: cleanUser.name,
+            user_email: cleanUser.email,
+            user_avatar_url: cleanUser.avatarUrl,
+            pro_member: cleanUser.isPro,
+            role: cleanUser.role,
+            cached_at: Date.now(),
+          }));
+          await storage.set('cached_user_role_' + cleanUser.id, cleanUser.isPro ? 'pro' : 'basic');
+          localStorage.setItem('cached_user_id', cleanUser.id);
+          localStorage.setItem('cached_is_pro', String(cleanUser.isPro));
+
+          // 6. Clear pending verification & save session
+          await storage.remove('pending_verification_email');
+          await storage.set('user_session', cleanEmail);
+
+          // 7. Save remember me credentials
+          if (rememberMe) {
+            await SecureStoragePlugin.set({ key: 'saved_email', value: cleanEmail }).catch(() => {});
+            await SecureStoragePlugin.set({ key: 'saved_pin', value: pin }).catch(() => {});
+          }
+
+          // 8. Process sync queue
+          await processSyncQueue().catch(console.error);
+        } catch (err: any) {
+          console.error('[Login] Background profile sync failed:', err?.message);
         }
-
-        // Set auth context state using public.users data or user_metadata fallback
-        setGlobalLoading(true);
-        const cleanUser = {
-          id: authData.user.id,
-          name: userRecord?.name || authData.user.user_metadata?.name || cleanEmail.split('@')[0],
-          email: cleanEmail,
-          isPro: userRecord?.is_pro === true,
-          role: userRecord?.role || 'user',
-          avatarUrl: userRecord?.avatar_url,
-        };
-
-        setCurrentUser(cleanUser as any);
-        markLoginComplete();
-
-      } catch (profileErr: any) {
-        console.error('[Login] Profile fix error:', profileErr?.message);
-        // Non fatal — user is already authenticated in Supabase
-        // Still set context if possible
-        setCurrentUser({ id: authData.user.id, email: cleanEmail } as any);
-        markLoginComplete();
-      }
-
-      // Clear pending verification
-      await storage.remove('pending_verification_email');
-
-      // Save session
-      await storage.set('user_session', cleanEmail);
-
-      if (rememberMe) {
-        await SecureStoragePlugin.set({ key: 'saved_email', value: cleanEmail }).catch(() => {});
-        await SecureStoragePlugin.set({ key: 'saved_pin', value: pin }).catch(() => {});
-      }
-
-      await processSyncQueue().catch(console.error);
-      setIsLoading(false);
-      navigate('/home', { replace: true });
+      })();
 
     } catch (err: any) {
       console.error('[Login] Caught exception:', err?.message);

@@ -12,12 +12,22 @@ const PaywallContext = createContext<PaywallContextType | undefined>(undefined);
 export const PaywallProvider = ({ children }: { children: ReactNode }) => {
   const [isPaywallOpen, setPaywallOpen] = useState(false);
 
+  const openPaywall = async () => {
+    try {
+      setPaywallOpen(true);
+    } catch (err: any) {
+      console.warn('[PaywallContext] openPaywall error:', err?.message);
+    }
+  };
+
+  const closePaywall = () => setPaywallOpen(false);
+
   return (
     <PaywallContext.Provider 
       value={{ 
         isPaywallOpen, 
-        openPaywall: () => setPaywallOpen(true), 
-        closePaywall: () => setPaywallOpen(false) 
+        openPaywall, 
+        closePaywall 
       }}
     >
       {children}

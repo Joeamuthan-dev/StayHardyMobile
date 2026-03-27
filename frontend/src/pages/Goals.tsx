@@ -488,10 +488,10 @@ const Goals: React.FC = () => {
       try {
         if (justCreatedGoal.current) return;
 
-      const stale = await loadGoalsListStale<Goal>(user.id);
-      if (stale !== null) {
-        setGoals((stale as Goal[]).filter(g => g.status === 'pending'));
-        setCompletedGoalsCount((stale as Goal[]).filter(g => g.status === 'completed').length);
+      const cachedGoals = await loadGoalsListStale<Goal>(user.id);
+      if (cachedGoals !== null) {
+        setGoals(cachedGoals.filter(g => g.status === 'pending'));
+        setCompletedGoalsCount(cachedGoals.filter(g => g.status === 'completed').length);
       }
 
       const expired = options?.force || (await isCacheExpired(CACHE_KEYS.goals_list, CACHE_EXPIRY_MINUTES.goals_list));
@@ -508,9 +508,9 @@ const Goals: React.FC = () => {
         const active = (data as Goal[]).filter(g => (g.status as string) !== 'completed' && (g.status as string) !== 'done' && (g.status as string) !== 'achieved');
         const completed = (data as Goal[]).filter(g => (g.status as string) === 'completed' || (g.status as string) === 'done' || (g.status as string) === 'achieved');
         
+        await persistGoalsList(user.id, data as Goal[]);
         setGoals(active);
         setCompletedGoalsCount(completed.length);
-        void persistGoalsList(user.id, data as Goal[]);
       }
       } catch (err) {
         console.error('Error fetching goals:', err);
@@ -848,7 +848,7 @@ const Goals: React.FC = () => {
 
       {/* Pinned Header */}
       <div style={{
-        padding: '24px 16px 16px 72px',
+        padding: 'calc(env(safe-area-inset-top, 0px) + 24px) 16px 16px 72px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'flex-end', 

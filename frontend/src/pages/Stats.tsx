@@ -9,9 +9,8 @@ import { loadStatsPageStale, persistStatsPageCache } from '../lib/statsPageCache
 import { ProductivityService, type ProductivityScoreData } from '../lib/ProductivityService';
 import { calculateProductivityScore } from '../utils/productivity';
 import { loadTasksListStale, loadGoalsListStale, loadRoutinesRawStale, loadRoutineLogsListStale } from '../lib/listCaches';
-import { useSubscription } from '../context/SubscriptionContext';
 import { useLoading } from '../context/LoadingContext';
-import { FeatureGate } from '../components/FeatureGate';
+import ProBlurGate from '../components/ProBlurGate';
 
 interface Task {
   id: string;
@@ -529,7 +528,6 @@ const Stats: React.FC = () => {
   const [trendDays, setTrendDays] = useState(7);
   const { user } = useAuth();
   const { setLoading } = useLoading();
-  const { isPro } = useSubscription();
   const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
   const isMountedRef = useRef(true);
   useEffect(() => {
@@ -636,12 +634,14 @@ const Stats: React.FC = () => {
           loadTasksListStale<Task>(user.id),
           loadRoutinesRawStale<Routine>(user.id),
           loadRoutineLogsListStale<RoutineLog>(user.id),
-          loadGoalsListStale<Goal>(user.id)
-        ]).then(([t, r, l, g]) => {
+          loadGoalsListStale<Goal>(user.id),
+          ProductivityService.getStoredScore(user.id)
+        ]).then(([t, r, l, g, s]) => {
           if (t) setTasks(t);
           if (r) setRoutines(r);
           if (l) setRoutineLogs(l);
           if (g) setGoals(g);
+          if (s) setScoreData(s);
         });
       }
     };
@@ -840,7 +840,7 @@ const Stats: React.FC = () => {
   };
 
   return (
-    <FeatureGate moduleName="Stats" isPro={!!isPro}>
+    <ProBlurGate featureName="Stats">
       <div 
         className={`page-shell stats-premium-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} 
         style={{ 
@@ -977,7 +977,7 @@ const Stats: React.FC = () => {
           /* Add other specific stats styles if needed, though most are likely global or inline already */
         `}</style>
       </div>
-    </FeatureGate>
+    </ProBlurGate>
   );
 };
 

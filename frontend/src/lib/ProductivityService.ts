@@ -1,6 +1,7 @@
 import { loadTasksListStale, loadGoalsListStale, loadRoutinesRawStale, loadRoutineLogsListStale } from './listCaches';
 import { calculateProductivityScore } from '../utils/productivity';
 import { CacheManager } from './cacheManager';
+import { supabase } from '../supabase';
 
 export interface ProductivityScoreData {
   tasks_progress: number;
@@ -42,20 +43,34 @@ export class ProductivityService {
     const today = new Date();
     const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const currentDayName = daysOfWeek[today.getDay()];
-    // Get local timezone-safe string YYYY-MM-DD
     const localTodayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
-    // Only count routines scheduled for today
     const routinesToday = routines.filter((r: any) => r.days?.includes(currentDayName)).length;
     const logsToday = logs.filter((l: any) => l.completed_at === localTodayStr).length;
     const routinesProgress = routinesToday > 0 ? Math.round((logsToday / routinesToday) * 100) : 0;
 
-    // 4. Extract Final 50/30/20 Rating
-    const overallScore = calculateProductivityScore({
-      tasksProgress,
-      routinesProgress,
-      goalsProgress
-    });
+    // 4. Role-aware Score Calculation
+    // Fetch user role from Supabase users table
+    const { data: userData } = await supabase
+      .from('users')
+      .select('pro_member, email')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const isBasic = !userData?.pro_member && userData?.email !== import.meta.env.VITE_ADMIN_EMAIL;
+
+    let overallScore = 0;
+    if (isBasic) {
+      // Basic Logic: 50% Goals + 50% Tasks
+      overallScore = Math.round((goalsProgress * 0.5) + (tasksProgress * 0.5));
+    } else {
+      // Pro/Admin Logic: 50% Habits + 30% Goals + 20% Tasks
+      overallScore = calculateProductivityScore({
+        tasksProgress,
+        routinesProgress,
+        goalsProgress
+      });
+    }
 
     const scoreData: ProductivityScoreData = {
       tasks_progress: tasksProgress,
@@ -69,11 +84,22 @@ export class ProductivityService {
       goals_total: goalsTotal
     };
 
-    // 5. Save statically
-    await CacheManager.saveToCache('global_productivity_score', { user_id: userId, score: scoreData }, null);
+    // 5. Save to local cache manager (async)
+    void CacheManager.saveToCache('global_productivity_score', { user_id: userId, score: scoreData }, null);
 
-    // 6. Push event downstream instantly
+    // 6. Save to localStorage synchronously for instant retrieval on reload
+    localStorage.setItem('ps_score_' + userId, String(overallScore));
+    localStorage.setItem('ps_score_ts_' + userId, String(Date.now()));
+
+    // 7. Update Supabase users table for persistence across devices
+    void supabase
+      .from('users')
+      .update({ productivity_score: overallScore })
+      .eq('id', userId);
+
+    // 8. Push events downstream instantly
     window.dispatchEvent(new CustomEvent('productivity_sync', { detail: scoreData }));
+    window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
 
     return scoreData;
   }
@@ -82,6 +108,15 @@ export class ProductivityService {
    * Safe fetch for application mounts so UI instantly renders prior to background syncing.
    */
   static async getStoredScore(userId: string): Promise<ProductivityScoreData | null> {
+    // 1. Try localStorage first (fastest, survives reload)
+    try {
+      const local = localStorage.getItem('ps_score_' + userId);
+      if (local) return { overall_score: Number(local) } as ProductivityScoreData;
+    } catch (e) {
+      console.error('Error reading score from localStorage:', e);
+    }
+
+    // 2. Fallback to CacheManager
     const snap = await CacheManager.getStaleCache<{ user_id: string; score: ProductivityScoreData }>('global_productivity_score');
     if (snap?.user_id === userId && snap.score) {
       return snap.score;

@@ -4,9 +4,10 @@ import { BarChart2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { useLoading } from '../context/LoadingContext';
 import { storage } from '../utils/storage';
-// import { canAccessStatsAndRoutine } from '../lib/lifetimeAccess';
+// import { canAccessStats and Routine } from '../lib/lifetimeAccess';
 import { supabase } from '../supabase';
 import { calculateProductivityScore } from '../utils/productivity';
 import { syncWidgetData } from '../lib/syncWidgetData';
@@ -90,10 +91,10 @@ const HomeDashboard: React.FC = () => {
   }; void _getWelcomeGreeting;
   const navigate = useNavigate();
   const { user, refreshUserProfile } = useAuth();
+  const { isPro } = useSubscription();
   const { setLoading } = useLoading();
 
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [imgError, setImgError] = useState(false);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [routineLogs, setRoutineLogs] = useState<RoutineLog[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -104,33 +105,105 @@ const HomeDashboard: React.FC = () => {
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportGateReady, setSupportGateReady] = useState(false);
   const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [animatedScore, setAnimatedScore] = useState(0);
+  const animationRef = useRef<number | null>(null);
 
-  const hasCheckedAuth = useRef(false);
+  const authChecked = useRef(false);
+  const lastScoreUpdateTime = useRef(0);
 
   useEffect(() => {
-    if (hasCheckedAuth.current) return;
-    hasCheckedAuth.current = true;
+    if (authChecked.current) return;
+    authChecked.current = true;
 
-    const checkAuth = async () => {
-      // First check Preferences (instant)
-      const savedLogin = await storage.get('user_session');
-      if (savedLogin && savedLogin !== '') return; // already good
-
-      // Then check Supabase session
+    const verifyAuth = async () => {
+      // Check Supabase session first
       const { data: { session } } =
         await supabase.auth.getSession();
+
       if (!session) {
-        navigate('/login', { replace: true });
+        console.log('[Home] No session — redirecting to login');
+
+        // Also check local storage
+        const savedLogin =
+          await storage.get('user_session');
+
+        if (!savedLogin || savedLogin === '') {
+          navigate('/login', { replace: true });
+          return;
+        }
       }
     };
 
-    checkAuth();
+    verifyAuth();
   }, [navigate]);
+
+  useEffect(() => {
+    const { data: { subscription } } =
+      supabase.auth.onAuthStateChange(
+        (event, session) => {
+          console.log('[Home] Auth event:', event);
+
+          if (event === 'SIGNED_OUT' || !session) {
+            navigate('/login', { replace: true });
+          }
+        }
+      );
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
+    const fetchName = async () => {
+      // 1. FAST PATH: Check synchronous cache or context first
+      const fastProfile = (() => {
+        try {
+          const raw = localStorage.getItem('cached_profile_fast_' + user?.id);
+          return raw ? JSON.parse(raw) : null;
+        } catch { return null; }
+      })();
+
+      if (fastProfile?.user_name) {
+        setDisplayName(fastProfile.user_name.split(' ')[0]);
+      } else if (user?.name) {
+        setDisplayName(user.name.split(' ')[0]);
+      }
+
+      try {
+        const cachedRaw = await storage.get('cached_user_profile_' + user?.id);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached.user_name) {
+            setDisplayName(cached.user_name.split(' ')[0]);
+            return;
+          }
+        }
+      } catch (_) { }
+
+      // 2. BACKGROUND SYNC: Try fetching from public.users if fallback is needed
+      if (user?.email) {
+        const { data } = await supabase
+          .from('users')
+          .select('name')
+          .eq('email', user.email)
+          .maybeSingle();
+
+        if (data?.name) {
+          setDisplayName(data.name.split(' ')[0]);
+        } else if (!displayName) { // only set fallback if we didn't get it from cache/context
+          setDisplayName(
+            user.email.split('@')[0]
+          );
+        }
+      }
+    };
+    fetchName();
+  }, [user]);
 
   const fetchPendingHabits = useCallback(async () => {
     if (!user?.id) return;
     const today = new Date().toISOString().split('T')[0];
-    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const todayName = dayNames[new Date().getDay()];
 
     const { data: todayHabits } = await supabase
@@ -175,92 +248,95 @@ const HomeDashboard: React.FC = () => {
     setLoading(true);
     try {
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const startDayStr =
-      thirtyDaysAgo.getFullYear() +
-      '-' +
-      String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') +
-      '-' +
-      String(thirtyDaysAgo.getDate()).padStart(2, '0');
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDayStr =
+        thirtyDaysAgo.getFullYear() +
+        '-' +
+        String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') +
+        '-' +
+        String(thirtyDaysAgo.getDate()).padStart(2, '0');
 
-    const stTasks = await loadTasksListStale<Task>(user.id);
-    if (stTasks !== null) setTasks(stTasks as Task[]);
-    const stGoals = await loadGoalsListStale<Goal>(user.id);
-    if (stGoals !== null) setGoals(stGoals as Goal[]);
-    const stRoutines = await loadRoutinesRawStale<HomeRoutineRow>(user.id);
-    if (stRoutines !== null) setRoutines(stRoutines as Routine[]);
-    const stLogs = await loadRoutineLogsListStale<RoutineLog>(user.id);
-    if (stLogs) {
-      setRoutineLogs(stLogs.filter((l) => l.completed_at >= startDayStr));
-    }
+      const stTasks = await loadTasksListStale<Task>(user.id);
+      if (stTasks !== null) setTasks(stTasks as Task[]);
+      const stGoals = await loadGoalsListStale<Goal>(user.id);
+      if (stGoals !== null) setGoals(stGoals as Goal[]);
+      const stRoutines = await loadRoutinesRawStale<HomeRoutineRow>(user.id);
+      if (stRoutines !== null) setRoutines(stRoutines as Routine[]);
+      const stLogs = await loadRoutineLogsListStale<RoutineLog>(user.id);
+      if (stLogs) {
+        setRoutineLogs(stLogs.filter((l) => l.completed_at >= startDayStr));
+      }
 
-    const cachedScore = await ProductivityService.getStoredScore(user.id);
-    if (cachedScore) {
-      setScoreData(cachedScore);
-    }
+      const cachedScore = localStorage.getItem('ps_score_' + user.id);
+      if (cachedScore) {
+        setScoreData({ overall_score: Number(cachedScore) } as ProductivityScoreData);
+      } else {
+        const asyncScore = await ProductivityService.getStoredScore(user.id);
+        if (asyncScore) setScoreData(asyncScore);
+      }
 
-    const tasksExp = await isCacheExpired(CACHE_KEYS.tasks_list, CACHE_EXPIRY_MINUTES.tasks_list);
-    const routinesExp = await isCacheExpired(CACHE_KEYS.routines_list, CACHE_EXPIRY_MINUTES.routines_list);
-    const logsExp = await isCacheExpired(CACHE_KEYS.routine_logs_list, CACHE_EXPIRY_MINUTES.routines_list);
+      const tasksExp = await isCacheExpired(CACHE_KEYS.tasks_list, CACHE_EXPIRY_MINUTES.tasks_list);
+      const routinesExp = await isCacheExpired(CACHE_KEYS.routines_list, CACHE_EXPIRY_MINUTES.routines_list);
+      const logsExp = await isCacheExpired(CACHE_KEYS.routine_logs_list, CACHE_EXPIRY_MINUTES.routines_list);
 
-    const [tasksRes, routinesRes, logsRes, goalsRes] = await Promise.all([
-      tasksExp
-        ? supabase
+      const [tasksRes, routinesRes, logsRes, goalsRes] = await Promise.all([
+        tasksExp
+          ? supabase
             .from('tasks')
             .select('id, title, status, priority, createdAt, updatedAt, category')
             .eq('userId', user.id)
-        : Promise.resolve({ data: null, error: null }),
-      routinesExp
-        ? supabase.from('routines').select('id, title, days').eq('user_id', user.id)
-        : Promise.resolve({ data: null, error: null }),
-      logsExp
-        ? supabase
+          : Promise.resolve({ data: null, error: null }),
+        routinesExp
+          ? supabase.from('routines').select('id, title, days').eq('user_id', user.id)
+          : Promise.resolve({ data: null, error: null }),
+        logsExp
+          ? supabase
             .from('routine_logs')
             .select('routine_id, completed_at')
             .eq('user_id', user.id)
             .gte('completed_at', startDayStr)
-        : Promise.resolve({ data: null, error: null }),
-      supabase
-        .from('goals')
-        .select('id, name, status, targetDate, createdAt')
-        .eq('userId', user.id)
-        .order('createdAt', { ascending: false })
-    ]);
+          : Promise.resolve({ data: null, error: null }),
+        supabase
+          .from('goals')
+          .select('id, name, status, targetDate, createdAt')
+          .eq('userId', user.id)
+          .order('createdAt', { ascending: false })
+      ]);
 
-    if (tasksExp && tasksRes.data) {
-      const tasksData = tasksRes.data;
-      setTasks(tasksData as Task[]);
-      void persistTasksList(user.id, tasksData);
-    }
+      if (tasksExp && tasksRes.data) {
+        const tasksData = tasksRes.data;
+        setTasks(tasksData as Task[]);
+        void persistTasksList(user.id, tasksData);
+      }
 
-    if (routinesExp && routinesRes.data) {
-      const routinesData = routinesRes.data;
-      setRoutines(routinesData as Routine[]);
-      void persistRoutinesRaw(user.id, routinesData as HomeRoutineRow[]);
-    }
+      if (routinesExp && routinesRes.data) {
+        const routinesData = routinesRes.data;
+        setRoutines(routinesData as Routine[]);
+        void persistRoutinesRaw(user.id, routinesData as HomeRoutineRow[]);
+      }
 
-    if (logsExp && logsRes.data) {
-      const logsData = logsRes.data as RoutineLog[];
-      const asLogs = logsData.filter((l) => l.completed_at >= startDayStr);
-      setRoutineLogs(asLogs);
-      const mergedMap = new Map<string, RoutineLog>();
-      for (const l of stLogs ?? []) mergedMap.set(`${l.routine_id}|${l.completed_at}`, l);
-      for (const l of asLogs) mergedMap.set(`${l.routine_id}|${l.completed_at}`, l);
-      void persistRoutineLogsList(user.id, [...mergedMap.values()]);
-    }
+      if (logsExp && logsRes.data) {
+        const logsData = logsRes.data as RoutineLog[];
+        const asLogs = logsData.filter((l) => l.completed_at >= startDayStr);
+        setRoutineLogs(asLogs);
+        const mergedMap = new Map<string, RoutineLog>();
+        for (const l of stLogs ?? []) mergedMap.set(`${l.routine_id}|${l.completed_at}`, l);
+        for (const l of asLogs) mergedMap.set(`${l.routine_id}|${l.completed_at}`, l);
+        void persistRoutineLogsList(user.id, [...mergedMap.values()]);
+      }
 
-    if (goalsRes.error) console.error('Error fetching goals:', goalsRes.error);
-    if (goalsRes.data) {
-      const goalsData = goalsRes.data;
-      setGoals(goalsData as Goal[]);
-      void persistGoalsList(user.id, goalsData as Goal[]);
-    }
+      if (goalsRes.error) console.error('Error fetching goals:', goalsRes.error);
+      if (goalsRes.data) {
+        const goalsData = goalsRes.data;
+        setGoals(goalsData as Goal[]);
+        void persistGoalsList(user.id, goalsData as Goal[]);
+      }
 
-    void syncWidgetData();
+      void syncWidgetData();
     } catch (err) {
       console.error('Error fetching data:', err);
     } finally {
@@ -270,11 +346,28 @@ const HomeDashboard: React.FC = () => {
 
   useEffect(() => {
     const handleScoreUpdated = (e: any) => {
-      setScoreData(e.detail);
+      const data = e.detail;
+      const tsKey = 'productivity_score_ts_' + user?.id;
+      const incomingTs = parseInt(localStorage.getItem(tsKey) || '0');
+
+      if (incomingTs >= lastScoreUpdateTime.current) {
+        lastScoreUpdateTime.current = incomingTs;
+        setScoreData(data);
+      }
     };
+
+    const handleRefresh = () => {
+      fetchData();
+    };
+
     window.addEventListener('productivity_sync', handleScoreUpdated);
-    return () => window.removeEventListener('productivity_sync', handleScoreUpdated);
-  }, []);
+    window.addEventListener('stayhardy_refresh', handleRefresh);
+
+    return () => {
+      window.removeEventListener('productivity_sync', handleScoreUpdated);
+      window.removeEventListener('stayhardy_refresh', handleRefresh);
+    };
+  }, [user?.id, fetchData]);
 
   useEffect(() => {
     fetchData();
@@ -283,11 +376,11 @@ const HomeDashboard: React.FC = () => {
 
     const goalsChannel = supabase
       .channel('home_goals_changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'goals', 
-        filter: `userId=eq.${user.id}` 
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'goals',
+        filter: `userId=eq.${user.id}`
       }, () => void fetchData())
       .subscribe();
 
@@ -386,11 +479,11 @@ const HomeDashboard: React.FC = () => {
   // Productivity Chart Data
   // Use DB calculated scores with client-side fallback
   const tasksProgress = scoreData?.tasks_progress ?? (tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100) : 0);
-  
+
   const routinesProgress = scoreData?.routines_progress ?? (activeRoutinesTodayCount > 0 ? Math.round((completedRoutinesToday / activeRoutinesTodayCount) * 100) : 0);
 
-  const avgGoalProgress = scoreData?.goals_progress ?? (goals.length > 0 
-    ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / goals.length) 
+  const avgGoalProgress = scoreData?.goals_progress ?? (goals.length > 0
+    ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / goals.length)
     : 0);
 
   const overallProgress = scoreData?.overall_score ?? calculateProductivityScore({
@@ -398,6 +491,58 @@ const HomeDashboard: React.FC = () => {
     routinesProgress,
     goalsProgress: avgGoalProgress
   });
+
+  const todayKey = `ps_delta_${localTodayStr}_${user?.id}`;
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayStr = new Date(yesterdayDate.getTime() - (yesterdayDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+  const yesterdayKey = `ps_delta_${yesterdayStr}_${user?.id}`;
+
+  // Save today's score
+  if (overallProgress > 0) {
+    localStorage.setItem(todayKey, String(overallProgress));
+  }
+
+  // Read yesterday's score
+  const yesterdayScore = parseInt(localStorage.getItem(yesterdayKey) || '', 10);
+  const scoreDelta = !isNaN(yesterdayScore) ? overallProgress - yesterdayScore : null;
+
+  useEffect(() => {
+    if (overallProgress === 0) {
+      setAnimatedScore(0);
+      return;
+    }
+    const startTime = performance.now();
+    const startValue = animatedScore;
+    const endValue = Math.max(0, Math.min(100, overallProgress));
+    const duration = 1200;
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easedProgress = easeOutCubic(progress);
+      const currentValue = Math.round(
+        startValue + (endValue - startValue) * easedProgress
+      );
+      setAnimatedScore(currentValue);
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [overallProgress]);
 
   // Dynamic data for 5% intervals
   const progressIntervals = [
@@ -441,12 +586,6 @@ const HomeDashboard: React.FC = () => {
   const _streakSubtext =
     currentStreak <= 10 ? 'Building the habit ⚡' : currentStreak <= 30 ? 'Momentum locked in ⚡' : 'Unstoppable rhythm ⚡'; void _streakSubtext;
 
-  const displayFirstName = useMemo(() => {
-    const raw = (user?.name?.split(' ')[0] || 'Operator');
-    const capped = raw.length > 12 ? raw.slice(0, 12) : raw;
-    if (capped.length === 0) return capped;
-    return capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
-  }, [user?.name]);
 
   useEffect(() => {
     ensureFirstOpenDate();
@@ -500,7 +639,7 @@ const HomeDashboard: React.FC = () => {
     const dates = [...new Set(logs.map(l => l.completed_at))].sort();
     let best = 1, current = 1;
     for (let i = 1; i < dates.length; i++) {
-      const prev = new Date(dates[i-1]);
+      const prev = new Date(dates[i - 1]);
       const curr = new Date(dates[i]);
       const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
       if (diff === 1) { current++; best = Math.max(best, current); } else { current = 1; }
@@ -533,61 +672,6 @@ const HomeDashboard: React.FC = () => {
   const activeGoalsCount = useMemo(() => goals.filter(g => g.status === 'pending').length, [goals]);
   const completedGoalsCount = useMemo(() => goals.filter(g => g.status === 'completed').length, [goals]);
 
-  const pendingCount = pendingTasks.length || 0;
-
-  const sections = [
-    {
-      label: 'Tasks',
-      leftStat: { icon: '📋', label: 'To Do', value: `${pendingCount} Tasks` },
-      rightStat: { icon: '✓', label: 'Done', value: `${completedTasksTotal} Tasks` }
-    },
-    {
-      label: 'Goals',
-      leftStat: { icon: '🎯', label: 'Active', value: `${activeGoalsCount} Goals` },
-      rightStat: { icon: '🏆', label: 'Done', value: `${completedGoalsCount} Goals` }
-    },
-    {
-      label: 'Habits',
-      leftStat: { icon: '🔄', label: 'Today', value: `${completedRoutinesToday}/${activeRoutinesTodayCount}` },
-      rightStat: { icon: '🔥', label: 'Streak', value: `${currentStreak} Days` }
-    }
-  ];
-
-  const currentSection = sections[activeSection];
-
-  const AnimatedAvatar = () => (
-    <div style={{
-      width: '36px',
-      height: '36px',
-      minWidth: '36px',
-      minHeight: '36px',
-      borderRadius: '50%',
-      background: '#1a1a2e',
-      border: '2px solid #000',
-      overflow: 'hidden',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      position: 'relative',
-      animation: 'bobHead 2s ease-in-out infinite'
-    }}>
-      <svg viewBox="0 0 36 36" width="36" height="36">
-        <circle cx="18" cy="13" r="7" fill="#FBBF24"/>
-        <ellipse cx="18" cy="8" rx="7" ry="4" fill="#92400E"/>
-        <circle cx="15" cy="13" r="1.2" fill="#1F2937"/>
-        <circle cx="21" cy="13" r="1.2" fill="#1F2937"/>
-        <path d="M15 16.5 Q18 18.5 21 16.5" stroke="#1F2937" strokeWidth="1" fill="none" strokeLinecap="round"/>
-        <ellipse cx="18" cy="28" rx="8" ry="6" fill="#3B82F6"/>
-      </svg>
-      <style>{`
-        @keyframes bobHead {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-1px); }
-        }
-      `}</style>
-    </div>
-  );
-
   const HeroFire = () => (
     <>
       <style>{`
@@ -610,10 +694,11 @@ const HomeDashboard: React.FC = () => {
   );
 
   const pendingHabitsToday = pendingHabitsCount;
-  const isPro = user?.isPro === true || user?.role === 'admin';
+  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+  const isProUser = !!isPro || isAdmin;
 
   return (
-    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: '110px', paddingBottom: '140px', overflowY: 'auto' }}>
+    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)', paddingBottom: '140px', overflowY: 'auto' }}>
       <style>{`
         .light-card::before {
           content: '';
@@ -621,9 +706,6 @@ const HomeDashboard: React.FC = () => {
           inset: 0;
           background: radial-gradient(circle at 70% 30%, rgba(0,232,122,0.15) 0%, transparent 60%), radial-gradient(circle at 20% 80%, rgba(99,102,241,0.1) 0%, transparent 50%);
           pointer-events: none;
-        }
-        .green-card {
-          background: radial-gradient(circle at 80% 20%, rgba(255,255,255,0.3) 0%, transparent 50%), #CCFF00 !important;
         }
       `}</style>
 
@@ -636,69 +718,148 @@ const HomeDashboard: React.FC = () => {
         position: 'relative',
         minHeight: 'fit-content'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#000000' }} />
-            <span style={{ fontSize: '13px', fontWeight: 600, color: '#000000', opacity: 0.6 }}>Overview</span>
-          </div>
-        </div>
+        {/* Greeting row — Hello + Avatar + Name inline */}
+        <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: '16px' }}>
 
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '10px', 
-          marginBottom: '8px',
-          flexWrap: 'nowrap',
-          overflow: 'hidden'
-        }}>
-          <span style={{ 
-            fontSize: 'max(24px, min(32px, 8vw))', 
-            fontWeight: 800, 
-            color: '#000000', 
-            letterSpacing: '-1px',
-            whiteSpace: 'nowrap'
-          }}>Hello</span>
-          <span style={{ 
-            fontSize: 'max(24px, min(32px, 8vw))', 
-            fontWeight: 800, 
-            color: '#000000', 
-            letterSpacing: '-1px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }}>{displayFirstName}!</span>
-          <button type="button" onClick={() => navigate('/settings')} style={{ padding: 0, border: 'none', background: 'transparent', cursor: 'pointer', flexShrink: 0 }}>
-            {user?.avatarUrl && !imgError ? (
-              <img 
-                src={user.avatarUrl} 
-                alt="" 
+          {/* Hello text */}
+          <span style={{
+            fontSize: '28px',
+            fontWeight: '900',
+            color: '#000000',
+            lineHeight: 1.1,
+          }}>
+            Hello
+          </span>
+
+          {/* Avatar — between Hello and name */}
+          <button
+            onClick={() => navigate('/settings')}
+            className="flex-shrink-0
+                       active:scale-90
+                       transition-transform duration-150"
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              overflow: 'hidden',
+              border: '2px solid rgba(0,0,0,0.1)',
+              backgroundColor: 'rgba(0,0,0,0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              padding: 0,
+              background: 'none',
+            }}
+          >
+            {user?.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt="Profile"
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  minWidth: '36px',
-                  minHeight: '36px',
-                  borderRadius: '50%',
+                  width: '100%',
+                  height: '100%',
                   objectFit: 'cover',
-                  border: '2px solid #000',
-                  flexShrink: 0,
-                  display: 'block'
-                }}
-                onError={(e: any) => {
-                  e.target.style.display = 'none';
-                  setImgError(true);
+                  borderRadius: '50%',
                 }}
               />
             ) : (
-              <AnimatedAvatar />
+              /* Default avatar — person silhouette */
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                style={{ width: '20px', height: '20px' }}
+              >
+                <circle
+                  cx="12" cy="8" r="4"
+                  fill="rgba(0,0,0,0.3)"
+                />
+                <path
+                  d="M4 20c0-4 3.6-7 8-7s8 3 8 7"
+                  stroke="rgba(0,0,0,0.3)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
             )}
           </button>
+
+          {/* Name — truncated to 12 chars max */}
+          <span style={{
+            fontSize: '28px',
+            fontWeight: '900',
+            color: '#000000',
+            lineHeight: 1.1,
+            maxWidth: '200px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {displayName.length > 12
+              ? displayName.substring(0, 12) + '...'
+              : displayName || 'Soldier'
+            }
+          </span>
         </div>
 
         <div style={{ fontSize: '24px', fontWeight: 700, color: '#000000', lineHeight: 1.3, marginBottom: '20px', letterSpacing: '-0.5px' }}>
-          {pendingHabitsToday > 0 ? (
-            <>You have <span onClick={() => navigate('/routine')} style={{ fontWeight: '900', color: '#000000', textDecoration: 'underline', textDecorationStyle: 'dotted', cursor: 'pointer' }}>{pendingHabitsToday} habits</span> due today</>
+          {/* Role-based greeting subtitle */}
+          {isProUser ? (
+            // PRO + ADMIN: show habits pending
+            <span>
+              {pendingHabitsToday > 0 ? (
+                <>
+                  You have{' '}
+                  <span
+                    onClick={() => navigate('/routine')}
+                    style={{
+                      fontWeight: '900',
+                      color: '#000000',
+                      textDecoration: 'underline',
+                      textDecorationStyle: 'dotted',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {pendingHabitsToday}{' '}
+                    {pendingHabitsToday === 1
+                      ? 'habit'
+                      : 'habits'
+                    }
+                  </span>
+                  {' '}due today
+                </>
+              ) : (
+                "You're all caught up today 🎉"
+              )}
+            </span>
           ) : (
-            <>You're all <span style={{ fontWeight: '900' }}>caught up</span> today 🎉</>
+            // BASIC USER: show tasks pending instead
+            <span>
+              {pendingTasks.length > 0 ? (
+                <>
+                  You have{' '}
+                  <span
+                    onClick={() => navigate('/dashboard')}
+                    style={{
+                      fontWeight: '900',
+                      color: '#000000',
+                      textDecoration: 'underline',
+                      textDecorationStyle: 'dotted',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {pendingTasks.length}{' '}
+                    {pendingTasks.length === 1
+                      ? 'task'
+                      : 'tasks'
+                    }
+                  </span>
+                  {' '}pending today
+                </>
+              ) : (
+                "You're all caught up today 🎉"
+              )}
+            </span>
           )}
         </div>
 
@@ -717,106 +878,211 @@ const HomeDashboard: React.FC = () => {
         </div>
       </section>
 
-      {/* SECTION 2 — DAILY PROGRESS CARD */}
-      <section className="green-card" style={{
+      {/* SECTION 2 — DAILY PROGRESS CARD (Productivity Score) */}
+      <section style={{
         margin: '0 16px 12px 16px',
+        background: '#D6FF2E',
         borderRadius: '24px',
-        padding: '24px',
+        padding: '20px',
         position: 'relative',
-        minHeight: 'fit-content'
+        overflow: 'hidden',
+        boxShadow: '0 8px 32px rgba(214,255,46,0.35), 0 2px 8px rgba(0,0,0,0.3)',
+        border: '1px solid rgba(255,255,255,0.2)'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <span style={{ fontSize: '42px', fontWeight: 900, color: '#000000', letterSpacing: '-2px', lineHeight: 1 }}>{Math.max(0, Math.min(100, overallProgress))}%</span>
-            {overallProgress > 0 && <span style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '10px', padding: '2px 8px', fontSize: '10px', fontWeight: 700, color: '#00', marginLeft: '8px' }}>+5%</span>}
-          </div>
-          <button onClick={() => navigate('/stats')} style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', flexShrink: 0 }}>
-            <BarChart2 size={18} color="#CCFF00" strokeWidth={2.5} />
-          </button>
-        </div>
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* Top HUD Row */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+          }}>
+            {/* Left: Score + delta + label */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+              {/* Score row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{
+                  fontFamily: 'Syne, sans-serif',
+                  fontWeight: '800',
+                  fontSize: '56px',
+                  color: '#000000',
+                  letterSpacing: '-2px',
+                  lineHeight: '1',
+                  display: 'inline-block',
+                }}>
+                  {animatedScore}%
+                </span>
 
-        <div style={{ fontSize: '13px', fontWeight: 600, color: 'rgba(0,0,0,0.55)', marginBottom: '16px' }}>Productivity Score</div>
+                {/* Delta pill */}
+                {animatedScore > 0 && scoreDelta !== null && (
+                  <span style={{
+                    background: scoreDelta > 0 ? 'rgba(0,180,0,0.18)' : scoreDelta < 0 ? 'rgba(220,0,0,0.14)' : 'rgba(0,0,0,0.14)',
+                    color: scoreDelta > 0 ? '#00C853' : scoreDelta < 0 ? '#FF3B30' : '#000000',
+                    padding: '5px 10px',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    fontFamily: 'Syne, sans-serif',
+                    letterSpacing: '0.02em',
+                    border: '1px solid rgba(0,0,0,0.08)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}>
+                    {scoreDelta > 0 ? `+${scoreDelta}%` : `${scoreDelta}%`}
+                  </span>
+                )}
+              </div>
 
-        {/* CYCLING GROUPS ROW */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '14px', fontWeight: '700', color: '#00' }}>{currentSection.label}</span>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <button onClick={() => setActiveSection((activeSection - 1 + 3) % 3)} style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '1.5px solid rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#000000', fontSize: '16px', fontWeight: '900' }}>‹</button>
-            <button onClick={() => setActiveSection((activeSection + 1) % 3)} style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '1.5px solid rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#000000', fontSize: '16px', fontWeight: '900' }}>›</button>
+              {/* Label */}
+              <span style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: 'rgba(0,0,0,0.55)',
+                fontFamily: 'Syne, sans-serif',
+                letterSpacing: '0.01em',
+                marginTop: '4px',
+              }}>
+                Productivity Score
+              </span>
+            </div>
+
+            {/* Right: Chart icon */}
+            <div
+              onClick={() => navigate('/stats')}
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: '#D6FF2E',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '2px solid rgba(0,0,0,0.12)',
+                color: '#000000',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                flexShrink: 0,
+                cursor: 'pointer'
+              }}
+            >
+              <BarChart2 size={22} strokeWidth={2.5} />
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{ width: '5px', height: '5px', borderRadius: '50%', background: i === activeSection ? '#000' : 'rgba(0,0,0,0.25)' }} />
+
+          {/* Navigation controls (arrows + dots) */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            marginBottom: '12px'
+          }}>
+            {/* Left Arrow */}
+            <button
+              onClick={() => setActiveSection(prev => (prev === 0 ? 2 : prev - 1))}
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.15)',
+                border: '1px solid rgba(0,0,0,0.1)',
+                color: '#000000',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+            </button>
+
+            {/* Dots */}
+            {[0, 1, 2].map(idx => (
+              <div
+                key={idx}
+                style={{
+                  width: activeSection === idx ? '6px' : '5px',
+                  height: activeSection === idx ? '6px' : '5px',
+                  borderRadius: '50%',
+                  background: activeSection === idx ? '#000000' : 'rgba(0,0,0,0.25)',
+                  transition: 'all 0.2s'
+                }}
+              />
             ))}
+
+            {/* Right Arrow */}
+            <button
+              onClick={() => setActiveSection(prev => (prev === 2 ? 0 : prev + 1))}
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.15)',
+                border: '1px solid rgba(0,0,0,0.1)',
+                color: '#000000',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          </div>
+
+          {/* Sub-cards Row */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {activeSection === 0 && (
+              <>
+                {/* TO DO (Tasks) */}
+                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>To Do</div>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{pendingTasks.length}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>tasks pending</div>
+                </div>
+                {/* DONE (Tasks) */}
+                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Done</div>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{completedTasksTotal}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>completed today</div>
+                </div>
+              </>
+            )}
+
+            {activeSection === 1 && (
+              <>
+                {/* ACTIVE (Goals) */}
+                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Active</div>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{activeGoalsCount}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>goals in progress</div>
+                </div>
+                {/* DONE (Goals) */}
+                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Done</div>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{completedGoalsCount}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>achieved 🏆</div>
+                </div>
+              </>
+            )}
+
+            {activeSection === 2 && (
+              <>
+                {/* TODAY (Habits) */}
+                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Today</div>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{completedHabitsTodayFresh}/{totalHabitsTodayFresh}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>habits done</div>
+                </div>
+                {/* BEST STREAK (Habits) */}
+                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Best Streak</div>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{bestStreakDays}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>days record</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
-
-        {activeSection === 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%', marginTop: '8px' }}>
-            {/* TO DO */}
-            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.5)" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
-                <span style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>To Do</span>
-              </div>
-              <span style={{ fontSize: '28px', fontWeight: '900', color: '#000000', lineHeight: 1 }}>{pendingTasks.length}</span>
-              <span style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', fontWeight: '500' }}>tasks pending</span>
-            </div>
-            {/* DONE */}
-            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.5)" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-                <span style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Done</span>
-              </div>
-              <span style={{ fontSize: '28px', fontWeight: '900', color: '#000000', lineHeight: 1 }}>{completedTasksTotal}</span>
-              <span style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', fontWeight: '500' }}>completed today</span>
-            </div>
-          </div>
-        )}
-
-        {activeSection === 1 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%', marginTop: '8px' }}>
-            {/* ACTIVE */}
-            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Active</div>
-              <div style={{ fontSize: '28px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{activeGoalsCount}</div>
-              <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', marginTop: '4px' }}>in progress</div>
-            </div>
-            {/* DONE */}
-            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '6px' }}>Done</div>
-              <div style={{ fontSize: '28px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{completedGoalsCount}</div>
-              <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', marginTop: '4px' }}>achieved 🏆</div>
-            </div>
-          </div>
-        )}
-
-        {activeSection === 2 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%', marginTop: '8px' }}>
-            {/* TODAY — Circular Progress */}
-            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Today</div>
-              <div style={{ position: 'relative', width: '56px', height: '56px' }}>
-                <svg width="56" height="56" viewBox="0 0 56 56">
-                  <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="4"/>
-                  <circle cx="28" cy="28" r="22" fill="none" stroke="#000000" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${2 * Math.PI * 22}`} strokeDashoffset={`${2 * Math.PI * 22 * (1 - (totalHabitsTodayFresh > 0 ? completedHabitsTodayFresh / totalHabitsTodayFresh : 0))}`} transform="rotate(-90 28 28)" style={{ transition: 'stroke-dashoffset 0.5s ease' }}/>
-                </svg>
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{completedHabitsTodayFresh}</span>
-                  <span style={{ fontSize: '8px', color: 'rgba(0,0,0,0.4)', fontWeight: '600' }}>/{totalHabitsTodayFresh}</span>
-                </div>
-              </div>
-              <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)', textAlign: 'center' }}>habits done</div>
-            </div>
-            {/* BEST STREAK */}
-            <div style={{ background: 'rgba(0,0,0,0.1)', borderRadius: '14px', padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-              <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.45)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Best Streak</div>
-              <div style={{ fontSize: '32px', lineHeight: 1, filter: 'hue-rotate(100deg) drop-shadow(0 0 4px rgba(0,200,100,0.6))' }}>🔥</div>
-              <div style={{ fontSize: '24px', fontWeight: '900', color: '#00', lineHeight: 1 }}>{bestStreakDays}</div>
-              <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.4)' }}>days record</div>
-            </div>
-          </div>
-        )}
       </section>
 
       {/* SECTION 3 — SMOOTH LINE CHART activity-card */}
@@ -848,9 +1114,9 @@ const HomeDashboard: React.FC = () => {
           <div style={{ position: 'relative' }}>
             {/* Card Content */}
             <div style={{
-              filter: !isPro ? 'blur(6px)' : 'none',
-              pointerEvents: !isPro ? 'none' : 'auto',
-              userSelect: !isPro ? 'none' : 'auto',
+              filter: !isProUser ? 'blur(6px)' : 'none',
+              pointerEvents: !isProUser ? 'none' : 'auto',
+              userSelect: !isProUser ? 'none' : 'auto',
               transition: 'filter 0.3s ease'
             }}>
               <section style={{
@@ -904,7 +1170,7 @@ const HomeDashboard: React.FC = () => {
             </div>
 
             {/* Premium Overlay for non-pro */}
-            {!isPro && (
+            {!isProUser && (
               <div style={{
                 position: 'absolute',
                 inset: '0 16px 10px 16px',
@@ -919,12 +1185,12 @@ const HomeDashboard: React.FC = () => {
               }}>
                 <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                 </div>
-                <p style={{ fontSize: '13px', fontWeight: '700', color: '#FFFFFF', margin: 0, textAlign: 'center' }}>Premium Feature</p>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0, textAlign: 'center', padding: '0 20px' }}>Upgrade to see habit activity</p>
-                <div onClick={() => navigate('/lifetime-access')} style={{ background: '#00E87A', color: '#000', fontSize: '11px', fontWeight: '800', padding: '7px 18px', borderRadius: '20px', cursor: 'pointer', letterSpacing: '0.06em' }}>
+                <p style={{ fontSize: '13px', fontWeight: '700', color: '#FFFFFF', margin: 0, textAlign: 'center' }}>💀 Blind spots kill progress</p>
+                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0, textAlign: 'center', padding: '0 20px' }}>Go Pro. See everything.</p>
+                <div onClick={() => navigate('/paywall')} style={{ background: '#00E87A', color: '#000', fontSize: '11px', fontWeight: '800', padding: '7px 18px', borderRadius: '20px', cursor: 'pointer', letterSpacing: '0.06em' }}>
                   UPGRADE →
                 </div>
               </div>

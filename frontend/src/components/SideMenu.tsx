@@ -2,35 +2,92 @@
 import React, { useEffect, useState } from 'react';
 import {
   Home, CheckSquare, Target, Calendar,
-  RefreshCw, BarChart2, User, X, LogOut
+  RefreshCw, BarChart2, X, LogOut,
+  ChevronRight
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import { supabase } from '../supabase';
-import { isNative } from '../utils/platform';
+import { storage } from '../utils/storage';
+
+// Read cached profile synchronously before any useEffect
+const getCachedProfile = () => {
+  try {
+    const userId = localStorage.getItem('cached_user_id');
+    if (!userId) return null;
+    const raw = localStorage.getItem('cached_profile_fast_' + userId);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
 
 interface SideMenuProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const triggerHaptic = async (style = 'Light') => {
-  if (!isNative) return;
-  try {
-    const { Haptics, ImpactStyle } = await import('@capacitor/haptics');
-    await Haptics.impact({ 
-      style: style === 'Medium' ? ImpactStyle.Medium : ImpactStyle.Light 
-    });
-  } catch {
-    // silent fail
+const getMembershipBadge = (
+  userEmail: string | undefined,
+  isPro: boolean
+): { label: string; style: React.CSSProperties } => {
+  const isAdmin = userEmail === import.meta.env.VITE_ADMIN_EMAIL;
+
+  if (isAdmin) {
+    return {
+      label: 'ADMIN',
+      style: {
+        padding: '2px 8px',
+        borderRadius: '6px',
+        fontSize: '9px',
+        fontWeight: '800',
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase' as const,
+        border: '1px solid rgba(245,158,11,0.3)',
+        background: 'rgba(245,158,11,0.15)',
+        color: '#F59E0B',
+      },
+    };
   }
+  if (isPro) {
+    return {
+      label: 'PRO',
+      style: {
+        padding: '2px 8px',
+        borderRadius: '6px',
+        fontSize: '9px',
+        fontWeight: '800',
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase' as const,
+        border: '1px solid rgba(0,230,118,0.3)',
+        background: 'rgba(0,230,118,0.15)',
+        color: '#00E676',
+      },
+    };
+  }
+  return {
+    label: 'BASIC',
+    style: {
+      padding: '2px 8px',
+      borderRadius: '6px',
+      fontSize: '9px',
+      fontWeight: '800',
+      letterSpacing: '0.12em',
+      textTransform: 'uppercase' as const,
+      border: '1px solid rgba(255,255,255,0.1)',
+      background: 'rgba(255,255,255,0.05)',
+      color: 'rgba(255,255,255,0.4)',
+    },
+  };
 };
 
 export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
-  
+  const { user } = useAuth();
+  const { isPro } = useSubscription();
+
   const [userRole, setUserRole] = useState<'admin' | 'pro' | 'basic'>('basic');
 
   useEffect(() => {
@@ -41,7 +98,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
       const email = session.user.email || '';
 
       // Admin check
-      if (email === 'joeamuthan2@gmail.com') {
+      if (email === import.meta.env.VITE_ADMIN_EMAIL) {
         setUserRole('admin');
         return;
       }
@@ -50,8 +107,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
       try {
         const { Purchases } = await import('@revenuecat/purchases-capacitor');
         const customerInfo = await Purchases.getCustomerInfo();
-        const isPro = customerInfo.customerInfo.entitlements.active['pro'] !== undefined;
-        setUserRole(isPro ? 'pro' : 'basic');
+        const isProMember = customerInfo.customerInfo.entitlements.active['StayHardy Pro'] !== undefined;
+        setUserRole(isProMember ? 'pro' : 'basic');
       } catch {
         // Fallback
         const role = session.user.user_metadata?.role || 'basic';
@@ -62,14 +119,68 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
     detectRole();
   }, []);
 
-  const isProUser = userRole === 'pro' || userRole === 'admin';
+  const isProUserFromState = userRole === 'pro' || userRole === 'admin' || isPro;
+  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+  const isProUser = isPro || isAdmin;
+
+
+  const [localProfile, setLocalProfile] = useState(getCachedProfile);
+
+  // Map userProfile for the surgical redesign snippet
+  const userProfile = {
+    user_id: user?.id,
+    user_email: user?.email,
+    user_name: user?.name,
+    user_avatar_url: user?.avatarUrl,
+    pro_member: isProUserFromState
+  };
+
+  useEffect(() => {
+    if (userProfile && userProfile.user_id) {
+      setLocalProfile(userProfile);
+      // Write fast cache for next render
+      const userId = userProfile.user_id;
+      if (userId) {
+        localStorage.setItem('cached_user_id', userId);
+        localStorage.setItem(
+          'cached_profile_fast_' + userId,
+          JSON.stringify(userProfile)
+        );
+      }
+    }
+  }, [userProfile.user_id, userProfile.user_name, userProfile.pro_member, userProfile.user_avatar_url]);
+
+  // Use localProfile for rendering (falls back to userProfile)
+  const displayProfile = localProfile || userProfile;
 
   const handleLogout = async () => {
-    await triggerHaptic('Light');
-    onClose();
-    setTimeout(() => {
-      logout();
-    }, 300);
+    try {
+      console.log('[Logout] Starting logout...');
+      onClose();
+
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[Logout] Supabase signOut error:', error.message);
+      }
+
+      await storage.remove('user_session');
+      await storage.remove('pending_verification_email');
+      await storage.remove('onboarding_complete');
+
+      try {
+        const { Preferences } = await import('@capacitor/preferences');
+        await Preferences.remove({ key: 'user_session' });
+        await Preferences.remove({ key: 'app_settings' });
+        await Preferences.remove({ key: 'pending_verification_email' });
+      } catch (prefErr) {
+        console.warn('[Logout] Preferences clear error:', prefErr);
+      }
+
+      navigate('/login', { replace: true });
+    } catch (err: any) {
+      console.error('[Logout] Error:', err?.message);
+      navigate('/login', { replace: true });
+    }
   };
 
   useEffect(() => {
@@ -83,7 +194,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {/* Backdrop — dark overlay behind menu */}
       {isOpen && (
         <div
           className="fixed inset-0 z-[99998] bg-black/70 transition-opacity duration-300"
@@ -91,292 +201,373 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
         />
       )}
 
-      {/* Menu drawer — slides in from left */}
-      <div
-        className={`fixed top-0 left-0 h-full
-                    w-[280px] z-[99999]
-                    bg-[#0A0A0A]
-                    border-r border-white/7
-                    transition-transform
-                    duration-300 ease-out flex flex-col
-                    ${isOpen
-                      ? 'translate-x-0'
-                      : '-translate-x-full'
-                    }`}
+      <div className={`fixed top-0 left-0 h-full w-[300px] z-[99999] transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{
+          background: 'linear-gradient(180deg, #0D0D0D 0%, #080808 100%)',
+          boxShadow: isOpen ? '20px 0 60px rgba(0,0,0,0.8)' : 'none',
+        }}
       >
-        {/* Menu header */}
-        <div className="flex items-center
-                        justify-between
-                        px-6 pt-14 pb-6
-                        border-b border-white/7">
-          <div>
-            <p className="text-[#00E676] font-bold
-                          text-sm tracking-[0.2em]
-                          uppercase">
-              Stay Hardy
-            </p>
-            <p className="text-white/30 text-xs
-                          tracking-widest mt-0.5">
-              The 1% starts here.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full
-                       bg-white/5 flex items-center
-                       justify-center
-                       active:bg-white/10
-                       transition-all"
-          >
-            <X size={16} className="text-white/60" />
-          </button>
-        </div>
-
-        {/* Nav items */}
-        <div className="px-4 py-6 flex flex-col gap-1 overflow-y-auto flex-1 custom-scrollbar">
-          {/* Home */}
-          <button
-            onClick={() => { navigate('/home'); onClose(); }}
-            className={`flex items-center gap-3
-              w-full px-4 py-3 rounded-xl
-              transition-all duration-150
-              ${location.pathname === '/home'
-                ? 'bg-[#00E676]/10 text-[#00E676]'
-                : 'text-white/60 hover:bg-white/5'
-              }`}
-          >
-            <Home size={18} strokeWidth={1.5} />
-            <span className="text-sm font-medium">
-              Home
-            </span>
-            {location.pathname === '/home' && (
-              <div className="ml-auto w-1.5 h-1.5
-                              rounded-full bg-[#00E676]" />
-            )}
-          </button>
-
-          {/* Tasks */}
-          <button
-            onClick={() => { navigate('/dashboard'); onClose(); }}
-            className={`flex items-center gap-3
-              w-full px-4 py-3 rounded-xl
-              transition-all duration-150
-              ${location.pathname === '/dashboard'
-                ? 'bg-[#00E676]/10 text-[#00E676]'
-                : 'text-white/60 hover:bg-white/5'
-              }`}
-          >
-            <CheckSquare size={18} strokeWidth={1.5} />
-            <span className="text-sm font-medium">
-              Tasks
-            </span>
-            {location.pathname === '/dashboard' && (
-              <div className="ml-auto w-1.5 h-1.5
-                              rounded-full bg-[#00E676]" />
-            )}
-          </button>
-
-          {/* Goals */}
-          <button
-            onClick={() => { navigate('/goals'); onClose(); }}
-            className={`flex items-center gap-3
-              w-full px-4 py-3 rounded-xl
-              transition-all duration-150
-              ${location.pathname === '/goals'
-                ? 'bg-[#00E676]/10 text-[#00E676]'
-                : 'text-white/60 hover:bg-white/5'
-              }`}
-          >
-            <Target size={18} strokeWidth={1.5} />
-            <span className="text-sm font-medium">
-              Goals
-            </span>
-            {location.pathname === '/goals' && (
-              <div className="ml-auto w-1.5 h-1.5
-                              rounded-full bg-[#00E676]" />
-            )}
-          </button>
-
-          {/* Calendar */}
-          <button
-            onClick={() => { navigate('/calendar'); onClose(); }}
-            className={`flex items-center gap-3
-              w-full px-4 py-3 rounded-xl
-              transition-all duration-150
-              ${location.pathname === '/calendar'
-                ? 'bg-[#00E676]/10 text-[#00E676]'
-                : 'text-white/60 hover:bg-white/5'
-              }`}
-          >
-            <Calendar size={18} strokeWidth={1.5} />
-            <span className="text-sm font-medium">
-              Calendar
-            </span>
-            {location.pathname === '/calendar' && (
-              <div className="ml-auto w-1.5 h-1.5
-                              rounded-full bg-[#00E676]" />
-            )}
-          </button>
-
-          {/* Habits — PRO */}
-          <button
-            onClick={() => {
-              if (!isProUser) {
-                navigate('/paywall');
-              } else {
-                navigate('/routine');
-              }
-              onClose();
-            }}
-            className={`flex items-center gap-3
-              w-full px-4 py-3 rounded-xl
-              transition-all duration-150
-              ${location.pathname === '/routine'
-                ? 'bg-[#00E676]/10 text-[#00E676]'
-                : !isProUser
-                  ? 'text-white/30'
-                  : 'text-white/60 hover:bg-white/5'
-              }`}
-          >
-            <RefreshCw size={18} strokeWidth={1.5} />
-            <span className="text-sm font-medium">
-              Habits
-            </span>
-            {!isProUser ? (
-              <span className="ml-auto text-[9px]
-                font-bold tracking-widest
-                px-2 py-0.5 rounded-full
-                border border-[#00E676]/40
-                text-[#00E676] bg-[#00E676]/10">
-                PRO
-              </span>
-            ) : location.pathname === '/routine' ? (
-              <div className="ml-auto w-1.5 h-1.5
-                              rounded-full bg-[#00E676]" />
-            ) : null}
-          </button>
-
-          {/* Stats — PRO */}
-          <button
-            onClick={() => {
-              if (!isProUser) {
-                navigate('/paywall');
-              } else {
-                navigate('/stats');
-              }
-              onClose();
-            }}
-            className={`flex items-center gap-3
-              w-full px-4 py-3 rounded-xl
-              transition-all duration-150
-              ${location.pathname === '/stats'
-                ? 'bg-[#00E676]/10 text-[#00E676]'
-                : !isProUser
-                  ? 'text-white/30'
-                  : 'text-white/60 hover:bg-white/5'
-              }`}
-          >
-            <BarChart2 size={18} strokeWidth={1.5} />
-            <span className="text-sm font-medium">
-              Stats
-            </span>
-            {!isProUser ? (
-              <span className="ml-auto text-[9px]
-                font-bold tracking-widest
-                px-2 py-0.5 rounded-full
-                border border-[#00E676]/40
-                text-[#00E676] bg-[#00E676]/10">
-                PRO
-              </span>
-            ) : location.pathname === '/stats' ? (
-              <div className="ml-auto w-1.5 h-1.5
-                              rounded-full bg-[#00E676]" />
-            ) : null}
-          </button>
-        </div>
-
-        {/* Lifetime card — basic users only */}
-        {!isProUser && (
-          <div className="mx-4 p-4 rounded-2xl
-                          border border-[#00E676]/20
-                          bg-[#00E676]/5 mb-4">
-            <div className="flex items-center
-                            justify-between mb-1">
-              <span className="text-[#00E676]
-                               font-bold text-sm">
-                ⚡ Lifetime ₹199
-              </span>
-              <span className="text-[9px] font-bold
-                tracking-widest px-2 py-0.5
-                rounded-full border
-                border-[#00E676]/40
-                text-[#00E676]">
-                ONE-TIME
-              </span>
+        <div className="px-6 pt-14 pb-5">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <p style={{
+                color: '#00E676',
+                fontWeight: '900',
+                fontSize: '22px',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                marginBottom: '2px'
+              }}>
+                Stay Hardy
+              </p>
+              <p style={{
+                color: '#FFFFFF',
+                opacity: 1,
+                fontWeight: '600',
+                fontSize: '10px',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase'
+              }}>
+                The 1% starts here.
+              </p>
             </div>
-            <p className="text-white/40 text-xs mb-3">
-              Unlock all modules forever.
-            </p>
+
             <button
-              onClick={() => {
-                navigate('/lifetime-access');
-                onClose();
+              onClick={onClose}
+              className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-150 active:scale-90"
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.05)',
               }}
-              className="w-full py-2 rounded-xl
-                         bg-[#00E676] text-black
-                         font-bold text-xs
-                         tracking-wide uppercase
-                         active:scale-95
-                         transition-all duration-150"
             >
-              Unlock PRO →
+              <X size={14} className="text-white/40" />
             </button>
           </div>
-        )}
 
-        {/* Account section */}
-        <div className="px-4 mb-4">
-          <p className="text-white/20 text-[10px]
-                        tracking-widest uppercase
-                        mb-2 px-4">
-            Account
-          </p>
-          <button
-            onClick={() => { navigate('/settings'); onClose(); }}
-            className={`flex items-center gap-3
-              w-full px-4 py-3 rounded-xl
-              transition-all duration-150
-              ${location.pathname === '/settings'
-                ? 'bg-[#00E676]/10 text-[#00E676]'
-                : 'text-white/60 hover:bg-white/5'
-              }`}
-          >
-            <User size={18} strokeWidth={1.5} />
-            <span className="text-sm font-medium">
-              Profile
-            </span>
-            {location.pathname === '/settings' && (
-              <div className="ml-auto w-1.5 h-1.5
-                              rounded-full bg-[#00E676]" />
-            )}
-          </button>
+          {(() => {
+            const email =
+              displayProfile?.user_email || user?.email || '';
+            const isProUser =
+              displayProfile?.pro_member === true || isPro === true;
+            const badge = getMembershipBadge(email, isProUser);
+            const avatarUrl = displayProfile?.user_avatar_url;
+            const displayName =
+              displayProfile?.user_name || email || 'Soldier';
+
+            return (
+              <button
+                onClick={() => {
+                  navigate('/settings');
+                  onClose();
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '12px',
+                  borderRadius: '16px',
+                  background: '#0A0A0A',
+
+                  outline: 'none',
+                  cursor: 'pointer',
+                  boxShadow: `
+                    0 8px 16px rgba(0,0,0,0.6),
+                    inset 0 1px 1px rgba(255,255,255,0.05)
+                  `,
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                onMouseDown={e => {
+                  (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)';
+                }}
+                onMouseUp={e => {
+                  (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+                }}
+                onTouchStart={e => {
+                  (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.95)';
+                }}
+                onTouchEnd={e => {
+                  (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+                }}
+              >
+                {/* AVATAR */}
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  flexShrink: 0,
+                  position: 'relative',
+                  boxShadow: '0 0 0 2px rgba(0,230,118,0.5), 0 0 0 4px #0A0A0A',
+                }}>
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar"
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        display: 'block',
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #1a1a1a, #0d0d0d)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: 'Syne, sans-serif',
+                      fontWeight: '800',
+                      fontSize: '16px',
+                      color: '#00E676',
+                    }}>
+                      {displayName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+
+                {/* TEXT BLOCK */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '5px',
+                  minWidth: 0,
+                  flex: 1,
+                  alignItems: 'flex-start',
+                }}>
+                  <span style={{
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    color: '#FFFFFF',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '160px',
+                    display: 'block',
+                  }}>
+                    {displayName}
+                  </span>
+                  <span style={badge.style}>
+                    {badge.label}
+                  </span>
+                </div>
+
+                {/* CHEVRON — replaces green dot */}
+                <ChevronRight
+                  size={18}
+                  color="rgba(255,255,255,0.25)"
+                  style={{ flexShrink: 0, marginLeft: 'auto' }}
+                />
+              </button>
+            );
+          })()}
         </div>
 
-        {/* Exit the Vault */}
-        <div className="px-4 mt-auto mb-10 pb-[env(safe-area-inset-bottom,20px)]">
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-white/8 to-transparent mb-2" />
+
+        <p className="px-6 text-[9px] font-bold tracking-[0.25em] uppercase mb-1"
+          style={{ color: 'rgba(255,255,255,0.2)' }}>
+          Navigate
+        </p>
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar pb-32">
+          {[
+            { path: '/home', label: 'Home', icon: Home },
+            { path: '/dashboard', label: 'Tasks', icon: CheckSquare },
+            { path: '/goals', label: 'Goals', icon: Target },
+            { path: '/calendar', label: 'Calendar', icon: Calendar },
+          ].map((item) => {
+            const Icon = item.icon;
+            const active = location.pathname === item.path;
+            return (
+              <button
+                key={item.path}
+                onClick={() => { navigate(item.path); onClose(); }}
+                className="flex items-center gap-3.5 w-full px-6 py-3.5 relative transition-all duration-200 group"
+                style={active ? {
+                  background: 'linear-gradient(90deg, rgba(0,230,118,0.08) 0%, rgba(0,230,118,0.02) 60%, transparent 100%)'
+                } : {}}
+              >
+                {active && (
+                  <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full"
+                    style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
+                  />
+                )}
+                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : {}} className={!active ? "text-white/30 group-hover:text-white/60 transition-colors" : ""}>
+                  <Icon size={18} strokeWidth={active ? 1.8 : 1.5} />
+                </div>
+                <span className={`text-sm flex-1 text-left tracking-wide transition-colors ${active ? "text-white font-semibold" : "text-white/40 font-medium group-hover:text-white/70"}`}
+                  style={active ? { textShadow: '0 0 20px rgba(0,230,118,0.3)' } : {}}
+                >
+                  {item.label}
+                </span>
+                {active && <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#00E676', boxShadow: '0 0 6px rgba(0,230,118,1)' }} />}
+              </button>
+            );
+          })}
+
+          {/* Habits — PRO Locked */}
+          {(() => {
+            const active = location.pathname === '/routine';
+            if (active && isProUserFromState) {
+              return (
+                <button
+                  onClick={() => { navigate('/routine'); onClose(); }}
+                  className="flex items-center gap-3.5 w-full px-6 py-3.5 relative transition-all duration-200"
+                  style={{ background: 'linear-gradient(90deg, rgba(0,230,118,0.08) 0%, rgba(0,230,118,0.02) 60%, transparent 100%)' }}
+                >
+                  <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full"
+                    style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
+                  />
+                  <div style={{ color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' }}>
+                    <RefreshCw size={18} strokeWidth={1.8} />
+                  </div>
+                  <span className="text-white font-semibold text-sm tracking-wide flex-1 text-left"
+                    style={{ textShadow: '0 0 20px rgba(0,230,118,0.3)' }}
+                   >
+                    Habits
+                  </span>
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#00E676', boxShadow: '0 0 6px rgba(0,230,118,1)' }} />
+                </button>
+              );
+            }
+            return (
+              <button
+                onClick={() => { navigate('/routine'); onClose(); }}
+                className="flex items-center gap-3.5 w-full px-6 py-3.5 group hover:bg-white/3 transition-all duration-200"
+              >
+                <div className={`${isProUserFromState ? "text-white/30 group-hover:text-white/60" : "text-white/20 group-hover:text-white/40"} transition-colors duration-200`}>
+                  <RefreshCw size={18} strokeWidth={1.5} />
+                </div>
+                <span className={`${isProUserFromState ? "text-white/40 group-hover:text-white/70" : "text-white/25 group-hover:text-white/40"} text-sm font-medium flex-1 text-left transition-colors duration-200`}>
+                  Habits
+                </span>
+                {!isProUserFromState && (
+                  <span className="text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md"
+                    style={{ background: 'rgba(0,230,118,0.1)', color: 'rgba(0,230,118,0.7)', letterSpacing: '0.15em' }}
+                  >
+                    PRO
+                  </span>
+                )}
+              </button>
+            );
+          })()}
+
+          {/* Stats — PRO Locked */}
+          {(() => {
+            const active = location.pathname === '/stats';
+            if (active && isProUserFromState) {
+              return (
+                <button
+                  onClick={() => { navigate('/stats'); onClose(); }}
+                  className="flex items-center gap-3.5 w-full px-6 py-3.5 relative transition-all duration-200"
+                  style={{ background: 'linear-gradient(90deg, rgba(0,230,118,0.08) 0%, rgba(0,230,118,0.02) 60%, transparent 100%)' }}
+                >
+                  <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full"
+                    style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
+                  />
+                  <div style={{ color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' }}>
+                    <BarChart2 size={18} strokeWidth={1.8} />
+                  </div>
+                  <span className="text-white font-semibold text-sm tracking-wide flex-1 text-left"
+                    style={{ textShadow: '0 0 20px rgba(0,230,118,0.3)' }}
+                   >
+                    Stats
+                  </span>
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#00E676', boxShadow: '0 0 6px rgba(0,230,118,1)' }} />
+                </button>
+              );
+            }
+            return (
+              <button
+                onClick={() => { navigate('/stats'); onClose(); }}
+                className="flex items-center gap-3.5 w-full px-6 py-3.5 group hover:bg-white/3 transition-all duration-200"
+              >
+                <div className={`${isProUserFromState ? "text-white/30 group-hover:text-white/60" : "text-white/20 group-hover:text-white/40"} transition-colors duration-200`}>
+                  <BarChart2 size={18} strokeWidth={1.5} />
+                </div>
+                <span className={`${isProUserFromState ? "text-white/40 group-hover:text-white/70" : "text-white/25 group-hover:text-white/40"} text-sm font-medium flex-1 text-left transition-colors duration-200`}>
+                  Stats
+                </span>
+                {!isProUserFromState && (
+                  <span className="text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md"
+                    style={{ background: 'rgba(0,230,118,0.1)', color: 'rgba(0,230,118,0.7)', letterSpacing: '0.15em' }}
+                  >
+                    PRO
+                  </span>
+                )}
+              </button>
+            );
+          })()}
+
+          {!isProUser && (
+            <div className="px-4 mt-4 mb-2">
+              <div
+                onClick={() => { navigate('/paywall'); onClose(); }}
+                className="rounded-2xl p-4 cursor-pointer active:scale-95 transition-all duration-200 relative overflow-hidden"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(0,230,118,0.08) 0%, rgba(0,230,118,0.03) 50%, transparent 100%)',
+                  boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.05), 0 8px 24px rgba(0,0,0,0.4)',
+                }}
+              >
+                <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full"
+                  style={{ background: 'rgba(0,230,118,0.15)', filter: 'blur(16px)' }}
+                />
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#00E676] font-black text-sm">⚡ Just ₹1/day</span>
+                  <span className="text-[8px] font-black tracking-widest px-2 py-1 rounded-full uppercase"
+                    style={{ background: 'rgba(0,232,122,0.15)', color: '#00E87A' }}
+                  >
+                    MOST POPULAR
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                  Go Pro. Cancel anytime.
+                </p>
+                <div className="flex items-center gap-1 mt-3">
+                  <p className="text-[10px] font-semibold" style={{ color: 'rgba(0,230,118,0.6)' }}>Start Now</p>
+                  <ChevronRight size={12} style={{ color: 'rgba(0,230,118,0.6)' }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 px-4 pb-10 pt-4"
+          style={{ 
+            background: 'linear-gradient(0deg, #080808 60%, transparent 100%)',
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            paddingTop: '16px',
+            marginTop: '8px'
+          }}
+        >
           <button
             onClick={handleLogout}
-            className="w-full flex items-center
-                       justify-center gap-2
-                       py-3 rounded-2xl
-                       border border-red-500/20
-                       text-red-400 text-sm
-                       font-medium
-                       active:bg-red-500/10
-                       transition-all duration-150"
+            className="w-full flex items-center justify-center gap-[10px] py-3.5 rounded-2xl group active:scale-95 transition-all duration-150"
+            style={{ 
+              background: 'rgba(255,255,255,0.02)',
+              color: '#FF4444'
+            }}
           >
-            <LogOut size={16} strokeWidth={1.5} />
-            Exit the Vault
+            <LogOut 
+              size={18} 
+              strokeWidth={1.5} 
+              style={{ stroke: '#FF4444' }}
+              className="transition-colors" 
+            />
+            <span style={{ 
+              fontSize: '15px', 
+              fontWeight: '700',
+              opacity: 1
+            }}>
+              Logout
+            </span>
           </button>
         </div>
       </div>

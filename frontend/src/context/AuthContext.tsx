@@ -9,8 +9,6 @@ import { saveUserProfileCache } from '../lib/userProfileCache';
 import { flushPendingListCacheWrites } from '../lib/listCaches';
 import { resolveUserRole } from '../config/adminOwner';
 import { RevenueCatService } from '../services/revenuecat';
-import { NativeBiometric } from '@capgo/capacitor-native-biometric';
-import { SecureStoragePlugin } from 'capacitor-secure-storage-plugin';
 
 export interface AuthUser {
   id: string;
@@ -33,7 +31,6 @@ interface AuthContextType {
   updateUserMetadata: (metadata: Record<string, unknown>) => void;
   refreshUserProfile: () => Promise<boolean>;
   initAuth: () => Promise<void>;
-  initBiometric: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -134,100 +131,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return isPro;
   }, [user?.id]);
 
-  const initBiometric = useCallback(async () => {
-    try {
-      console.log('=== INIT BIOMETRICS CHALLENGE ===');
-      if (loginJustHappened.current || !isNative) return true;
-
-      let isSecureLoginEnabled = false;
-      try {
-        const { value } = await SecureStoragePlugin.get({ key: 'secure_login_enabled' }).catch(() => ({ value: null }));
-        isSecureLoginEnabled = value === 'true';
-        if (!isSecureLoginEnabled) {
-          const prefValue = await storage.get('save_login_enabled').catch(() => null);
-          isSecureLoginEnabled = prefValue === 'true';
-        }
-      } catch (e) {
-        console.warn('Biometric toggle check failed (Graceful fallback):', e);
-        isSecureLoginEnabled = false;
-      }
-
-      if (!isSecureLoginEnabled) return true;
-
-      let savedEmail = '';
-      let savedPin = '';
-      try {
-        const [e, p] = await Promise.all([
-          SecureStoragePlugin.get({ key: 'saved_email' }).then(r => r.value).catch(() => null),
-          SecureStoragePlugin.get({ key: 'saved_pin' }).then(r => r.value).catch(() => null)
-        ]);
-        savedEmail = e || '';
-        savedPin = p || '';
-
-        if (!savedEmail || !savedPin) {
-          const [pe, pp] = await Promise.all([
-            storage.get('saved_email').catch(() => null),
-            storage.get('saved_pin').catch(() => null)
-          ]);
-          savedEmail = savedEmail || pe || '';
-          savedPin = savedPin || pp || '';
-        }
-      } catch (e) {
-        console.warn('SecureStorage retrieval failed (Graceful fallback):', e);
-      }
-
-      if (savedEmail && savedPin) {
-        const result = await NativeBiometric.isAvailable();
-        if (result.isAvailable) {
-          try {
-            await NativeBiometric.verifyIdentity({
-              reason: 'Unlock Stay Hardy',
-              title: 'Authentication Required',
-              subtitle: 'Use Biometrics to Enter Vault',
-              description: 'Verify your identity to continue to your dashboard.',
-            });
-            
-            const { data: userData, error: dbError } = await supabase
-              .from('users')
-              .select('*')
-              .ilike('email', savedEmail)
-              .eq('pin', savedPin)
-              .single();
-
-            if (!dbError && userData) {
-              // Critical Fix: Use PIN + Suffix to satisfy Supabase 6-character rule and match system standard
-              const { error: authError } = await supabase.auth.signInWithPassword({
-                email: savedEmail.toLowerCase(),
-                password: savedPin + '_secure_pin'
-              });
-              if (!authError) {
-                const merged: AuthUser = {
-                  id: userData.id,
-                  name: userData.name || '',
-                  email: savedEmail.toLowerCase(),
-                  isPro: userData.is_pro === true,
-                  role: userData.role || 'user',
-                  avatarUrl: userData.avatar_url || '',
-                  proPurchaseDate: userData.pro_purchase_date ?? null,
-                  paymentId: userData.payment_id ?? null,
-                  paymentAmount: userData.payment_amount ?? null,
-                };
-                persistUser(merged);
-                return true;
-              }
-            }
-          } catch (e) {
-            console.warn('Biometric verify failed:', e);
-            return false;
-          }
-        }
-      }
-      return true;
-    } catch (err) {
-      console.error('Biometric init error:', err);
-      return true;
-    }
-  }, [persistUser]);
 
   const initAuth = useCallback(async () => {
     try {
@@ -273,21 +176,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [persistUser]);
 
   const logout = async () => {
-    console.log('Logging out...');
-    await storage.remove('save_login_enabled').catch(() => {});
-    await storage.remove('saved_email').catch(() => {});
-    await storage.remove('saved_pin').catch(() => {});
+    try {
+      console.log('Logging out...');
+      // 1. Supabase signout
+      if (isNative) {
+        await RevenueCatService.logOut().catch(() => {});
+        await supabase.auth.signOut({ scope: 'local' });
+      } else {
+        await supabase.auth.signOut({ scope: 'global' });
+      }
 
-    if (isNative) {
-      await RevenueCatService.logOut().catch(() => {});
-      await supabase.auth.signOut({ scope: 'local' });
-    } else {
-      await supabase.auth.signOut({ scope: 'global' });
+      const clearRoleCache = async () => {
+        try {
+          const userId = localStorage.getItem('cached_user_id') || '';
+
+          // Clear localStorage keys
+          localStorage.removeItem('cached_is_pro');
+          localStorage.removeItem('cached_user_id');
+          if (userId) {
+            localStorage.removeItem('cached_profile_fast_' + userId);
+            localStorage.removeItem('ps_score_' + userId);
+            localStorage.removeItem('ps_score_ts_' + userId);
+          }
+
+          // Clear Preferences keys
+          if (userId) {
+            await storage.remove('cached_user_profile_' + userId);
+            await storage.remove('cached_user_role_' + userId);
+          }
+        } catch (err) {
+          console.warn('[Auth] Cache clear failed:', err);
+        }
+      };
+
+      void clearRoleCache();
+
+      // 2. Clear Preferences
+      await storage.remove('user_session');
+      await storage.remove('pending_verification_email');
+      await storage.remove('save_login_enabled').catch(() => {});
+      await storage.remove('saved_email').catch(() => {});
+      await storage.remove('saved_pin').catch(() => {});
+
+      try {
+        const { Preferences } =
+          await import('@capacitor/preferences');
+        // Clear all app preferences
+        await Preferences.clear();
+      } catch (e) {
+        console.warn('[Auth] Preferences clear failed:', e);
+      }
+
+      // 3. Reset user state
+      await flushPendingListCacheWrites();
+      await clearAllCache();
+      loginJustHappened.current = false;
+      persistUser(null);
+
+      // 4. Navigate to login
+      // This may already be handled by the caller
+      // but add as safety:
+      window.location.hash = '/login';
+
+    } catch (err: any) {
+      console.error('[Auth] Logout error:', err?.message);
+      // Force redirect regardless
+      window.location.hash = '/login';
     }
-    await flushPendingListCacheWrites();
-    await clearAllCache();
-    loginJustHappened.current = false;
-    persistUser(null);
   };
 
   useEffect(() => {
@@ -312,7 +267,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         updateUserMetadata,
         refreshUserProfile,
         initAuth,
-        initBiometric
       }}
     >
       {children}
