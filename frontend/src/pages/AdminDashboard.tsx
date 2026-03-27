@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
-import BottomNav from '../components/BottomNav';
+
 import {
   XAxis,
   YAxis,
@@ -2942,6 +2942,7 @@ const AdminDashboard: React.FC = () => {
         .admin-hub-root {
           --admin-accent: ${ADM.accent};
           --admin-gold: ${ADM.gold};
+          padding-bottom: 120px;
         }
         .admin-hub-header {
           margin-bottom: 1.25rem;
@@ -3088,7 +3089,7 @@ const AdminDashboard: React.FC = () => {
           overflow-x: auto;
           scrollbar-width: none;
           -webkit-overflow-scrolling: touch;
-          padding-bottom: 2px;
+          padding-bottom: 140px;
         }
         .admin-hub-tabs-scroll::-webkit-scrollbar {
           display: none;
@@ -4748,7 +4749,7 @@ const AdminDashboard: React.FC = () => {
         }
       `}</style>
 
-      <BottomNav isHidden={isSidebarHidden} />
+
 
       {/* Reset PIN Modal */}
       {resetPinModal.show && (

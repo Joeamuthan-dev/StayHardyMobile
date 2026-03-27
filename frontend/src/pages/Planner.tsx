@@ -1,8 +1,8 @@
+// src/pages/Planner.tsx
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
-import BottomNav from '../components/BottomNav';
 
 type TabFilter = 'all' | 'tasks' | 'goals';
 type DatePreset = 'all' | 'month' | '30d' | 'custom';
@@ -111,16 +111,9 @@ const SwipeDeleteRow: React.FC<{
 const Planner: React.FC = () => {
   const { user } = useAuth();
   const { setLoading } = useLoading();
-  const [isSidebarHidden, setIsSidebarHidden] = useState(
+  const [isSidebarHidden] = useState(
     () => localStorage.getItem('sidebarHidden') === 'true',
   );
-  const toggleSidebar = () => {
-    setIsSidebarHidden((prev) => {
-      const next = !prev;
-      localStorage.setItem('sidebarHidden', next.toString());
-      return next;
-    });
-  };
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -349,7 +342,7 @@ const Planner: React.FC = () => {
     <div className={`page-shell hist-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
       <style>{`
         .hist-page {
-          padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+          padding-bottom: calc(8.5rem + env(safe-area-inset-bottom, 0px));
         }
         @media (max-width: 767px) {
           .hist-page.page-shell {
@@ -367,7 +360,7 @@ const Planner: React.FC = () => {
           z-index: 1;
           max-width: 720px;
           margin: 0 auto;
-          padding: 0 0.45rem;
+          padding: 0 16px;
         }
         .hist-premium-header {
           position: relative;
@@ -800,94 +793,88 @@ const Planner: React.FC = () => {
           cursor: pointer;
         }
         .hist-preset-btn--on {
+          color: #ecfdf5;
+          background: rgba(16, 185, 129, 0.18);
           border-color: rgba(52, 211, 153, 0.45);
-          color: #4ade80;
-          box-shadow: 0 0 14px rgba(16, 185, 129, 0.15);
+          box-shadow: 0 0 18px rgba(74, 222, 128, 0.2);
         }
         .hist-custom-row {
           display: flex;
           gap: 0.5rem;
-          margin-top: 0.75rem;
-          flex-wrap: wrap;
+          margin-top: 0.5rem;
         }
         .hist-custom-row input {
           flex: 1;
-          min-width: 120px;
-          border-radius: 10px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
           background: rgba(0, 0, 0, 0.35);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
           color: #fff;
-          padding: 0.5rem 0.65rem;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.75rem;
+          padding: 0.4rem;
+          font-size: 11px;
         }
       `}</style>
-
-      <div className="aurora-bg hist-aurora">
-        <div className="aurora-gradient-1" />
-        <div className="aurora-gradient-2" />
-      </div>
+      <div className="hist-aurora" aria-hidden />
 
       <div className="hist-inner">
         <header className="hist-premium-header">
-          <div className="hist-premium-header__row hist-premium-header__row--nav">
-            <div className="hist-premium-header__nav-left">
-              <button
-                type="button"
-                className="notification-btn desktop-only-btn hist-header-icon-btn"
-                title={isSidebarHidden ? 'Show sidebar' : 'Focus mode'}
-                aria-label="Toggle sidebar"
-                onClick={toggleSidebar}
-              >
-                <span className="material-symbols-outlined">
-                  {isSidebarHidden ? 'side_navigation' : 'fullscreen'}
-                </span>
-              </button>
-            </div>
+          <div className="hist-premium-header__row--nav">
             <div className="hist-premium-header__title-block">
-              <h1 className="hist-premium-title">HISTORY</h1>
-              <p className="hist-premium-tagline">YOUR JOURNEY · YOUR PROOF</p>
+              <h1 className="hist-premium-title">PLANNER</h1>
+              <p className="hist-premium-tagline">MISSION CONTROL LOGS</p>
+            </div>
+            <div className="hist-premium-header__nav-left" style={{ left: 'auto', right: '0' }}>
+               {/* Search/Filter icon removed, merged into chip */}
             </div>
           </div>
-        </header>
 
-        <div className="hist-tabs-wrap">
-          {(['all', 'tasks', 'goals'] as const).map((t) => (
+          <div className="hist-tabs-wrap">
             <button
-              key={t}
               type="button"
-              className={`hist-tab${tab === t ? ' hist-tab--active' : ''}`}
-              onClick={() => setTab(t)}
+              className={`hist-tab${tab === 'all' ? ' hist-tab--active' : ''}`}
+              onClick={() => setTab('all')}
             >
-              {t === 'all' ? 'ALL' : t.toUpperCase()}
+              ALL UNITS
             </button>
-          ))}
-          <button
-            type="button"
-            className="hist-date-chip"
-            onClick={() => setFilterSheetOpen(true)}
-          >
-            {chipLabel}
-          </button>
-        </div>
+            <button
+              type="button"
+              className={`hist-tab${tab === 'tasks' ? ' hist-tab--active' : ''}`}
+              onClick={() => setTab('tasks')}
+            >
+              TASKS
+            </button>
+            <button
+              type="button"
+              className={`hist-tab${tab === 'goals' ? ' hist-tab--active' : ''}`}
+              onClick={() => setTab('goals')}
+            >
+              GOALS
+            </button>
 
-        <div className="hist-summary">
-          <span className="hist-pill hist-pill--green">
-            {summary.completedThisMonth} COMPLETED THIS MONTH
-          </span>
-          <span className="hist-pill hist-pill--muted">
-            {totalTasksCount + totalGoalsCount} IN ARCHIVE
-          </span>
-        </div>
+            <button
+              type="button"
+              className="hist-date-chip"
+              onClick={() => setFilterSheetOpen(true)}
+            >
+              {chipLabel}
+            </button>
+          </div>
+
+          <div className="hist-summary">
+            <span className="hist-pill hist-pill--green">
+              MONTH YIELD: {summary.completedThisMonth}
+            </span>
+            <span className="hist-pill hist-pill--muted">TOTAL UNITS: {totalTasksCount + totalGoalsCount}</span>
+          </div>
+        </header>
 
         <main>
           {showTasks && (
             <section className="hist-section">
               <div
                 className="hist-section-head"
+                onClick={() => setIsTasksExpanded((x) => !x)}
                 role="button"
                 tabIndex={0}
-                onClick={() => setIsTasksExpanded((e) => !e)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
@@ -897,11 +884,9 @@ const Planner: React.FC = () => {
               >
                 <div className="hist-section-head-left">
                   <span className="hist-section-icon hist-section-icon--tasks material-symbols-outlined">
-                    task_alt
+                    check_circle
                   </span>
-                  <div style={{ minWidth: 0 }}>
-                    <h2 className="hist-section-title hist-section-title--tasks">Completed Tasks</h2>
-                  </div>
+                  <h2 className="hist-section-title hist-section-title--tasks">Completed Tasks</h2>
                   <span className="hist-count-badge">{filteredTasks.length}</span>
                 </div>
                 <span
@@ -915,10 +900,12 @@ const Planner: React.FC = () => {
                   {taskDayKeys.length === 0 ? (
                     <div className="hist-empty">
                       <span className="hist-empty-emoji" aria-hidden>
-                        ✅
+                        📋
                       </span>
-                      <p className="hist-empty-title">Nothing here yet</p>
-                      <p className="hist-empty-sub">Complete a task from your list to see it shine here.</p>
+                      <p className="hist-empty-title">Historical data blank</p>
+                      <p className="hist-empty-sub">
+                        Tasks you complete will manifest in this database.
+                      </p>
                     </div>
                   ) : (
                     taskDayKeys.map((dayKey) => (
@@ -926,8 +913,7 @@ const Planner: React.FC = () => {
                         <div className="hist-day-pill">{formatGroupLabel(dayKey)}</div>
                         {(groupedTasks.get(dayKey) || []).map((item) => {
                           const done = item.updatedAt || item.createdAt;
-                          const delay = cardIndex++ * 55;
-                          const cat = (item.category || 'GENERAL').toUpperCase();
+                          const delay = cardIndex++ * 45;
                           return (
                             <SwipeDeleteRow key={item.id} onDelete={() => deleteTask(item.id)}>
                               <div
@@ -935,7 +921,9 @@ const Planner: React.FC = () => {
                                 style={{ animationDelay: `${delay}ms` }}
                               >
                                 <div className="hist-card-top">
-                                  <span className={`hist-cat-pill ${categoryPillClass(cat)}`}>{cat}</span>
+                                  <span className={`hist-cat-pill ${categoryPillClass(item.category)}`}>
+                                    {item.category || 'GENERAL'}
+                                  </span>
                                 </div>
                                 <button
                                   type="button"
@@ -951,29 +939,13 @@ const Planner: React.FC = () => {
                                 >
                                   <p className="hist-card-title">{item.title}</p>
                                 </button>
-                                {item.image_url && (
-                                  <div
-                                    style={{
-                                      borderRadius: 12,
-                                      overflow: 'hidden',
-                                      marginBottom: 8,
-                                      opacity: 0.55,
-                                      maxHeight: 100,
-                                    }}
-                                  >
-                                    <img
-                                      src={item.image_url}
-                                      alt=""
-                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    />
-                                  </div>
-                                )}
                                 <div className="hist-done-chip">
-                                  ✓ DONE{' '}
-                                  {new Date(done).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric',
+                                  <span className="material-symbols-outlined">verified</span>
+                                  DONE{' '}
+                                  {new Date(done).toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true,
                                   })}
                                 </div>
                               </div>
@@ -992,9 +964,9 @@ const Planner: React.FC = () => {
             <section className="hist-section">
               <div
                 className="hist-section-head"
+                onClick={() => setIsGoalsExpanded((x) => !x)}
                 role="button"
                 tabIndex={0}
-                onClick={() => setIsGoalsExpanded((e) => !e)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
@@ -1138,8 +1110,6 @@ const Planner: React.FC = () => {
           </div>
         </div>
       )}
-
-      <BottomNav isHidden={isSidebarHidden} hideFloatingShelf={filterSheetOpen} hideMobileNavChrome={filterSheetOpen} />
     </div>
   );
 };

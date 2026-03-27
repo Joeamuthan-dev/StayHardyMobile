@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
-import BottomNav from '../components/BottomNav';
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired, invalidateUserStatsCache } from '../lib/cacheManager';
 import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
@@ -356,6 +355,18 @@ const Dashboard: React.FC = () => {
     setTopToastVisible(true);
     topToastTimerRef.current = setTimeout(() => setTopToastVisible(false), 1500);
   };
+
+  useEffect(() => {
+    if (showModal || !!detailTask) {
+      document.body.classList.add('sheet-open');
+    } else {
+      document.body.classList.remove('sheet-open');
+    }
+    return () => {
+      document.body.classList.remove('sheet-open');
+    }
+  }, [showModal, detailTask]);
+
   const [imageUrl, setImageUrl] = useState('');
   const { user } = useAuth();
   const isCreatingTask = useRef(false);
@@ -877,7 +888,8 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className={`page-shell dashboard-page-layout ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ 
-      paddingBottom: '100px', 
+      paddingTop: '64px',
+      paddingBottom: '120px', 
       background: '#000000', 
       minHeight: '100vh', 
       overflowY: 'auto',
@@ -921,7 +933,8 @@ const Dashboard: React.FC = () => {
                   boxShadow:
                     '0 0 20px rgba(239,68,68,0.1),' +
                     'inset 0 1px 0 ' +
-                    'rgba(255,255,255,0.05)'
+                    'rgba(255,255,255,0.05)',
+                  marginTop: '16px'
                 }}>
                   <div style={{
                     display: 'flex',
@@ -1293,10 +1306,6 @@ const Dashboard: React.FC = () => {
       </div>
 
 
-      <BottomNav
-        isHidden={isSidebarHidden}
-        hideFloatingShelf={showModal || !!detailTask}
-      />
 
       {toast && (
         <div
@@ -1378,7 +1387,7 @@ const Dashboard: React.FC = () => {
         <div style={{
           position: 'fixed',
           inset: 0,
-          zIndex: 700,
+          zIndex: 9999,
           display: 'flex',
           alignItems: 'flex-end'
         }}>
@@ -1406,7 +1415,7 @@ const Dashboard: React.FC = () => {
               borderRadius: '32px 32px 0 0',
               border: '1px solid rgba(0,232,122,0.4)',
               borderBottom: 'none',
-              paddingBottom: '48px',
+               paddingBottom: 'max(60px, env(safe-area-inset-bottom, 60px))',
               animation: isExiting 
                 ? 'taskModalDown 0.4s cubic-bezier(0.32, 0, 0.67, 0) forwards'
                 : 'taskModalUp 0.4s cubic-bezier(0.34,1.56,0.64,1), taskBorderGlow 3s ease-in-out infinite',

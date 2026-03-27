@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
-import BottomNav from '../components/BottomNav';
 import CategoryInsightCard from '../components/CategoryInsightCard';
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired } from '../lib/cacheManager';
@@ -960,7 +959,7 @@ const Stats: React.FC = () => {
           </section>
         </main>
 
-        <BottomNav isHidden={isSidebarHidden} />
+
         
         <style>{`
           @keyframes gaugeLoad {

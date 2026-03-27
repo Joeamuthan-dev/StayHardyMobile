@@ -151,6 +151,21 @@ export default function VerifyEmail() {
         </span>
       </p>
 
+      {/* Login link fix */}
+      <div className="mt-8 text-center">
+        <p className="text-white/20 text-xs mb-2">
+          Already activated your account?
+        </p>
+        <button
+          onClick={() => navigate('/login')}
+          className="text-[#00E676] text-sm font-medium
+                     tracking-wide active:opacity-70
+                     transition-opacity"
+        >
+          Go to Sign In →
+        </button>
+      </div>
+
     </div>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
-import BottomNav from '../components/BottomNav';
+
 
 const MAX_LEN = 500;
 const MIN_SUBMIT = 10;
@@ -601,7 +601,7 @@ const Feedback: React.FC = () => {
         )}
       </main>
 
-      <BottomNav />
+
 
       {/* BOTTOM SHEET PICKER */}
       {showCategoryPicker && (
@@ -774,7 +774,7 @@ const Feedback: React.FC = () => {
           background: #080c0a;
           color: #fff;
           font-family: 'DM Sans', system-ui, sans-serif;
-          padding: 20px 24px calc(100px + env(safe-area-inset-bottom, 0));
+          padding: 20px 24px calc(120px + env(safe-area-inset-bottom, 0));
           box-sizing: border-box;
         }
 

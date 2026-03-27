@@ -1,6 +1,6 @@
+// src/pages/HomeDashboard.tsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { BarChart2 } from 'lucide-react';
-import BottomNav from '../components/BottomNav';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -383,9 +383,6 @@ const HomeDashboard: React.FC = () => {
     }
   }
 
-
-
-
   // Productivity Chart Data
   // Use DB calculated scores with client-side fallback
   const tasksProgress = scoreData?.tasks_progress ?? (tasks.length > 0 ? Math.round((tasks.filter(t => t.status === 'completed').length / tasks.length) * 100) : 0);
@@ -440,15 +437,6 @@ const HomeDashboard: React.FC = () => {
   const routineFrac =
     activeRoutinesTodayCount > 0 ? Math.min(1, completedRoutinesToday / activeRoutinesTodayCount) : 0;
   const _ringOffset = ringC - routineFrac * ringC; void _ringOffset;
-
-  /* const pendingGoalsSorted = useMemo(
-    () =>
-      [...goals]
-        .filter((g) => g.status === 'pending' && g.targetDate)
-        .sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime())
-        .slice(0, 5),
-    [goals],
-  ); */
 
   const _streakSubtext =
     currentStreak <= 10 ? 'Building the habit ⚡' : currentStreak <= 30 ? 'Momentum locked in ⚡' : 'Unstoppable rhythm ⚡'; void _streakSubtext;
@@ -505,7 +493,6 @@ const HomeDashboard: React.FC = () => {
     return () => window.clearTimeout(t);
   }, [user?.id, supportGateReady, tasks, goals.length, currentStreak]);
 
-  // const [activeActivityTab, setActiveActivityTab] = useState<'Tasks' | 'Habits'>('Tasks');
   const [activeSection, setActiveSection] = useState(0);
 
   const calcBestStreak = useCallback((logs: RoutineLog[]) => {
@@ -522,8 +509,6 @@ const HomeDashboard: React.FC = () => {
   }, []);
 
   const bestStreakDays = useMemo(() => calcBestStreak(routineLogs), [routineLogs, calcBestStreak]);
-
-
 
   const getLast7DaysHabits = useCallback(() => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -544,7 +529,6 @@ const HomeDashboard: React.FC = () => {
 
 
   const completedTasksTotal = useMemo(() => tasks.filter(t => t.status === 'completed' && isCompletedTaskToday(t.updatedAt)).length, [tasks]);
-  // const completedHabitsTotal = useMemo(() => routineLogs.filter(l => l.completed_at === localTodayStr).length, [routineLogs, localTodayStr]);
 
   const activeGoalsCount = useMemo(() => goals.filter(g => g.status === 'pending').length, [goals]);
   const completedGoalsCount = useMemo(() => goals.filter(g => g.status === 'completed').length, [goals]);
@@ -629,7 +613,7 @@ const HomeDashboard: React.FC = () => {
   const isPro = user?.isPro === true || user?.role === 'admin';
 
   return (
-    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: '110px', paddingBottom: '100px', overflowY: 'auto' }}>
+    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: '110px', paddingBottom: '140px', overflowY: 'auto' }}>
       <style>{`
         .light-card::before {
           content: '';
@@ -642,8 +626,6 @@ const HomeDashboard: React.FC = () => {
           background: radial-gradient(circle at 80% 20%, rgba(255,255,255,0.3) 0%, transparent 50%), #CCFF00 !important;
         }
       `}</style>
-
-
 
       {/* SECTION 1 — HERO GREETING CARD */}
       <section className="light-card" style={{
@@ -951,7 +933,6 @@ const HomeDashboard: React.FC = () => {
         );
       })()}
 
-      <BottomNav isHidden={isSidebarHidden} />
       <SupportModal isOpen={showSupportModal} onClose={() => setShowSupportModal(false)} />
     </div>
   );

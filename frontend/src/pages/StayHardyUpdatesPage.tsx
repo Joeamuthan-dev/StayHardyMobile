@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { storage } from '../utils/storage';
 import { useNavigate } from 'react-router-dom';
-import BottomNav from '../components/BottomNav';
 import { supabase } from '../supabase';
 import { CacheManager, CACHE_EXPIRY, CACHE_KEYS } from '../lib/smartCacheManager';
 
@@ -203,11 +202,11 @@ const StayHardyUpdatesPage: React.FC = () => {
           </div>
         )}
       </div>
-      <BottomNav isHidden={isSidebarHidden} />
+
 
       <style>{`
         .updates-page { background: #050807 !important; min-height: 100dvh; }
-        .updates-wrap { max-width: 680px; margin: 0 auto; padding: 16px 14px 82px; }
+        .updates-wrap { max-width: 680px; margin: 0 auto; padding: 16px 14px 110px; }
         .updates-top { display: flex; justify-content: space-between; margin-bottom: 10px; }
         .updates-title {
           text-align: center; margin: 6px 0 2px; color: #fff;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 
-import BottomNav from '../components/BottomNav';
+
 
 const FeedbackList: React.FC = () => {
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
@@ -35,7 +35,7 @@ const FeedbackList: React.FC = () => {
 
 
   return (
-    <div className="page-shell">
+    <div className="page-shell pb-32">
       <div className="aurora-bg">
         <div className="aurora-gradient-1"></div>
         <div className="aurora-gradient-2"></div>
@@ -92,7 +92,7 @@ const FeedbackList: React.FC = () => {
         )}
       </main>
 
-      <BottomNav />
+
     </div>
   );
 };

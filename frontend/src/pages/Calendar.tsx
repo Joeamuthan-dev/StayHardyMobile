@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import BottomNav from '../components/BottomNav';
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 const MONTHS = [
@@ -1040,7 +1039,7 @@ const Calendar: React.FC = () => {
         </div>
       </div>
 
-      <BottomNav isHidden={isSidebarHidden} hideFloatingShelf={sheetOpen} hideMobileNavChrome={sheetOpen} />
+
     </div>
   );
 };

@@ -1,5 +1,5 @@
 // src/pages/Login.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { storage } from '../utils/storage';
@@ -8,22 +8,23 @@ import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
 import { processSyncQueue } from '../lib/syncQueue';
-import { isHashed, hashPin, verifyPin } from '../utils/pinUtils';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { hashPin, padPinForAuth } from '../utils/pinUtils';
 
 const Login: React.FC = () => {
   const { user, loading: authLoading, setCurrentUser, markLoginComplete } = useAuth();
-  const { setLoading } = useLoading();
+  const { setLoading: setGlobalLoading } = useLoading();
   const navigate = useNavigate();
   
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState(''); // PIN
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pin, setPin] = useState(''); 
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [showResendOption, setShowResendOption] = useState(false);
+  
+  // STATE FOR SCENARIO HANDLING
+  const [showResend, setShowResend] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState('');
 
   // PIN Ref for focus management
   const pinInputRef = useRef<HTMLInputElement>(null);
@@ -64,204 +65,202 @@ const Login: React.FC = () => {
     }
   }, [user, authLoading, navigate]);
 
-  /**
-   * SILENT PIN MIGRATION
-   * Detects plain text PINs and hashes them in the background.
-   */
-  const runSilentPinMigration = async (
-    userEmail: string,
-    plainPin: string
-  ): Promise<void> => {
-    try {
-      // Fetch current PIN from public.users
-      const { data: userRecord, error: fetchError } = await supabase
-        .from('users')
-        .select('pin')
-        .eq('email', userEmail)
-        .single();
+  const handleResend = async () => {
+    setIsResending(true);
+    setResendSuccess('');
 
-      if (fetchError || !userRecord) return; // Silent fail
-      if (isHashed(userRecord.pin)) return; // Already migrated
-      if (userRecord.pin !== plainPin) return; // Mismatch - don't touch it
+    const targetEmail = email.trim().toLowerCase();
 
-      // Hash the plain text PIN
-      const hashedPin = await hashPin(plainPin);
+    const { error: resendError } =
+      await supabase.auth.resend({
+        type: 'signup',
+        email: targetEmail,
+        options: {
+          emailRedirectTo: 'https://stayhardy.com/auth/verify'
+        }
+      });
 
-      // Silently update the record
-      await supabase
-        .from('users')
-        .update({ pin: hashedPin })
-        .eq('email', userEmail);
+    setIsResending(false);
 
-      console.log('Silent PIN migration successful for operative:', userEmail);
-    } catch (err) {
-      // Critical: Never disrupt the user flow for migration errors
-      console.error('Silent PIN migration error:', err);
+    if (resendError) {
+      console.error('[Resend] Error:', JSON.stringify(resendError));
+      setErrorMessage("Resend failed. The system resists. Try again.");
+    } else {
+      await storage.set('pending_verification_email', targetEmail);
+      setResendSuccess("Activation mail redeployed. Check your inbox, soldier.");
+      setShowResend(false);
+      setTimeout(() => navigate('/verify-email'), 1500);
     }
   };
 
-  const handleResendFromLogin = async () => {
-    const pendingEmail = await storage.get('pending_verification_email');
-    const targetEmail = pendingEmail || email.trim().toLowerCase();
-
-    if (!targetEmail || !EMAIL_REGEX.test(targetEmail)) {
-      setError("We need an email address to resend the activation mail.");
+  const handleLogin = async () => {
+    // ─── VALIDATION ───────────────────────
+    if (!email.trim()) {
+      setErrorMessage("That doesn't look like a valid command. Check your email.");
       return;
     }
 
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: targetEmail,
-      options: {
-        emailRedirectTo: 'stayhardy://auth/verify'
-      }
-    });
-
-    if (!error) {
-      setError('');
-      setSuccessMessage("Activation mail redeployed. Check your inbox.");
-      setTimeout(() => navigate('/verify-email'), 2000);
-    } else {
-      setError("Resend failed. Try again in a moment.");
+    if (pin.length < 4) {
+      setErrorMessage("Your PIN is your vault key. Enter it.");
+      return;
     }
-  };
 
-  const handleLogin = useCallback(async () => {
-    setIsSubmitting(true);
-    setError('');
-    setSuccessMessage('');
-    setShowResendOption(false);
+    // ─── RESET STATE ──────────────────────
+    setIsLoading(true);
+    setErrorMessage('');
+    setShowResend(false);
+    setResendSuccess('');
 
     try {
-      const cleanEmail = email?.trim()?.toLowerCase();
-      const cleanPIN = password.trim();
-
-      // EMAIL VALIDATION ERRORS
-      if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
-        setError("That doesn't look like a valid command. Check your email.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // PIN ERRORS
-      if (cleanPIN.length === 0) {
-        setError("Your PIN is your vault key. Enter it.");
-        setIsSubmitting(false);
-        return;
-      }
-      if (cleanPIN.length !== 4) {
-        setError("Wrong code. The 1% don't give up — try again.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      const { data: dbUser, error: dbError } = await supabase
-        .from('users')
-        .select('*')
-        .ilike('email', cleanEmail)
-        .maybeSingle();
-
-      // AUTHENTICATION / SERVER ERRORS: User not found
-      if (dbError || !dbUser) {
-        setError("We don't recognize this soldier. Check your email or sign up.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      /**
-       * HYBRID PIN VERIFICATION (Plain Text or Bcrypt)
-       */
-      const dbPin = dbUser.pin?.toString()?.trim() || '';
-      let isPinValid = false;
-
-      if (isHashed(dbPin)) {
-        // Use bcrypt comparison for migrated accounts
-        isPinValid = await verifyPin(cleanPIN, dbPin);
-      } else {
-        // Direct comparison for legacy plain text accounts
-        isPinValid = dbPin === cleanPIN;
-      }
-
-      if (!isPinValid) {
-        setError("Wrong code. The 1% don't give up — try again.");
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Supabase Authentication with salted PIN (matches original logic)
+      // ─── ATTEMPT LOGIN (uses PADDED pin for auth) ────────────
+      // Let Supabase Auth decide everything
+      // auth.users is the source of truth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPIN + '_secure_pin',
+        email: email.trim().toLowerCase(),
+        password: padPinForAuth(pin),
       });
-      
-      // SUPABASE ERROR HANDLING
-      if (authError) {
-        const msg = authError.message?.toLowerCase() || '';
 
-        // UNVERIFIED ACCOUNT HANDLING
-        if (msg.includes('email not confirmed') || msg.includes('not confirmed') || msg.includes('confirmation')) {
-          await storage.set('pending_verification_email', cleanEmail);
-          setError("Account not activated yet. Check your mail, soldier.");
-          setTimeout(() => setShowResendOption(true), 2000);
-          setIsSubmitting(false);
+      console.log('[Login] Error:', JSON.stringify(authError));
+      console.log('[Login] Error msg:', authError?.message);
+      console.log('[Login] Error code:', (authError as any)?.code);
+      console.log('[Login] Error status:', authError?.status);
+      console.log('[Login] User:', authData?.user?.id);
+
+      // ─── HANDLE ERRORS ────────────────────
+      if (authError) {
+        setIsLoading(false);
+
+        const msg = authError.message?.toLowerCase() || '';
+        const code = (authError as any).code?.toLowerCase() || '';
+
+        // NOT VERIFIED — show resend
+        if (
+          msg.includes('email not confirmed') ||
+          msg.includes('not confirmed') ||
+          msg.includes('confirmation') ||
+          msg.includes('unconfirmed') ||
+          code === 'email_not_confirmed'
+        ) {
+          setErrorMessage("Your account isn't activated yet, soldier. Resend the activation mail below.");
+          setShowResend(true);
+          await storage.set('pending_verification_email', email.trim().toLowerCase());
           return;
         }
 
-        if (msg.includes('invalid login') || msg.includes('incorrect')) {
-          setError("Access denied. Your credentials didn't make the cut.");
-        } else if (msg.includes('user not found') || msg.includes('no user')) {
-          setError("We don't recognize this soldier. Check your email or sign up.");
-        } else if (msg.includes('network') || msg.includes('fetch')) {
-          setError("The system is down. Even machines need rest. Try again.");
-        } else {
-          setError("Access denied. Your credentials didn't make the cut.");
+        // WRONG PIN or USER NOT FOUND
+        if (
+          msg.includes('invalid login') ||
+          msg.includes('invalid credentials') ||
+          msg.includes('user not found') ||
+          msg.includes('no user') ||
+          authError.status === 400
+        ) {
+          setErrorMessage("Wrong code. The 1% don't give up — try again.");
+          return;
         }
-        setIsSubmitting(false);
+
+        // NETWORK ERROR
+        if (msg.includes('network') || msg.includes('fetch')) {
+          setErrorMessage("The system is down. Even machines need rest. Try again.");
+          return;
+        }
+
+        setErrorMessage("Access denied. Your credentials didn't make the cut.");
         return;
       }
 
-      setLoading(true);
-      const cleanUser = {
-        id: dbUser.id,
-        name: dbUser.name || cleanEmail.split('@')[0],
-        email: dbUser.email,
-        isPro: dbUser.is_pro === true,
-        role: dbUser.role || 'user',
-        avatarUrl: dbUser.avatar_url,
-      };
+      // ─── LOGIN SUCCESS ─────────────────────
+      if (!authData?.user) {
+        setIsLoading(false);
+        setErrorMessage("Access denied. Your credentials didn't make the cut.");
+        return;
+      }
+
+      console.log('[Login] Success ✅', authData.user.email);
+
+      // Update public.users pin if null
+      // This fixes users who signed up but had NULL pin due to previous insert failures
+      const cleanEmail = email.trim().toLowerCase();
+      try {
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('pin, id, name, is_pro, role, avatar_url')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+
+        if (userRecord && !userRecord.pin) {
+          // PIN is null — fix it silently
+          const hashedPin = await hashPin(pin);
+          await supabase
+            .from('users')
+            .update({ pin: hashedPin })
+            .eq('id', userRecord.id);
+          console.log('[Login] Fixed NULL pin silently ✅');
+        }
+
+        if (!userRecord) {
+          // Profile missing entirely — create it
+          const hashedPin = await hashPin(pin);
+          await supabase
+            .from('users')
+            .insert({
+              id: authData.user.id,
+              email: cleanEmail,
+              name: authData.user.user_metadata?.name || 'Hardy Soldier',
+              pin: hashedPin,
+              created_at: new Date().toISOString(),
+            });
+          console.log('[Login] Created missing profile ✅');
+        }
+
+        // Set auth context state using public.users data or user_metadata fallback
+        setGlobalLoading(true);
+        const cleanUser = {
+          id: authData.user.id,
+          name: userRecord?.name || authData.user.user_metadata?.name || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          isPro: userRecord?.is_pro === true,
+          role: userRecord?.role || 'user',
+          avatarUrl: userRecord?.avatar_url,
+        };
+
+        setCurrentUser(cleanUser as any);
+        markLoginComplete();
+
+      } catch (profileErr: any) {
+        console.error('[Login] Profile fix error:', profileErr?.message);
+        // Non fatal — user is already authenticated in Supabase
+        // Still set context if possible
+        setCurrentUser({ id: authData.user.id, email: cleanEmail } as any);
+        markLoginComplete();
+      }
+
+      // Clear pending verification
+      await storage.remove('pending_verification_email');
+
+      // Save session
+      await storage.set('user_session', cleanEmail);
 
       if (rememberMe) {
         await SecureStoragePlugin.set({ key: 'saved_email', value: cleanEmail }).catch(() => {});
-        await SecureStoragePlugin.set({ key: 'saved_pin', value: cleanPIN }).catch(() => {});
-      }
-
-      setCurrentUser(cleanUser as any);
-      markLoginComplete();
-
-      /**
-       * SILENT MIGRATION TRIGGER (Fire and Forget)
-       * Use fire and forget to satisfy premium transition speed requirements.
-       */
-      if (authData.user && !isHashed(dbPin)) {
-        runSilentPinMigration(cleanEmail, cleanPIN);
+        await SecureStoragePlugin.set({ key: 'saved_pin', value: pin }).catch(() => {});
       }
 
       await processSyncQueue().catch(console.error);
-      
-      // Navigate to Home Dashboard
+      setIsLoading(false);
       navigate('/home', { replace: true });
-    } catch (err) {
-      console.error('Login error:', err);
-      setError("The system is down. Even machines need rest. Try again.");
-    } finally {
-      setIsSubmitting(false);
+
+    } catch (err: any) {
+      console.error('[Login] Caught exception:', err?.message);
+      setIsLoading(false);
+      setErrorMessage("The system is down. Even machines need rest. Try again.");
     }
-  }, [email, password, rememberMe, setCurrentUser, markLoginComplete, setLoading, navigate]);
+  };
 
   const handlePinInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^0-9]/g, '');
     if (val.length <= 4) {
-      setPassword(val);
+      setPin(val);
       if (val.length >= 4) {
         pinInputRef.current?.blur();
       }
@@ -278,7 +277,7 @@ const Login: React.FC = () => {
     navigate('/onboarding', { replace: true });
   };
 
-  const isFormValid = email.length > 0 && password.length === 4;
+  const isFormValid = email.length > 0 && pin.length === 4;
 
   return (
     <div className="login-page-root min-h-screen bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black relative overflow-hidden">
@@ -335,11 +334,11 @@ const Login: React.FC = () => {
                 maxLength={4}
                 autoFocus={false}
                 style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
-                value={password}
+                value={pin}
                 onChange={handlePinInput}
               />
               {[0, 1, 2, 3].map((index) => {
-                const isFilled = password.length > index;
+                const isFilled = pin.length > index;
                 return (
                   <div 
                     key={index}
@@ -356,46 +355,51 @@ const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* ERROR MESSAGE DISPLAY STYLING */}
-        {error && (
-          <p className={`${error.includes('soldier') || error.includes('work') ? 'text-[#00E676]' : 'text-red-400'} text-xs tracking-wide mt-2 text-center font-medium`}>
-            {error}
-          </p>
-        )}
-
-        {/* SUCCESS MESSAGE DISPLAY STYLING */}
-        {successMessage && (
-          <p className="text-[#00E676] text-xs tracking-wide mt-2 text-center font-medium">
-            {successMessage}
-          </p>
-        )}
-
-        {/* UNVERIFIED ACCOUNT HANDLING: RESEND OPTION */}
-        {showResendOption && (
-          <div className="mt-3 text-center animate-in fade-in slide-in-from-bottom-6 duration-700">
-            <p className="text-white/30 text-xs mb-2">
-              Didn't get the activation mail?
-            </p>
-            <button
-              onClick={handleResendFromLogin}
-              className="text-[#00E676] text-xs font-bold uppercase tracking-widest underline underline-offset-4 decoration-[#00E676]/30 active:opacity-70 transition-all"
-            >
-              Resend Activation Mail
-            </button>
-          </div>
-        )}
-
         {/* PRIMARY ACTION BUTTON */}
         <button 
           onClick={handleLogin}
-          disabled={isSubmitting || !isFormValid}
+          disabled={isLoading || !isFormValid}
           className="w-full bg-[#00E676] text-black font-black uppercase h-14 rounded-2xl flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,230,118,0.4)] active:scale-95 transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isSubmitting ? 'Unlocking' : "Let's Start"}
+          {isLoading ? 'Unlocking the Vault...' : "Let's Start"}
           <svg width="20" height="20" viewBox="0 0 24 24" className="fill-none stroke-black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14m-7-7l7 7-7 7" />
           </svg>
         </button>
+
+        {/* ERROR UI BLOCK */}
+        {errorMessage && (
+          <div className="mt-4 text-center">
+            <p className="text-red-400 text-xs tracking-wide font-medium mb-3 leading-relaxed px-2">
+              {errorMessage}
+            </p>
+
+            {/* Resend button */}
+            {showResend && (
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleResend}
+                  disabled={isResending}
+                  className="w-full py-4 rounded-2xl bg-[#00E676] text-black font-bold text-sm uppercase tracking-wide active:scale-95 transition-all duration-150 shadow-[0_0_20px_rgba(0,230,118,0.35)] disabled:opacity-40"
+                >
+                  {isResending ? 'Deploying Mail...' : 'Resend Activation Mail →'}
+                </button>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="w-full py-3 rounded-2xl border border-white/10 text-white/50 text-sm active:scale-95 transition-all duration-150"
+                >
+                  Try Sign In Instead
+                </button>
+              </div>
+            )}
+
+            {resendSuccess && (
+              <p className="text-[#00E676] text-xs tracking-wide mt-3 font-medium">
+                {resendSuccess}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* SIGN UP LINK */}
         <div className="text-center pt-2">

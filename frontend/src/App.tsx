@@ -1,5 +1,6 @@
 // src/App.tsx
 import React, { Suspense, useEffect, useState, useRef } from 'react';
+import * as Sentry from '@sentry/react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { isWeb } from './utils/platform';
 import { App as CapApp } from '@capacitor/app';
@@ -24,6 +25,7 @@ import WidgetSyncBootstrap from './components/WidgetSyncBootstrap';
 import { AuthDeepLinkHandler } from './components/AuthDeepLinkHandler';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { SideMenu } from './components/SideMenu';
+import BottomNav from './components/BottomNav';
 import OfflineSyncBootstrap from './components/OfflineSyncBootstrap';
 
 // Pages
@@ -80,13 +82,13 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <>
-      {sidebarOpen && <SideMenu onClose={() => setSidebarOpen(false)} />}
+      <SideMenu isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       {showHamburger && (
         <div
           onClick={() => setSidebarOpen(true)}
           style={{
             position: 'fixed',
-            top: '52px',
+            top: '16px',
             left: '16px',
             zIndex: 1500,
             width: '40px',
@@ -110,6 +112,7 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
         </div>
       )}
       {children}
+      {user && !isAuthPage && <BottomNav isHidden={sidebarOpen} />}
     </>
   );
 };
@@ -336,15 +339,53 @@ const Root: React.FC = () => (
     <AuthProvider>
       <SubscriptionProvider>
         <PaywallProvider>
-          <Router>
-            <ThemeProvider>
-              <LanguageProvider>
-                {isWeb ? <Analytics /> : null}
-                {isWeb ? <SpeedInsights /> : null}
-                <AppCore />
-              </LanguageProvider>
-            </ThemeProvider>
-          </Router>
+          <Sentry.ErrorBoundary
+            fallback={
+              <div style={{
+                background: '#000',
+                color: '#00E676',
+                height: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                gap: '16px',
+                fontFamily: 'sans-serif'
+              }}>
+                <h2 style={{ color: '#fff' }}>
+                  Something went wrong.
+                </h2>
+                <p style={{ color: 'rgba(255,255,255,0.4)',
+                            fontSize: '14px' }}>
+                  Our team has been notified.
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  style={{
+                    background: '#00E676',
+                    color: '#000',
+                    border: 'none',
+                    padding: '12px 32px',
+                    borderRadius: '12px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Reload App
+                </button>
+              </div>
+            }
+          >
+            <Router>
+              <ThemeProvider>
+                <LanguageProvider>
+                  {isWeb ? <Analytics /> : null}
+                  {isWeb ? <SpeedInsights /> : null}
+                  <AppCore />
+                </LanguageProvider>
+              </ThemeProvider>
+            </Router>
+          </Sentry.ErrorBoundary>
         </PaywallProvider>
       </SubscriptionProvider>
     </AuthProvider>

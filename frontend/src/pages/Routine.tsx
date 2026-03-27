@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import BottomNav from '../components/BottomNav';
 import { supabase } from '../supabase';
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired, invalidateUserStatsCache } from '../lib/cacheManager';
@@ -1486,7 +1485,7 @@ const Routine: React.FC = () => {
             </div>
           )}
 
-          <BottomNav isHidden={isSidebarHidden} />
+
           <style>{`
             .streak-glass-banner { position: relative; display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem; border-radius: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); }
             .streak-glass-banner__sparkle { color: #6ee7b7; font-size: 20px !important; }

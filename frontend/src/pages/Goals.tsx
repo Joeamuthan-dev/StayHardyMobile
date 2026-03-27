@@ -1,3 +1,4 @@
+// src/pages/Goals.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
@@ -8,12 +9,9 @@ import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
 import { persistGoalsList, loadGoalsListStale } from '../lib/listCaches';
 import { isOnline } from '../lib/networkStatus';
 import { enqueueSync, AFTER_SYNC_FLUSH_EVENT } from '../lib/syncQueue';
-import BottomNav from '../components/BottomNav';
 import { useLocation } from 'react-router-dom';
 import { ProductivityService } from '../lib/ProductivityService';
 import { triggerCelebration } from '../components/CelebrationOverlay';
-
-
 
 interface Goal {
   id: string;
@@ -28,12 +26,6 @@ interface Goal {
   updatedAt?: string;
 }
 
-
-
-
-
-
-
 const motivationalQuotes = [
   "Small progress each day leads to big results.",
   "Discipline today builds the future you want.",
@@ -45,8 +37,6 @@ const motivationalQuotes = [
   "It does not matter how slowly you go as long as you do not stop.",
   "The only way to do great work is to love what you do."
 ];
-
-
 
 const GoalCard = ({
   goal,
@@ -419,7 +409,7 @@ const GoalCard = ({
             <svg width="14" height="14"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#000"
+              stroke="#00"
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round">
@@ -456,7 +446,6 @@ const GoalCard = ({
   )
 }
 
-
 const triggerGlobalRefresh = () => {
   window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
   console.log('Global refresh triggered');
@@ -469,7 +458,6 @@ const Goals: React.FC = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
   const [targetDate, setTargetDate] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -568,29 +556,6 @@ const Goals: React.FC = () => {
     }
   }, [location.search]);
 
-  const uploadImage = async (file: File) => {
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${user?.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('task-images')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('task-images')
-        .getPublicUrl(filePath);
-
-      return publicUrl;
-    } catch (err: any) {
-      console.error('Storage Error:', err);
-      throw new Error(err.message || 'Storage connection failed');
-    }
-  };
-
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id || !name) return;
@@ -609,16 +574,11 @@ const Goals: React.FC = () => {
     setGlobalLoading(true);
     setLoadingText("Establishing Tactical Link...");
 
-
     const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
     const tempId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
     const online = await isOnline();
-    if (!online && imageFile) {
-      showToast('Images require a connection. Try again when online.');
-      return;
-    }
 
     const optimistic: Goal = {
       id: tempId,
@@ -628,7 +588,6 @@ const Goals: React.FC = () => {
       targetDate,
       status: 'pending',
       quote: randomQuote,
-      image_url: undefined, // temporary
       createdAt: nowIso,
     };
 
@@ -645,7 +604,6 @@ const Goals: React.FC = () => {
 
     setName('');
     setDescription('');
-    setImageFile(null);
     setTargetDate('');
     setShowModal(false);
 
@@ -673,11 +631,6 @@ const Goals: React.FC = () => {
         return;
       }
 
-      let imageUrl = '';
-      if (imageFile) {
-        imageUrl = await uploadImage(imageFile);
-      }
-
       const newGoal = {
         userId: user.id,
         name: name.trim(),
@@ -685,7 +638,7 @@ const Goals: React.FC = () => {
         targetDate: targetDate || null,
         status: 'pending',
         quote: randomQuote,
-        image_url: imageUrl,
+        image_url: '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -827,14 +780,6 @@ const Goals: React.FC = () => {
     }
   };
 
-
-
-
-
-
-
-
-
   return (
     <div className="page-shell goals-page-layout" style={{ 
       background: '#000', 
@@ -843,7 +788,8 @@ const Goals: React.FC = () => {
       display: 'flex',
       flexDirection: 'column',
       overflowY: 'auto',
-      WebkitOverflowScrolling: 'touch'
+      WebkitOverflowScrolling: 'touch',
+      paddingBottom: '110px'
     }}>
       <style>{`
         @keyframes meshMove {
@@ -988,7 +934,7 @@ const Goals: React.FC = () => {
         className="bouncing-scroll"
         style={{ 
           paddingTop: '32px', // Sticky header takes up its own space
-          paddingBottom: '120px'
+          paddingBottom: '140px'
         }}
       >
         <style>{`
@@ -1182,8 +1128,6 @@ const Goals: React.FC = () => {
         )}
       </div>
 
-
-
       {/* Elite Command Interface Modal */}
       {showModal && (
         <div style={{
@@ -1210,8 +1154,6 @@ const Goals: React.FC = () => {
             backdropFilter: 'blur(20px)',
             position: 'relative'
           }}>
-
-
 
             {/* Modal Header */}
             <div style={{
@@ -1486,8 +1428,6 @@ const Goals: React.FC = () => {
         </div>
       )}
 
-      {/* Confetti overlay removed */}
-
       {toast && (
         <div
           role="status"
@@ -1513,12 +1453,6 @@ const Goals: React.FC = () => {
           {toast}
         </div>
       )}
-
-      <BottomNav
-        isHidden={false}
-        hideFloatingShelf={showModal}
-        hideMobileNavChrome={showModal}
-      />
     </div>
   );
 };

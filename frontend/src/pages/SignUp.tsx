@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import { storage } from '../utils/storage';
 import { supabase } from '../supabase';
-import { hashPin } from '../utils/pinUtils';
+import { hashPin, padPinForAuth } from '../utils/pinUtils';
 
 export default function SignUp() {
   const navigate = useNavigate();
@@ -17,6 +17,12 @@ export default function SignUp() {
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
+  // STATE FOR SCENARIO HANDLING
+  const [showResend, setShowResend] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState('');
+  const [showGoToLogin, setShowGoToLogin] = useState(false);
+  
   const pinInputRef = useRef<HTMLInputElement>(null);
   const confirmPinInputRef = useRef<HTMLInputElement>(null);
 
@@ -24,15 +30,8 @@ export default function SignUp() {
   useEffect(() => {
     const checkSupabaseConfig = async () => {
       try {
-        // Test basic Supabase connectivity
-        const { data, error } = await supabase.auth.getSession();
-        console.log('[SignUp] Supabase session check:', JSON.stringify(data));
-        console.log('[SignUp] Supabase session error:', JSON.stringify(error));
-
-        // Log the Supabase URL being used
-        console.log('[SignUp] Supabase URL:', 
-          import.meta.env.VITE_SUPABASE_URL || 'NOT SET');
-
+        await supabase.auth.getSession();
+        console.log('[SignUp] Supabase config check complete.');
       } catch (err: any) {
         console.error('[SignUp] Supabase config check failed:', err?.message);
       }
@@ -50,263 +49,195 @@ export default function SignUp() {
   const isValidEmail = (val: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
 
-  // Direct Resend API fallback if Supabase SMTP fails
-  const sendActivationEmailDirect = async (
-    userEmail: string,
-    userName: string
-  ) => {
-    try {
-      const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY;
+  const handleResend = async () => {
+    setIsResending(true);
+    setResendSuccess('');
 
-      if (!RESEND_API_KEY) {
-        console.warn('[SignUp] VITE_RESEND_API_KEY not set — skipping direct send');
-        return;
-      }
+    const targetEmail = email.trim().toLowerCase();
 
-      console.log('[SignUp] Attempting direct Resend API call...');
-
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-        },
-        body: JSON.stringify({
-          from: 'StayHardy <noreply@stayhardy.com>',
-          to: [userEmail],
-          subject: 'Welcome to Stay Hardy — Activate Your Account',
-          xml: null, // Ensure clear body
-          html: `
-            <div style="background:#000000;padding:40px;font-family:sans-serif;">
-              <h1 style="color:#00E676;font-size:32px;margin-bottom:8px;">
-                STAY HARDY
-              </h1>
-              <p style="color:#ffffff;font-size:12px;
-                        letter-spacing:0.2em;margin-bottom:32px;">
-                THE 1% STARTS HERE.
-              </p>
-              <h2 style="color:#ffffff;font-size:20px;margin-bottom:16px;">
-                Welcome, ${userName}.
-              </h2>
-              <p style="color:rgba(255,255,255,0.6);font-size:14px;
-                        line-height:1.7;margin-bottom:32px;">
-                Your account is ready. One last step — activate it
-                by clicking the button below.
-              </p>
-              <a href="https://stayhardy.com/auth/verify"
-                 style="display:inline-block;background:#00E676;
-                        color:#000000;font-weight:700;font-size:14px;
-                        padding:16px 32px;border-radius:12px;
-                        text-decoration:none;letter-spacing:0.05em;">
-                ACTIVATE MY ACCOUNT
-              </a>
-              <p style="color:rgba(255,255,255,0.3);font-size:12px;
-                        margin-top:32px;">
-                If you didn't sign up for Stay Hardy, ignore this email.
-              </p>
-            </div>
-          `,
-        }),
+    const { error: resendError } =
+      await supabase.auth.resend({
+        type: 'signup',
+        email: targetEmail,
+        options: {
+          emailRedirectTo: 'https://stayhardy.com/auth/verify'
+        }
       });
 
-      const result = await response.json();
-      console.log('[SignUp] Direct Resend result:', JSON.stringify(result));
+    setIsResending(false);
 
-      if (response.ok) {
-        console.log('[SignUp] ✅ Direct email sent successfully');
-      } else {
-        console.error('[SignUp] ❌ Direct email failed:', JSON.stringify(result));
-      }
-
-    } catch (err: any) {
-      console.error('[SignUp] Direct Resend exception:', err?.message);
+    if (resendError) {
+      console.error('[Resend] Error:', JSON.stringify(resendError));
+      setErrorMessage("Resend failed. The system resists. Try again.");
+    } else {
+      await storage.set('pending_verification_email', targetEmail);
+      setResendSuccess("Activation mail redeployed. Check your inbox, soldier.");
+      setShowResend(false);
+      setTimeout(() => navigate('/verify-email'), 1500);
     }
   };
 
   const handleSignUp = async () => {
-    // VALIDATION
+    // ─── VALIDATION ───────────────────────
     if (!fullName.trim()) {
       setErrorMessage("A soldier without a name? Fill this in.");
       return;
     }
-    if (!isValidEmail(email)) {
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
       setErrorMessage("That doesn't look like a valid command. Check your email.");
       return;
     }
+
     if (pin.length < 4) {
       setErrorMessage("Your PIN must be exactly 4 digits. No shortcuts.");
       return;
     }
+
     if (pin !== confirmPin) {
       setErrorMessage("PINs don't match. Eyes on the target.");
       return;
     }
 
+    // ─── RESET STATE ──────────────────────
     setIsLoading(true);
     setErrorMessage('');
+    setShowResend(false);
+    setShowGoToLogin(false);
+    setResendSuccess('');
 
     try {
-      /**
-       * STEP 1 — CHECK EMAIL IN public.users TABLE
-       */
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('email')
-        .eq('email', email.trim().toLowerCase())
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('[SignUp] Email check error:', JSON.stringify(checkError));
-        // Non-fatal — continue with signup attempt
-      }
-
-      if (existingUser) {
-        // Email already registered — show branded message
-        setIsLoading(false);
-        setErrorMessage("This soldier already has a post. Sign in instead.");
-        return; // STOP — do not proceed to signUp()
-      }
-
-      /**
-       * SUPABASE SIGN UP CALL with FULL LOGGING
-       */
-      console.log('[SignUp] Starting signup for:', email.trim().toLowerCase());
-      console.log('[SignUp] emailRedirectTo: https://stayhardy.com/auth/verify');
-
-      const { data, error } = await supabase.auth.signUp({
+      // ─── ATTEMPT SIGNUP (uses PADDED pin for auth) ─────────────────
+      // Let Supabase handle duplicate detection
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
-        password: pin + '_secure_pin', // Salted PIN as per project security standard
+        password: padPinForAuth(pin),
         options: {
           emailRedirectTo: 'https://stayhardy.com/auth/verify',
           data: {
-            full_name: fullName.trim(),
+            name: fullName.trim(),
           }
         }
       });
 
-      console.log('[SignUp] Raw response data:', JSON.stringify(data));
-      console.log('[SignUp] Raw response error:', JSON.stringify(error));
+      console.log('[SignUp] Error:', JSON.stringify(authError));
+      console.log('[SignUp] User:', authData?.user?.id);
+      console.log('[SignUp] Identities:', JSON.stringify(authData?.user?.identities));
+      console.log('[SignUp] Confirmed at:', authData?.user?.email_confirmed_at);
 
-      if (data?.user) {
-        console.log('[SignUp] User ID:', data.user.id);
-        console.log('[SignUp] User email:', data.user.email);
-        console.log('[SignUp] Email confirmed at:', data.user.email_confirmed_at);
-        console.log('[SignUp] Confirmation sent at:', data.user.confirmation_sent_at);
-        console.log('[SignUp] Identities:', JSON.stringify(data.user.identities));
-      }
-
-      if (error) {
-        console.error('[SignUp] Auth error status:', error.status);
-        console.error('[SignUp] Auth error message:', error.message);
-        console.error('[SignUp] Auth error full:', JSON.stringify(error));
-
+      // ─── HANDLE ERRORS ────────────────────
+      if (authError) {
         setIsLoading(false);
 
-        if (
-          error.message?.toLowerCase().includes('already registered') ||
-          error.message?.toLowerCase().includes('already exists') ||
-          error.message?.toLowerCase().includes('user already') ||
-          error.message?.toLowerCase().includes('email address is already') ||
-          error.status === 422
-        ) {
+        const msg = authError.message?.toLowerCase() || '';
+        const code = (authError as any).code?.toLowerCase() || '';
+
+        // Weak password (should not happen with padding)
+        if (code === 'weak_password' || msg.includes('weak_password') || msg.includes('at least')) {
+          setErrorMessage("PIN too weak. Please try a different PIN.");
+          return;
+        }
+
+        // Rate limited
+        if (msg.includes('rate limit') || msg.includes('too many')) {
+          setErrorMessage("Too many attempts. Wait a moment, soldier.");
+          return;
+        }
+
+        // Generic error
+        setErrorMessage("Recruitment failed. Check your details and try again.");
+        console.error('[SignUp] Unhandled:', authError.message);
+        return;
+      }
+
+      if (!authData?.user) {
+        setIsLoading(false);
+        setErrorMessage("Recruitment failed. Try again.");
+        return;
+      }
+
+      // ─── CHECK IF ALREADY REGISTERED ──────
+      // Supabase returns user with empty identities when email already exists with confirmation on
+      if (authData.user.identities && authData.user.identities.length === 0) {
+        setIsLoading(false);
+
+        // Email exists — check if confirmed by trying to login
+        const { error: checkError } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password: padPinForAuth(pin),
+        });
+
+        if (!checkError) {
+          // Login worked = activated account
+          // Sign out immediately — they should use login page
+          await supabase.auth.signOut();
           setErrorMessage("This soldier already has a post. Sign in instead.");
-        } else if (
-          error.message?.toLowerCase().includes('network') ||
-          error.message?.toLowerCase().includes('fetch')
-        ) {
-          setErrorMessage("The system is down. Even machines need rest. Try again.");
-        } else if (
-          error.message?.toLowerCase().includes('invalid email')
-        ) {
-          setErrorMessage("That doesn't look like a valid command. Check your email.");
+          setShowGoToLogin(true);
         } else {
-          setErrorMessage("Recruitment failed. Check your details and try again.");
-          console.error('[SignUp] Unhandled error:', JSON.stringify(error));
+          const errMsg = checkError.message?.toLowerCase() || '';
+          if (errMsg.includes('not confirmed') || errMsg.includes('email not confirmed')) {
+            // Exists but not confirmed
+            setErrorMessage("Your account exists but isn't activated yet. Check your inbox or resend below.");
+            setShowResend(true);
+            await storage.set('pending_verification_email', email.trim().toLowerCase());
+          } else {
+            // Exists but wrong PIN entered
+            setErrorMessage("This soldier already has a post. Sign in instead.");
+            setShowGoToLogin(true);
+          }
         }
         return;
       }
 
-      // CRITICAL CHECK: If user exists but identities array is empty
-      // this means the email is already registered
-      if (data?.user && data.user.identities?.length === 0) {
-        console.warn('[SignUp] User exists but identities empty — duplicate email');
-        setIsLoading(false);
-        setErrorMessage("This soldier already has a post. Sign in instead.");
-        return;
-      }
-
-      // Check if confirmation email was scheduled
-      if (data?.user?.confirmation_sent_at) {
-        console.log('[SignUp] ✅ Confirmation email scheduled at:', 
-          data.user.confirmation_sent_at);
-      } else {
-        console.warn('[SignUp] ⚠️ confirmation_sent_at is null — email may not send');
-      }
-
-      /**
-       * PROFILE INSERT (Always HASH on new registration)
-       */
-      if (data.user) {
-        // ENFORCE BCRYPT HASHING BEFORE INSERT
+      // ─── NEW USER SUCCESS ──────────────────
+      // Insert profile into public.users
+      // This is NON-FATAL — auth account is created
+      try {
         const hashedPin = await hashPin(pin);
-        
         const { error: profileError } = await supabase
           .from('users')
           .insert({
-            id: data.user.id,
+            id: authData.user.id,
             email: email.trim().toLowerCase(),
             name: fullName.trim(),
             pin: hashedPin,
-            status: 'online',
             created_at: new Date().toISOString(),
           });
 
         if (profileError) {
-          console.error('Profile insert error (Non-fatal):', profileError);
+          console.error('[SignUp] Profile insert failed:', profileError.message);
+          // Non fatal — continue
+        } else {
+          console.log('[SignUp] Profile created ✅');
         }
-
-        // FALLBACK: Calling direct Resend API fallback if enabled
-        sendActivationEmailDirect(
-          email.trim().toLowerCase(),
-          fullName.trim()
-        );
+      } catch (hashErr: any) {
+        console.error('[SignUp] Hash error:', hashErr?.message);
+        // Non fatal — continue
       }
 
+      // ─── STEP 4: SAVE PENDING + NAVIGATE ───
       setIsLoading(false);
-
-      /**
-       * SUCCESS FLOW — REDIRECT TO VERIFICATION PENDING
-       */
       await storage.set('pending_verification_email', email.trim().toLowerCase());
-      
-      // We clear the user_session to ensure they MUST verify before home entry
       await storage.remove('user_session');
-
-      // Navigate to verification briefing
       navigate('/verify-email');
-
     } catch (err: any) {
-      console.error('[SignUp] CAUGHT EXCEPTION:', err?.message);
-      console.error('[SignUp] Full exception:', JSON.stringify(err));
+      console.error('[SignUp] Caught exception:', err?.message);
       setIsLoading(false);
-      setErrorMessage("Recruitment failed. Check your details and try again.");
+      setErrorMessage("Recruitment failed. Try again.");
     }
   };
 
   const handlePinInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
     setPin(val);
-    if (val.length === 4) {
-      pinInputRef.current?.blur();
-    }
+    if (val.length === 4) pinInputRef.current?.blur();
   };
 
   const handleConfirmPinInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 4);
     setConfirmPin(val);
-    if (val.length === 4) {
-      confirmPinInputRef.current?.blur();
-    }
+    if (val.length === 4) confirmPinInputRef.current?.blur();
   };
 
   const isFormValid = 
@@ -335,24 +266,17 @@ export default function SignUp() {
 
       {/* 2. BRANDING BLOCK */}
       <div className="flex flex-col items-center justify-center mt-24 mb-8">
-        <h1 className="text-white font-extrabold text-5xl tracking-tight text-center leading-none mb-3">
-          STAY HARDY
-        </h1>
-        <p className="text-[#00E676] text-sm font-medium tracking-[0.2em] uppercase text-center">
-          The 1% starts here.
-        </p>
+        <h1 className="text-white font-extrabold text-5xl tracking-tight text-center leading-none mb-3">STAY HARDY</h1>
+        <p className="text-[#00E676] text-sm font-medium tracking-[0.2em] uppercase text-center">The 1% starts here.</p>
       </div>
 
       {/* 3. FORM CARD */}
       <div className="w-full max-w-sm bg-[#0A0A0A] border border-white/5 rounded-3xl px-6 py-8 mx-auto space-y-6">
         
-        {/* FULL NAME */}
         <div className="space-y-2">
           <label className="text-white/60 text-sm font-medium ml-1">Full Name</label>
           <input
             type="text"
-            autoFocus={false}
-            autoComplete="name"
             placeholder="Your name, soldier"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
@@ -360,13 +284,10 @@ export default function SignUp() {
           />
         </div>
 
-        {/* EMAIL ADDRESS */}
         <div className="space-y-2">
           <label className="text-white/60 text-sm font-medium ml-1">Email Address</label>
           <input
             type="email"
-            autoFocus={false}
-            autoComplete="off"
             placeholder="Your email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -374,85 +295,32 @@ export default function SignUp() {
           />
         </div>
 
-        {/* CREATE PIN */}
+        {/* PIN INPUTS */}
         <div className="space-y-1">
           <label className="text-white/60 text-sm font-medium ml-1">Create Your PIN</label>
-          <p className="text-white/25 text-xs ml-1 mb-4">4-digit code. Remember it.</p>
-          
-          <div 
-            className="relative flex gap-5 justify-center items-center py-2"
-            onClick={() => {
-              pinInputRef.current?.focus();
-            }}
-          >
-            <input
-              ref={pinInputRef}
-              type="tel"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              autoFocus={false}
-              maxLength={4}
-              value={pin}
-              style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
-              onChange={handlePinInput}
-            />
+          <div className="relative flex gap-5 justify-center items-center py-2" onClick={() => pinInputRef.current?.focus()}>
+            <input ref={pinInputRef} type="tel" inputMode="numeric" value={pin} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} onChange={handlePinInput} />
             {[0, 1, 2, 3].map((idx) => (
-              <div 
-                key={idx}
-                className="w-14 h-14 rounded-full flex items-center justify-center transition-all"
-                style={pinDotStyle}
-              >
-                {pin.length > idx && (
-                  <div className="w-5 h-5 rounded-full bg-[#00E676] shadow-[0_0_12px_rgba(0,230,118,0.6)] animate-in zoom-in duration-200" />
-                )}
+              <div key={idx} className="w-14 h-14 rounded-full flex items-center justify-center transition-all" style={pinDotStyle}>
+                {pin.length > idx && <div className="w-5 h-5 rounded-full bg-[#00E676] shadow-[0_0_12px_rgba(0,230,118,0.6)] animate-in zoom-in duration-200" />}
               </div>
             ))}
           </div>
         </div>
 
-        {/* CONFIRM PIN */}
         <div className="space-y-1">
           <label className="text-white/60 text-sm font-medium ml-1">Confirm Your PIN</label>
-          <p className="text-white/25 text-xs ml-1 mb-4">Enter it again to confirm.</p>
-          
-          <div 
-            className="relative flex gap-5 justify-center items-center py-2"
-            onClick={() => {
-              confirmPinInputRef.current?.focus();
-            }}
-          >
-            <input
-              ref={confirmPinInputRef}
-              type="tel"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              autoFocus={false}
-              maxLength={4}
-              value={confirmPin}
-              style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
-              onChange={handleConfirmPinInput}
-            />
+          <div className="relative flex gap-5 justify-center items-center py-2" onClick={() => confirmPinInputRef.current?.focus()}>
+            <input ref={confirmPinInputRef} type="tel" inputMode="numeric" value={confirmPin} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} onChange={handleConfirmPinInput} />
             {[0, 1, 2, 3].map((idx) => (
-              <div 
-                key={idx}
-                className="w-14 h-14 rounded-full flex items-center justify-center transition-all"
-                style={pinDotStyle}
-              >
-                {confirmPin.length > idx && (
-                  <div className="w-5 h-5 rounded-full bg-[#00E676] shadow-[0_0_12px_rgba(0,230,118,0.6)] animate-in zoom-in duration-200" />
-                )}
+              <div key={idx} className="w-14 h-14 rounded-full flex items-center justify-center transition-all" style={pinDotStyle}>
+                {confirmPin.length > idx && <div className="w-5 h-5 rounded-full bg-[#00E676] shadow-[0_0_12px_rgba(0,230,118,0.6)] animate-in zoom-in duration-200" />}
               </div>
             ))}
           </div>
-          
-          {confirmPin.length === 4 && (
-            <p className={`${pin === confirmPin ? 'text-[#00E676]' : 'text-red-400'} text-xs text-center mt-3 tracking-wide font-medium`}>
-              {pin === confirmPin ? "PINs match. You're cleared." : "PINs don't match. Stay focused."}
-            </p>
-          )}
         </div>
 
-        {/* 4. SIGN UP BUTTON */}
+        {/* SIGN UP BUTTON */}
         <button
           onClick={handleSignUp}
           disabled={!isFormValid || isLoading}
@@ -461,32 +329,53 @@ export default function SignUp() {
           {isLoading ? 'Enlisting...' : 'Sign Up'}
         </button>
 
-        {/* ERROR DISPLAY */}
+        {/* ERROR UI BLOCK */}
         {errorMessage && (
-          <div className="mt-3 text-center">
-            <p className="text-red-400 text-xs tracking-wide font-medium mb-2">
+          <div className="mt-4 text-center">
+            <p className="text-red-400 text-xs tracking-wide font-medium mb-3 leading-relaxed px-2">
               {errorMessage}
             </p>
-            {errorMessage.includes('already has a post') && (
+
+            {/* Go to login — SignUp only */}
+            {showGoToLogin && (
               <button
                 onClick={() => navigate('/login')}
-                className="text-[#00E676] text-xs font-medium tracking-wide underline underline-offset-2 active:opacity-70 transition-opacity"
+                className="w-full py-4 rounded-2xl bg-[#00E676] text-black font-bold text-sm uppercase tracking-wide active:scale-95 transition-all duration-150 shadow-[0_0_20px_rgba(0,230,118,0.35)]"
               >
-                Take me to Sign In →
+                Take Me to Sign In →
               </button>
+            )}
+
+            {/* Resend button */}
+            {showResend && (
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleResend}
+                  disabled={isResending}
+                  className="w-full py-4 rounded-2xl bg-[#00E676] text-black font-bold text-sm uppercase tracking-wide active:scale-95 transition-all duration-150 shadow-[0_0_20px_rgba(0,230,118,0.35)] disabled:opacity-40"
+                >
+                  {isResending ? 'Deploying Mail...' : 'Resend Activation Mail →'}
+                </button>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="w-full py-3 rounded-2xl border border-white/10 text-white/50 text-sm active:scale-95 transition-all duration-150"
+                >
+                  Try Sign In Instead
+                </button>
+              </div>
+            )}
+
+            {resendSuccess && (
+              <p className="text-[#00E676] text-xs tracking-wide mt-3 font-medium">
+                {resendSuccess}
+              </p>
             )}
           </div>
         )}
 
-        {/* 5. BOTTOM LINK */}
         <p className="text-white/40 text-sm text-center mt-6">
           Already a member?{' '}
-          <span
-            onClick={() => navigate('/login')}
-            className="text-[#00E676] font-bold cursor-pointer hover:underline"
-          >
-            Sign In
-          </span>
+          <span onClick={() => navigate('/login')} className="text-[#00E676] font-bold cursor-pointer hover:underline">Sign In</span>
         </p>
 
       </div>

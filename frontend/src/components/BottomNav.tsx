@@ -194,7 +194,7 @@ const BottomNav: React.FC<{
 
   return (
     <>
-      {/* ── PREMIUM FLOATING DOCK (MOBILE) ── */}
+      {/* ── MOBILE NAVBAR (FLOATING DOCK) ── */}
       {!hideFloatingShelfByRoute &&
         !isMobileMenuOpen &&
         !hideFloatingShelf &&
@@ -223,41 +223,19 @@ const BottomNav: React.FC<{
               50%  { transform: scale(1.2) }
               100% { transform: scale(1) }
             }
-            body.mobile-drawer-open .bottom-nav-container {
+            /* Hide the bar in some UI states but also force it stay hidden on desktop media as we have a sidebar */
+            body.mobile-drawer-open .bottom-nav-container,
+            body.sheet-open .bottom-nav-container {
               display: none !important;
+            }
+            @media (min-width: 1024px) {
+              .bottom-nav-container { display: none !important; }
             }
           `}</style>
 
-          <div className="bottom-nav-container" style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            zIndex: 1000,
-            display: 'flex',
-            justifyContent: 'center',
-            padding: '0 16px',
-            paddingBottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
-            pointerEvents: 'none'
-          }}>
+          <div className="bottom-nav-container fixed bottom-0 left-0 right-0 w-full z-[1000] flex justify-center px-4 pb-[max(20px,env(safe-area-inset-bottom,20px))] pointer-events-none">
             {/* Floating dock */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-around',
-              background: 'rgba(14,14,14,0.94)',
-              backdropFilter: 'blur(24px)',
-              WebkitBackdropFilter: 'blur(24px)',
-              borderRadius: '30px',
-              padding: '10px 16px',
-              width: '100%',
-              maxWidth: '440px',
-              position: 'relative',
-              pointerEvents: 'all',
-              overflow: 'visible',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.05)',
-              borderTop: '1px solid rgba(0,232,122,0.12)'
-            }}>
+            <div className="flex items-center justify-around bg-[rgba(14,14,14,0.94)] backdrop-blur-2xl rounded-[30px] py-2.5 px-4 w-full max-w-[440px] pointer-events-auto relative shadow-[0_8px_32px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.05)] border-t border-[rgba(0,232,122,0.12)]">
 
               {/* Liquid indicator dot */}
               {activeNavIdx >= 0 && (
@@ -278,12 +256,12 @@ const BottomNav: React.FC<{
 
               {/* HABITS */}
               <div
-                onClick={() => navigate(isPro ? '/routine' : '/lifetime-access')}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, cursor: 'pointer', padding: '4px 0', position: 'relative' }}
+                onClick={() => navigate(isPro ? '/routine' : '/paywall')}
+                className="flex flex-col items-center gap-1 flex-1 cursor-pointer py-1 relative"
               >
                 {!isPro && (
-                  <div style={{ position: 'absolute', top: 0, right: '8px', width: '10px', height: '10px', borderRadius: '50%', background: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-                    <svg width="5" height="5" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <div className="absolute top-0 right-2 w-2.5 h-2.5 rounded-full bg-red-500 flex items-center justify-center z-10">
+                    <svg width="5" height="5" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                   </div>
                 )}
                 <div style={{ animation: isActive('/routine') ? 'iconPop 0.3s ease' : 'none' }}>
@@ -291,27 +269,27 @@ const BottomNav: React.FC<{
                     <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
                   </svg>
                 </div>
-                <span style={{ fontSize: '8px', fontWeight: '800', letterSpacing: '0.08em', color: !isPro ? 'rgba(239,68,68,0.5)' : isActive('/routine') ? '#FFFFFF' : 'rgba(255,255,255,0.3)', transition: 'color 0.2s ease' }}>HABITS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${!isPro ? 'text-red-500/50' : isActive('/routine') ? 'text-white' : 'text-white/30'}`}>HABITS</span>
               </div>
 
               {/* TASKS */}
               <div
                 onClick={() => navigate('/dashboard')}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, cursor: 'pointer', padding: '4px 0', position: 'relative' }}
+                className="flex flex-col items-center gap-1 flex-1 cursor-pointer py-1 relative"
               >
                 <div style={{ animation: isActive('/dashboard') ? 'iconPop 0.3s ease' : 'none' }}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isActive('/dashboard') ? '#00E87A' : '#666666'} strokeWidth="2" strokeLinecap="round">
                     <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                   </svg>
                 </div>
-                <span style={{ fontSize: '8px', fontWeight: '800', letterSpacing: '0.08em', color: isActive('/dashboard') ? '#FFFFFF' : 'rgba(255,255,255,0.3)', transition: 'color 0.2s ease' }}>TASKS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${isActive('/dashboard') ? 'text-white' : 'text-white/30'}`}>TASKS</span>
               </div>
 
               {/* CENTER FAB */}
-              <div style={{ position: 'relative', width: '56px', height: '56px', flexShrink: 0, marginTop: '-16px' }}>
+              <div className="relative w-14 h-14 flex-shrink-0 -mt-4">
                 {/* Progress ring */}
                 {pressProgress > 0 && pressProgress < 100 && (
-                  <svg style={{ position: 'absolute', top: '-5px', left: '-5px', transform: 'rotate(-90deg)', pointerEvents: 'none' }} width="66" height="66" viewBox="0 0 66 66">
+                  <svg className="absolute -top-[5px] -left-[5px] rotate-[-90deg] pointer-events-none" width="66" height="66" viewBox="0 0 66 66">
                     <circle cx="33" cy="33" r="30" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="3"/>
                     <circle cx="33" cy="33" r="30" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round"
                       strokeDasharray={String(2 * Math.PI * 30)}
@@ -323,22 +301,7 @@ const BottomNav: React.FC<{
                 {/* FAB */}
                 <div
                   {...longPressHandlers}
-                  style={{
-                    width: '56px',
-                    height: '56px',
-                    borderRadius: '50%',
-                    background: fabState === 'longpress' ? '#FFFFFF' : '#00E87A',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    WebkitUserSelect: 'none',
-                    transition: 'background 0.3s ease, transform 0.2s ease',
-                    transform: fabState === 'pressing' ? 'scale(1.08)' : fabState === 'longpress' ? 'scale(1.15)' : 'scale(1)',
-                    animation: fabState === 'idle' ? 'fabHalo 3s ease-in-out infinite' : fabState === 'longpress' ? 'fabMorphHome 0.4s ease' : 'none',
-                    boxShadow: fabState === 'longpress' ? '0 0 40px rgba(255,255,255,0.6)' : undefined
-                  }}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center cursor-pointer select-none transition-all duration-200 ${fabState === 'longpress' ? 'bg-white scale-115 shadow-[0_0_40px_rgba(255,255,255,0.6)]' : 'bg-[#00E87A]'} ${fabState === 'pressing' ? 'scale-108' : 'scale-100'} ${fabState === 'idle' ? 'animate-[fabHalo_3s_ease-in-out_infinite]' : fabState === 'longpress' ? 'animate-[fabMorphHome_0.4s_ease]' : ''}`}
                 >
                   {fabState === 'longpress' ? (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -358,7 +321,7 @@ const BottomNav: React.FC<{
                 </div>
                 {/* Long press hint */}
                 {fabState === 'pressing' && pressProgress > 30 && (
-                  <div style={{ position: 'absolute', bottom: '-22px', left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontSize: '9px', fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.06em', pointerEvents: 'none' }}>
+                  <div className="absolute -bottom-[22px] left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-bold text-white/50 tracking-wider pointer-events-none uppercase">
                     → HOME
                   </div>
                 )}
@@ -367,24 +330,24 @@ const BottomNav: React.FC<{
               {/* GOALS */}
               <div
                 onClick={() => navigate('/goals')}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, cursor: 'pointer', padding: '4px 0', position: 'relative' }}
+                className="flex flex-col items-center gap-1 flex-1 cursor-pointer py-1 relative"
               >
                 <div style={{ animation: isActive('/goals') ? 'iconPop 0.3s ease' : 'none' }}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isActive('/goals') ? '#00E87A' : '#666666'} strokeWidth="2" strokeLinecap="round">
                     <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
                   </svg>
                 </div>
-                <span style={{ fontSize: '8px', fontWeight: '800', letterSpacing: '0.08em', color: isActive('/goals') ? '#FFFFFF' : 'rgba(255,255,255,0.3)', transition: 'color 0.2s ease' }}>GOALS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${isActive('/goals') ? 'text-white' : 'text-white/30'}`}>GOALS</span>
               </div>
 
               {/* STATS */}
               <div
-                onClick={() => navigate(isPro ? '/stats' : '/lifetime-access')}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, cursor: 'pointer', padding: '4px 0', position: 'relative' }}
+                onClick={() => navigate(isPro ? '/stats' : '/paywall')}
+                className="flex flex-col items-center gap-1 flex-1 cursor-pointer py-1 relative"
               >
                 {!isPro && (
-                  <div style={{ position: 'absolute', top: 0, right: '8px', width: '10px', height: '10px', borderRadius: '50%', background: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-                    <svg width="5" height="5" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <div className="absolute top-0 right-2 w-2.5 h-2.5 rounded-full bg-red-500 flex items-center justify-center z-10">
+                    <svg width="5" height="5" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                   </div>
                 )}
                 <div style={{ animation: isActive('/stats') ? 'iconPop 0.3s ease' : 'none' }}>
@@ -392,7 +355,7 @@ const BottomNav: React.FC<{
                     <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
                   </svg>
                 </div>
-                <span style={{ fontSize: '8px', fontWeight: '800', letterSpacing: '0.08em', color: !isPro ? 'rgba(239,68,68,0.5)' : isActive('/stats') ? '#FFFFFF' : 'rgba(255,255,255,0.3)', transition: 'color 0.2s ease' }}>STATS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${!isPro ? 'text-red-500/50' : isActive('/stats') ? 'text-white' : 'text-white/30'}`}>STATS</span>
               </div>
 
             </div>
@@ -400,9 +363,9 @@ const BottomNav: React.FC<{
         </>
       )}
 
-      {/* ── DESKTOP SIDEBAR ── */}
+      {/* ── DESKTOP SIDEBAR (HIDDEN ON MOBILE) ── */}
       {!isHidden && (
-        <aside className="desktop-sidebar">
+        <aside className="desktop-sidebar hidden lg:flex">
           <style>{`
             @keyframes pulseGlow {
               0% { box-shadow: 0 0 0 0px rgba(16, 185, 129, 0.4); }
@@ -422,10 +385,10 @@ const BottomNav: React.FC<{
               animation: pulseGlow 2s infinite;
             }
           `}</style>
-          <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+          <div className="sidebar-logo flex items-center gap-[0.35rem] flex-wrap">
             <span>StayHardy</span>
             {user?.isPro && !isAdminHubUser(user) && (
-              <span className="material-symbols-outlined" style={{ fontSize: '1.05rem', color: '#fbbf24', fontVariationSettings: "'FILL' 1" }} aria-label="Lifetime Pro" title="Lifetime Pro">star</span>
+              <span className="material-symbols-outlined text-[1.05rem] text-[#fbbf24] fill-1" aria-label="Lifetime Pro" title="Lifetime Pro">star</span>
             )}
           </div>
 
@@ -439,8 +402,8 @@ const BottomNav: React.FC<{
             ))}
           </nav>
 
-          <div className="sidebar-logout-container">
-            <button type="button" className="sidebar-nav-item" style={{ marginBottom: '0.5rem', width: '100%', border: 'none', background: 'transparent' }} onClick={() => setIsIntroOpen(true)}>
+          <div className="sidebar-logout-container mb-10">
+            <button type="button" className="sidebar-nav-item w-full bg-transparent border-none mb-2" onClick={() => setIsIntroOpen(true)}>
               <span className="material-symbols-outlined">help_outline</span>
               <span>Why Stay Hardy?</span>
             </button>
