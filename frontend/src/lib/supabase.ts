@@ -20,6 +20,11 @@ export const supabase = createClient(
       persistSession: true,
       detectSessionInUrl: false, // ← CRITICAL for Capacitor
       flowType: 'implicit',      // ← Keep this
+      lock: async (_name, _acquireTimeout, fn) => {
+        // Use a simple immediate execution instead of Web Locks API
+        // to avoid lock contention on Capacitor/WebView
+        return fn();
+      },
     },
   }
 );

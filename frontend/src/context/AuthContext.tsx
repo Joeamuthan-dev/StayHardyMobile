@@ -66,11 +66,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const persistUser = useCallback((next: AuthUser | null) => {
     setUser(next);
-    if (next) {
-      localStorage.setItem('user', JSON.stringify(next));
-    } else {
-      localStorage.removeItem('user');
-    }
   }, []);
 
   const markLoginComplete = useCallback(() => {
@@ -88,9 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const updateUserMetadata = (metadata: Record<string, unknown>) => {
     setUser((prev) => {
       if (!prev) return null;
-      const updated = { ...prev, ...metadata } as AuthUser;
-      localStorage.setItem('user', JSON.stringify(updated));
-      return updated;
+      return { ...prev, ...metadata } as AuthUser;
     });
   };
 
@@ -124,7 +117,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         paymentId: (dbData as any).payment_id ?? null,
         paymentAmount: (dbData as any).payment_amount ?? null,
       };
-      localStorage.setItem('user', JSON.stringify(merged));
       void saveUserProfileCache(merged);
       return merged;
     });
@@ -136,7 +128,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log('=== INIT SUPABASE SESSION ===');
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+
+      // Fix for boot hang: 5s max wait for session
+      const getSessionWithTimeout = async () => {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Session timeout')), 5000)
+        );
+        return Promise.race([
+          supabase.auth.getSession(),
+          timeoutPromise
+        ]) as Promise<{ data: { session: any } }>;
+      };
+
+      const { data: { session } } = await getSessionWithTimeout().catch((err) => {
+        console.warn('[Auth] Session fetch failed or timed out:', err);
+        return { data: { session: null } };
+      });
       
       if (!session?.user?.id) {
         persistUser(null);
@@ -246,8 +253,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        // Clear all UI cache — user is logged out
+        try {
+          const userId = localStorage.getItem('cached_user_id') || '';
+          localStorage.removeItem('cached_is_pro');
+          localStorage.removeItem('cached_user_id');
+          if (userId) {
+            localStorage.removeItem('cached_profile_fast_' + userId);
+            localStorage.removeItem('ps_score_' + userId);
+            localStorage.removeItem('ps_score_ts_' + userId);
+          }
+          await storage.remove('user_session');
+          if (userId) {
+            await storage.remove('cached_user_profile_' + userId);
+            await storage.remove('cached_user_role_' + userId);
+          }
+        } catch (err) {
+          console.warn('[Auth] Cache clear on signout failed:', err);
+        }
         loginJustHappened.current = false;
         persistUser(null);
         setLoading(false);

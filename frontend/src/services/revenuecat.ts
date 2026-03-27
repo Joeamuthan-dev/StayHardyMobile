@@ -10,7 +10,7 @@ const LOGTAG = '[RevenueCat]';
  * Hardened with initialization guards and silent failure triggers.
  */
 export class RevenueCatService {
-  private static isConfigured = false;
+  static isConfigured = false;
 
   /**
    * Initialize RevenueCat SDK

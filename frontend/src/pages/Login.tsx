@@ -392,6 +392,28 @@ const Login: React.FC = () => {
           </svg>
         </button>
 
+        <button
+          onClick={() => navigate('/forgot-pin')}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'rgba(255,255,255,0.4)',
+            fontSize: '13px',
+            fontWeight: '500',
+            cursor: 'pointer',
+            marginTop: '16px',
+            padding: '8px',
+            textDecoration: 'underline',
+            textUnderlineOffset: '3px',
+            fontFamily: 'Syne, sans-serif',
+            display: 'block',
+            width: '100%',
+            textAlign: 'center',
+          }}
+        >
+          Forgot PIN?
+        </button>
+
         {/* ERROR UI BLOCK */}
         {errorMessage && (
           <div className="mt-4 text-center">

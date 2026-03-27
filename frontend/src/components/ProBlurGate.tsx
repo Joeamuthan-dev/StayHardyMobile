@@ -81,58 +81,74 @@ const ProBlurGate: React.FC<ProBlurGateProps> = ({
             '0 0 40px rgba(0,230,118,0.1), 0 20px 60px rgba(0,0,0,0.8)',
         }}
       >
-        {/* Lock icon */}
-        <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔒</div>
+        {/* Change 1: Lock icon SVG replacement */}
+        <div style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: '14px',
+          background: 'rgba(0,230,118,0.1)',
+          border: '1px solid rgba(0,230,118,0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 14px auto',
+        }}>
+          <svg width="22" height="22" viewBox="0 0 24 24"
+            fill="none" stroke="#00E676" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11"
+              rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
 
-        {/* PRO FEATURE label */}
+        {/* Change 2: PRO FEATURE label typography */}
         <p
           style={{
+            fontFamily: 'Syne, sans-serif',
             fontSize: '11px',
-            fontWeight: '800',
+            fontWeight: '700',
             color: '#00E676',
-            letterSpacing: '0.15em',
+            letterSpacing: '0.18em',
             textTransform: 'uppercase',
-            margin: '0 0 8px 0',
+            margin: '0 0 10px 0',
           }}
         >
           PRO FEATURE
         </p>
 
-        {/* Heading */}
+        {/* Change 3: Main heading typography + Emoji removal */}
         <h3
           style={{
             fontFamily: 'Syne, sans-serif',
             fontWeight: '800',
-            fontSize: '26px',
+            fontSize: '24px',
             color: '#FFFFFF',
-            margin: '0 0 10px 0',
             letterSpacing: '-0.3px',
+            lineHeight: '1.25',
+            margin: '0 0 10px 0',
+            textAlign: 'center',
           }}
         >
-          {featureName.toLowerCase().includes('habit') 
-            ? '💀 Blind spots kill progress' 
-            : featureName.toLowerCase().includes('stat')
-            ? '📈 Are you improving?'
-            : `Unlock ${featureName}`}
+          Unlock {featureName}
         </h3>
 
-        {/* Subtitle */}
+        {/* Change 4: Subtitle typography + Clean text */}
         <p
           style={{
+            fontFamily: 'Inter, system-ui, sans-serif',
             fontSize: '14px',
-            color: 'rgba(255,255,255,0.45)',
-            margin: '0 0 24px 0',
+            fontWeight: '400',
+            color: 'rgba(255,255,255,0.5)',
             lineHeight: '1.6',
+            margin: '0 0 22px 0',
+            textAlign: 'center',
           }}
         >
-          {featureName.toLowerCase().includes('habit')
-            ? 'Track your habits. Join Pro for just ₹1/day.'
-            : featureName.toLowerCase().includes('stat')
-            ? 'Your stats are waiting. Just ₹1/day to see the truth.'
-            : `Upgrade to Stay Hardy Pro to access full ${featureName} and all elite modules.`}
+          Upgrade to Stay Hardy Pro to access full {featureName} and all elite modules.
         </p>
 
-        {/* CTA — navigates to /paywall */}
+        {/* Change 5: CTA Button typography and updated text */}
         <button
           onClick={() => {
             try {
@@ -147,15 +163,16 @@ const ProBlurGate: React.FC<ProBlurGateProps> = ({
             borderRadius: '16px',
             border: 'none',
             background: '#00E676',
-            color: '#000000',
-            fontFamily: 'Syne, sans-serif',
-            fontWeight: '800',
-            fontSize: '15px',
             cursor: 'pointer',
-            letterSpacing: '0.02em',
             boxShadow: '0 0 24px rgba(0,230,118,0.4)',
             transition: 'transform 0.15s ease, opacity 0.15s ease',
             WebkitTapHighlightColor: 'transparent',
+            // Updated typography
+            fontFamily: 'Syne, sans-serif',
+            fontWeight: '800',
+            fontSize: '14px',
+            letterSpacing: '0.06em',
+            color: '#000000',
           }}
           onTouchStart={e => {
             (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.97)';
@@ -166,7 +183,7 @@ const ProBlurGate: React.FC<ProBlurGateProps> = ({
             (e.currentTarget as HTMLButtonElement).style.opacity = '1';
           }}
         >
-          UNLOCK FOR ₹30/mo →
+          The 1% starts here ⚡
         </button>
       </div>
     </div>

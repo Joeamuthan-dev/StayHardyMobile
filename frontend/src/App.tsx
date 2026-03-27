@@ -1,7 +1,7 @@
 // src/App.tsx
-import React, { Suspense, useEffect, useState, useRef } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import * as Sentry from '@sentry/react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { isWeb } from './utils/platform';
 import { App as CapApp } from '@capacitor/app';
 import { Analytics } from "@vercel/analytics/react";
@@ -13,7 +13,7 @@ import { supabase } from './supabase';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
-import { SubscriptionProvider, useSubscription } from './context/SubscriptionContext';
+import { SubscriptionProvider } from './context/SubscriptionContext';
 import { PaywallProvider } from './context/PaywallContext';
 import { LoadingProvider } from './context/LoadingContext';
 
@@ -39,8 +39,8 @@ import Stats from './pages/Stats';
 import Settings from './pages/Settings';
 import Planner from './pages/Planner';
 import Goals from './pages/Goals';
-import ForgotPin from './pages/ForgotPin';
-import ResetPin from './pages/ResetPin';
+import ForgotPIN from './pages/ForgotPIN';
+import ResetPIN from './pages/ResetPIN';
 import Tips from './pages/Tips';
 import Feedback from './pages/Feedback';
 import FeedbackList from './pages/FeedbackList';
@@ -78,7 +78,8 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Hidden on onboarding or login pages
-  const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-pin', '/reset-pin', '/paywall', '/loading', '/onboarding'].includes(location.pathname);
+  const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-pin', '/reset-pin', '/paywall', '/loading', '/onboarding']
+    .some(p => location.pathname.toLowerCase().replace(/\/$/, '') === p);
   const showHamburger = user && !isAuthPage && !sidebarOpen;
 
   return (
@@ -122,57 +123,41 @@ const RootRedirect = () => {
   return <Navigate to="/loading" replace />;
 };
 
-const ProtectedRouteBase = () => {
-  const [status, setStatus] = useState<'checking' | 'ok' | 'redirect'>('checking');
-  const checked = useRef(false);
-  const navigate = useNavigate();
+const ProtectedRoute: React.FC = () => {
+  const { user, loading } = useAuth();
+  const location = useLocation();
 
-  useEffect(() => {
-    if (checked.current) return;
-    checked.current = true;
-
-    const verify = async () => {
-      try {
-        // Check local storage first (instant)
-        const saved = await storage.get('user_session');
-        if (saved && saved !== '') {
-          setStatus('ok');
-          return;
-        }
-
-        // Check Supabase session
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session) {
-          // Save to storage for next time
-          await storage.set(
-            'user_session',
-            session.user.email || 'authenticated'
-          );
-          setStatus('ok');
-        } else {
-          setStatus('redirect');
-        }
-      } catch {
-        setStatus('redirect');
-      }
-    };
-
-    verify();
-  }, [navigate]);
-
-  if (status === 'checking') {
+  if (loading) {
     return (
       <div style={{
+        minHeight: '100vh',
         background: '#000000',
-        width: '100vw',
-        height: '100vh'
-      }} />
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+        <div style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '50%',
+          border: '3px solid rgba(0,230,118,0.2)',
+          borderTop: '3px solid #00E676',
+          animation: 'spin 0.8s linear infinite',
+        }}/>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
     );
   }
 
-  if (status === 'redirect') {
-    return <Navigate to="/login" replace />;
+  if (!user) {
+    // No authenticated user → redirect to login
+    // Save current location to redirect back after login if desired,
+    // though the requirement says just navigate to /login.
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return <Outlet />;
@@ -188,7 +173,6 @@ const AdminRoute = () => {
 const AppCore: React.FC = () => {
   const navigate = useNavigate();
   const { initAuth } = useAuth();
-  const { initRevenueCat } = useSubscription();
   const [authReady, setAuthReady] = useState(false);
   
   // Handle auth state stabilization
@@ -271,13 +255,12 @@ const AppCore: React.FC = () => {
     const initApp = async () => {
       try {
         await initAuth();
-        await initRevenueCat();
       } catch (err) {
         console.error('Core Initialization Failure:', err);
       }
     };
     initApp();
-  }, [initAuth, initRevenueCat]);
+  }, [initAuth]);
 
   // Don't render routes until auth state is known
   if (!authReady) {
@@ -305,12 +288,12 @@ const AppCore: React.FC = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/forgot-pin" element={<ForgotPin />} />
-          <Route path="/reset-pin" element={<ResetPin />} />
+          <Route path="/forgot-pin" element={<ForgotPIN />} />
+          <Route path="/reset-pin" element={<ResetPIN />} />
           <Route path="/paywall" element={<Paywall />} />
           
           {/* Protected Hubs */}
-          <Route element={<ProtectedRouteBase />}>
+          <Route element={<ProtectedRoute />}>
             <Route path="/home" element={<HomeDashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/routine" element={<Routine />} />

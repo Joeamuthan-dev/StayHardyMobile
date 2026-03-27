@@ -20,7 +20,6 @@ interface SubscriptionContextType {
   restorePurchases: () => Promise<boolean>;
   presentCustomerCenter: () => Promise<void>;
   presentPaywall: () => Promise<void>;
-  initRevenueCat: (userId?: string) => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -140,50 +139,90 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   }, [updateStateFromInfo, setGlobalLoading]);
 
-  const initRevenueCat = useCallback(async (uid?: string) => {
-    try {
-      console.log('=== INIT REVENUECAT ===');
-      if (!Capacitor.isNativePlatform()) {
-        setLoading(false);
-        return;
-      }
+  const [rcReady, setRcReady] = useState(false);
 
-      await RevenueCatService.configure(uid || user?.id);
-      await refreshSubscription();
-    } catch (err) {
-      console.error('RevenueCat init failed (Non-blocking):', err);
-      setLoading(false);
-    }
-  }, [user?.id, refreshSubscription]);
-
-  // Secondary setup (listeners only)
+  // STEP 1: Configure RC first — nothing else runs until done
   useEffect(() => {
-    let listener: string | null = null;
+    if (!user?.id) {
+      setRcReady(false);
+      return;
+    }
+    
+    let cancelled = false;
+    
+    const initRC = async () => {
+      try {
+        console.log('=== STAGE 1: CONFIGURE REVENUECAT ===');
+        await RevenueCatService.configure(user.id);
+        if (!cancelled) {
+          setRcReady(true); // Signal that RC is ready
+        }
+      } catch (e) {
+        console.warn('[Sub] RC configure failed:', e);
+      }
+    };
+    
+    initRC();
+    
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // STEP 2: Setup listeners and fetch data AFTER rcReady
+  useEffect(() => {
+    if (!rcReady || !user?.id) return;
+    
+    let listenerHandle: any = null;
     let appStateListener: any = null;
+    
+    const setupRC = async () => {
+      try {
+        console.log('=== STAGE 2: SETUP REVENUECAT DATA ===');
+        if (!Capacitor.isNativePlatform()) {
+          setLoading(false);
+          return;
+        }
 
-    const setupListeners = async () => {
-      if (Capacitor.isNativePlatform()) {
-        listener = await Purchases.addCustomerInfoUpdateListener((info) => {
-          updateStateFromInfo(info);
-        });
+        // Add listener first
+        const listenerId = await Purchases.addCustomerInfoUpdateListener(
+          async (info) => {
+            updateStateFromInfo(info);
+          }
+        );
+        listenerHandle = listenerId;
 
+        // Add App State listener to refresh on foreground
         appStateListener = await App.addListener('appStateChange', ({ isActive }) => {
-          if (isActive) {
+          if (isActive && RevenueCatService.isConfigured) {
             refreshSubscription();
           }
         });
+        
+        // Then fetch current data
+        await refreshSubscription();
+        
+      } catch (e) {
+        console.warn('[Sub] RC setup failed:', e);
+      } finally {
+        setLoading(false);
       }
     };
-
-    setupListeners();
-
+    
+    setupRC();
+    
+    // Cleanup: only remove if SDK is still configured
     return () => {
-      if (listener) {
-        Purchases.removeCustomerInfoUpdateListener({ listenerToRemove: listener });
+      if (RevenueCatService.isConfigured) {
+        if (listenerHandle) {
+          try {
+            Purchases.removeCustomerInfoUpdateListener({ listenerToRemove: listenerHandle });
+          } catch (e) {}
+        }
+        if (appStateListener) {
+          try { appStateListener.remove(); } catch (e) {}
+        }
       }
-      if (appStateListener) appStateListener.remove();
     };
-  }, [refreshSubscription, updateStateFromInfo]);
+  }, [rcReady, user?.id, refreshSubscription, updateStateFromInfo]);
 
   const purchasePackage = async (pkg: PurchasesPackage): Promise<boolean> => {
     const info = await RevenueCatService.purchasePackage(pkg);
@@ -216,8 +255,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       purchasePackage,
       restorePurchases,
       presentCustomerCenter,
-      presentPaywall,
-      initRevenueCat
+      presentPaywall
     }}>
       {children}
     </SubscriptionContext.Provider>

@@ -1,155 +1,393 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { hashPin } from '../utils/pinUtils';
+import { padPinForAuth } from '../utils/pinUtils';
 
-const ResetPin: React.FC = () => {
-  const [pin, setPin] = useState(['', '', '', '']);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+const ResetPIN: React.FC = () => {
   const navigate = useNavigate();
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
 
-  const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newPin = [...pin];
-    newPin[index] = value.slice(-1);
-    setPin(newPin);
-    if (value && index < 3) {
-      document.getElementById(`reset-pin-${index + 1}`)?.focus();
+  useEffect(() => {
+    // Supabase automatically handles the token from URL
+    // and sets the session — we just need to wait for it
+    const { data: authListener } =
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'PASSWORD_RECOVERY' && session) {
+          setSessionReady(true);
+        }
+      });
+    return () => authListener.subscription.unsubscribe();
+  }, []);
+
+  const handleResetPIN = async () => {
+    if (pin.length !== 4) {
+      setError('PIN must be exactly 4 digits.');
+      return;
     }
-  };
-
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !pin[index] && index > 0) {
-      document.getElementById(`reset-pin-${index - 1}`)?.focus();
+    if (pin !== confirmPin) {
+      setError('PINs do not match. Try again.');
+      return;
     }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalPin = pin.join('');
-    if (finalPin.length < 4) {
-      setError('Please enter all 4 digits');
+    if (!/^\d{4}$/.test(pin)) {
+      setError('PIN must contain only numbers.');
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError(null);
 
     try {
-      const securePass = finalPin + "_secure_pin";
-      const { error: authError } = await supabase.auth.updateUser({
-        password: securePass
-      });
-      if (authError) throw authError;
+      // 1. Update Supabase Auth password (padded PIN)
+      const paddedPin = padPinForAuth(pin);
+      const { error: updateError } =
+        await supabase.auth.updateUser({
+          password: paddedPin,
+        });
+      if (updateError) throw updateError;
 
-      // Also update the users table plain PIN
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error: dbError } = await supabase
-          .from('users')
-          .update({ 
-            pin: finalPin,
-            updatedAt: new Date().toISOString()
-          })
-          .eq('id', user.id);
-        
-        if (dbError) console.error('DB PIN update failed:', dbError);
-      }
+      // 2. Get current user
+      const { data: { user } } =
+        await supabase.auth.getUser();
+      if (!user) throw new Error('Session expired.');
+
+      // 3. Update PIN hash in public.users
+      const hashedPin = await hashPin(pin);
+      const { error: dbError } = await supabase
+        .from('users')
+        .update({ pin: hashedPin })
+        .eq('id', user.id);
+      if (dbError) throw dbError;
 
       setSuccess(true);
+
+      // Redirect to login after 2 seconds
       setTimeout(() => navigate('/login'), 2000);
+
     } catch (err: any) {
-      setError(err.message || 'Failed to reset PIN. Error: session might have expired.');
+      setError(
+        err?.message ||
+        'Reset failed. The link may have expired. Try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="auth-container" style={{ background: '#020617', padding: '1rem' }}>
-      <div className="aurora-bg">
-        <div className="aurora-gradient-1"></div>
-        <div className="aurora-gradient-2"></div>
+  // PIN input renderer (4 digit boxes)
+  const renderPINInput = (
+    value: string,
+    onChange: (v: string) => void,
+    placeholder: string
+  ) => (
+    <div style={{ marginBottom: '20px' }}>
+      <p style={{
+        fontSize: '11px',
+        fontWeight: '700',
+        color: 'rgba(255,255,255,0.4)',
+        letterSpacing: '0.1em',
+        textTransform: 'uppercase',
+        marginBottom: '10px',
+      }}>
+        {placeholder}
+      </p>
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        justifyContent: 'center',
+      }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{
+            width: '60px',
+            height: '60px',
+            borderRadius: '16px',
+            background: '#0A0A0A',
+            border: value[i]
+              ? '1px solid rgba(0,230,118,0.5)'
+              : '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '24px',
+            color: '#FFFFFF',
+            fontFamily: 'Syne, sans-serif',
+            fontWeight: '800',
+            boxShadow: value[i]
+              ? '0 0 12px rgba(0,230,118,0.2)'
+              : 'inset 0 2px 8px rgba(0,0,0,0.4)',
+            transition: 'all 0.2s ease',
+          }}>
+            {value[i] ? '●' : ''}
+          </div>
+        ))}
       </div>
+      {/* Hidden input for keyboard */}
+      <input
+        type="number"
+        inputMode="numeric"
+        maxLength={4}
+        value={value}
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+          onChange(v);
+        }}
+        style={{
+          position: 'absolute',
+          opacity: 0,
+          pointerEvents: 'none',
+          width: '1px',
+          height: '1px',
+        }}
+      />
+    </div>
+  );
 
-      <div style={{ maxWidth: '400px', margin: '0 auto', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <header style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 0' }}>
-          <button 
-            onClick={() => navigate(-1)} 
-            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
-          >
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
-          <h2 style={{ fontSize: '1rem', fontWeight: 900, letterSpacing: '0.1em', margin: 0, color: 'white' }}>StayHardy</h2>
-          <div style={{ width: '24px' }}></div>
-        </header>
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: '#000000',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      padding: '0 24px',
+      paddingTop: 'calc(env(safe-area-inset-top, 0px) + 48px)',
+      paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
+      boxSizing: 'border-box',
+    }}>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-          <div style={{ marginBottom: '2rem', padding: '1.5rem', borderRadius: '999px', background: 'rgba(34, 197, 94, 0.1)', color: 'var(--primary)' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '3rem' }}>lock_reset</span>
+      {success ? (
+        /* Success state */
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          paddingTop: '40px',
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>
+            ✅
+          </div>
+          <h2 style={{
+            fontFamily: 'Syne, sans-serif',
+            fontWeight: '800',
+            fontSize: '24px',
+            color: '#FFFFFF',
+            margin: '0 0 12px 0',
+          }}>
+            PIN Updated!
+          </h2>
+          <p style={{
+            fontSize: '14px',
+            color: 'rgba(255,255,255,0.45)',
+            lineHeight: '1.6',
+          }}>
+            Your PIN has been reset successfully.
+            Redirecting to login...
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Icon */}
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '20px',
+            background: 'rgba(0,230,118,0.1)',
+            border: '1px solid rgba(0,230,118,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: '24px',
+            boxShadow: '0 0 24px rgba(0,230,118,0.15)',
+          }}>
+            <svg width="28" height="28" viewBox="0 0 24 24"
+              fill="none" stroke="#00E676" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
           </div>
 
-          <h1 style={{ fontSize: '2rem', fontWeight: 900, letterSpacing: '-0.025em', margin: 0, color: 'white', textAlign: 'center' }}>Reset Your PIN</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', marginTop: '0.75rem', textAlign: 'center', marginBottom: '3rem' }}>
-            Enter your new 4-digit PIN. #StayHard
+          <h1 style={{
+            fontFamily: 'Syne, sans-serif',
+            fontWeight: 800,
+            fontSize: '32px',
+            color: '#ffffff',
+            margin: '0 0 8px 0',
+            letterSpacing: '-0.5px',
+            textAlign: 'center',
+          }}>
+            Reset your PIN
+          </h1>
+
+          <p style={{
+            fontFamily: 'Syne, sans-serif',
+            fontSize: '15px',
+            fontWeight: 400,
+            color: 'rgba(255,255,255,0.5)',
+            margin: '0 0 40px 0',
+            lineHeight: '1.6',
+            textAlign: 'center',
+          }}>
+            Choose a new 4-digit PIN for your vault.
           </p>
 
-          {success && (
-            <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '1rem', borderRadius: '1rem', marginBottom: '1.5rem', width: '100%', textAlign: 'center' }}>
-              PIN reset successfully! Redirecting...
-            </div>
+          {!sessionReady && (
+            <p style={{
+              fontSize: '13px',
+              color: 'rgba(255,255,255,0.3)',
+              marginBottom: '20px',
+              textAlign: 'center',
+            }}>
+              Verifying your reset link...
+            </p>
           )}
 
-          {error && (
-            <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', padding: '1rem', borderRadius: '1rem', marginBottom: '1.5rem', width: '100%', textAlign: 'center' }}>
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} style={{ width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginBottom: '3rem' }}>
-              {pin.map((digit, i) => (
-                <input
-                  key={i}
-                  id={`reset-pin-${i}`}
-                  type="password"
-                  inputMode="numeric"
-                  className="form-input"
-                  style={{ width: '4rem', height: '4rem', textAlign: 'center', fontSize: '1.5rem', fontWeight: 900, borderRadius: '1.25rem', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', boxSizing: 'border-box' }}
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleChange(i, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(i, e)}
-                  required
-                />
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <button type="submit" className="glow-btn-primary" style={{ height: '4rem' }} disabled={loading || success}>
-                {loading ? 'Updating...' : 'Reset PIN'}
-              </button>
-              <button 
-                type="button" 
-                onClick={() => navigate('/login')}
-                style={{ height: '3.5rem', background: 'none', border: 'none', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer', borderRadius: '1rem' }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <footer style={{ padding: '2rem 0', textAlign: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#475569', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>verified_user</span>
-            <span>End-to-End Encrypted</span>
+          {/* New PIN input */}
+          <div
+            onClick={() => {
+              const input = document.getElementById('pin-input-1');
+              if (input) input.focus();
+            }}
+            style={{ width: '100%', position: 'relative' }}
+          >
+            {renderPINInput(pin, setPin, 'New PIN')}
+            <input
+              id="pin-input-1"
+              type="number"
+              inputMode="numeric"
+              value={pin}
+              onChange={e => {
+                const v = e.target.value
+                  .replace(/\D/g, '').slice(0, 4);
+                setPin(v);
+              }}
+              style={{
+                position: 'absolute',
+                top: 0, left: 0,
+                width: '100%', height: '100%',
+                opacity: 0,
+                cursor: 'pointer',
+              }}
+            />
           </div>
-        </footer>
-      </div>
+
+          {/* Confirm PIN input */}
+          <div
+            onClick={() => {
+              const input = document.getElementById('pin-input-2');
+              if (input) input.focus();
+            }}
+            style={{ width: '100%', position: 'relative' }}
+          >
+            {renderPINInput(
+              confirmPin, setConfirmPin, 'Confirm new PIN'
+            )}
+            <input
+              id="pin-input-2"
+              type="number"
+              inputMode="numeric"
+              value={confirmPin}
+              onChange={e => {
+                const v = e.target.value
+                  .replace(/\D/g, '').slice(0, 4);
+                setConfirmPin(v);
+              }}
+              style={{
+                position: 'absolute',
+                top: 0, left: 0,
+                width: '100%', height: '100%',
+                opacity: 0,
+                cursor: 'pointer',
+              }}
+            />
+          </div>
+
+          {/* Error */}
+          {error && (
+            <p style={{
+              fontSize: '13px',
+              color: '#EF4444',
+              margin: '-8px 0 16px 0',
+              fontWeight: '500',
+              textAlign: 'center',
+            }}>
+              {error}
+            </p>
+          )}
+
+          {/* Submit */}
+          <button
+            onClick={handleResetPIN}
+            disabled={
+              loading ||
+              !sessionReady ||
+              pin.length !== 4 ||
+              confirmPin.length !== 4
+            }
+            style={{
+              width: '100%',
+              height: '56px',
+              borderRadius: '16px',
+              border: 'none',
+              background:
+                loading || !sessionReady ||
+                pin.length !== 4 || confirmPin.length !== 4
+                  ? 'rgba(0,230,118,0.3)'
+                  : '#00E676',
+              color: '#000000',
+              fontFamily: 'Syne, sans-serif',
+              fontWeight: '800',
+              fontSize: '15px',
+              letterSpacing: '0.05em',
+              cursor:
+                loading || !sessionReady ||
+                pin.length !== 4 || confirmPin.length !== 4
+                  ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px',
+              boxShadow:
+                !loading && sessionReady &&
+                pin.length === 4 && confirmPin.length === 4
+                  ? '0 0 24px rgba(0,230,118,0.3)'
+                  : 'none',
+              transition: 'all 0.2s ease',
+              marginTop: '8px',
+            }}
+          >
+            {loading ? (
+              <>
+                <div style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  border: '2.5px solid rgba(0,0,0,0.3)',
+                  borderTop: '2.5px solid #000',
+                  animation: 'spin 0.8s linear infinite',
+                }}/>
+                Updating...
+              </>
+            ) : (
+              'Update PIN'
+            )}
+          </button>
+        </>
+      )}
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
 
-export default ResetPin;
+export default ResetPIN;

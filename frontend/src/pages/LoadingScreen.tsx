@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { supabase } from '../supabase';
+import { useAuth } from '../context/AuthContext';
 import { storage } from '../utils/storage';
 
 const LoadingScreen = () => {
@@ -49,6 +49,8 @@ const LoadingScreen = () => {
     };
   }, []);
 
+  const { user, loading: authLoading } = useAuth();
+
   // Boot Sequence Logic (Navigation & Splash Hiding)
   useEffect(() => {
     const init = async () => {
@@ -57,52 +59,56 @@ const LoadingScreen = () => {
       
       const startTime = Date.now();
 
-      try {
-        // Add small delay to let Supabase restore session or for branding
-        const elapsed = Date.now() - startTime;
-        const brandDelay = Math.max(2500 - elapsed, 0); 
-        await new Promise((resolve) => setTimeout(resolve, brandDelay));
+      // IF Auth is done, route immediately
+      if (!authLoading) {
+        try {
+          // Add small delay for branding if needed
+          const elapsed = Date.now() - startTime;
+          const brandDelay = Math.max(1500 - elapsed, 0); 
+          await new Promise((resolve) => setTimeout(resolve, brandDelay));
 
-        // Get current Supabase session (Primary source of truth)
-        const { data: { session } } = await supabase.auth.getSession();
+          if (user) {
+            // Valid Supabase session → safe to go home
+            navigate('/home', { replace: true });
+            return;
+          }
 
-        if (session && session.user) {
-          // Has valid session → home
-          await storage.remove('pending_verification_email');
-          navigate('/home', { replace: true });
-          return;
-        }
+          // No Supabase session
+          const pendingEmail = await storage.get('pending_verification_email');
+          if (pendingEmail) {
+            navigate('/verify-email', { replace: true });
+            return;
+          }
 
-        // No session → check local storage
-        const savedLogin = await storage.get('user_session');
+          const onboardingDone = await storage.get('onboarding_complete');
+          if (onboardingDone === 'true') {
+            navigate('/login', { replace: true });
+            return;
+          }
 
-        if (savedLogin && savedLogin !== '') {
-          // Has local session but no Supabase session
-          // = session expired or logged out
-          // Clear stale local session
-          await storage.remove('user_session');
-          navigate('/login', { replace: true });
-          return;
-        }
-
-        // No session anywhere → onboarding or login
-        const onboardingComplete =
-          await storage.get('onboarding_complete');
-
-        if (onboardingComplete === 'true') {
-          navigate('/login', { replace: true });
-        } else {
+          // Fresh install
           navigate('/onboarding', { replace: true });
+
+        } catch (err) {
+          console.error('[LoadingScreen] Routing failed:', err);
+          navigate('/login', { replace: true });
         }
-      } catch (err) {
-        console.error('Boot failure:', err);
-        navigate('/onboarding', { replace: true });
       }
     };
 
-    // Show loading for minimum duration then route
-    const timer = setTimeout(init, 500); 
-    return () => clearTimeout(timer);
+    init();
+  }, [authLoading, user, navigate]);
+
+  // Safety net: Max 8s wait for boot stabilization
+  useEffect(() => {
+    const maxWait = setTimeout(() => {
+      if (window.location.hash.includes('loading')) {
+        console.warn('[LoadingScreen] Boot timeout — forcing login');
+        navigate('/login', { replace: true });
+      }
+    }, 8000);
+
+    return () => clearTimeout(maxWait);
   }, [navigate]);
 
   return (
