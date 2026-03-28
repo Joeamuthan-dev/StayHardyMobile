@@ -2,7 +2,7 @@
  * Single owner account — Admin Hub and admin nav links only for this email.
  * DB `users.role` must not downgrade this user when merged into AuthUser.
  */
-export const OWNER_ADMIN_EMAIL = 'joe@gmail.com';
+export const OWNER_ADMIN_EMAIL = 'joeamuthan2@gmail.com';
 
 function normalizeEmailForCompare(email: string | undefined | null): string {
   if (!email) return '';
@@ -21,8 +21,8 @@ export function isOwnerAdminEmail(email: string | undefined | null): boolean {
  * Use for sidebar, routes, and guards — checks normalized email so "Joe@gmail.com" matches.
  * Prefer this over `user.role === 'admin'` so stale cache/DB merges cannot hide Admin Hub.
  */
-export function isAdminHubUser(user: { email?: string } | null | undefined): boolean {
-  return isOwnerAdminEmail(user?.email);
+export function isAdminHubUser(user: { email?: string; role?: string } | null | undefined): boolean {
+  return isOwnerAdminEmail(user?.email) || user?.role === 'admin';
 }
 
 /** Settings profile + upsell: owner email or DB role `admin`. */

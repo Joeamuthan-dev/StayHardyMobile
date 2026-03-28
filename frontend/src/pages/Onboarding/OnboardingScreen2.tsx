@@ -23,28 +23,29 @@ const OnboardingScreen2: React.FC<OnboardingScreen2Props> = ({ onNext, onSkip })
   };
 
   useEffect(() => {
-    // HARDCODED "WIN" PATTERN FOR MOTIVATIONAL HUD
+    // "STAY" spelled in pixel-art using green cells (3-wide letters, 1-col gap)
+    // Cols 0-2=S, 3=gap, 4-6=T, 7=gap, 8-10=A, 11=gap, 12-14=Y, 15-25=noise
     const winPattern = [
-      [4,4,0,4,0,4,0,4,4,4,0,0,4,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-      [4,4,0,4,4,4,0,4,0,4,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-      [4,0,4,4,4,4,0,4,0,4,0,0,4,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-      [4,0,4,4,0,4,0,4,0,4,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-      [4,0,0,4,0,4,0,4,0,4,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-      [4,0,0,4,0,4,0,4,4,4,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-      [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+      // row 0 — top padding
+      [0,0,0, 0, 0,0,0, 0, 0,0,0, 0, 0,0,0, 0,0,0,0,0,0,0,0,0,0,0],
+      // row 1
+      [4,4,4, 0, 4,4,4, 0, 0,4,0, 0, 4,0,4, 2,3,2,1,2,3,2,1,2,1,2],
+      // row 2
+      [4,0,0, 0, 0,4,0, 0, 4,0,4, 0, 4,0,4, 1,2,3,2,1,2,3,2,1,2,1],
+      // row 3
+      [4,4,4, 0, 0,4,0, 0, 4,4,4, 0, 0,4,0, 2,1,2,3,2,1,2,3,2,1,2],
+      // row 4
+      [0,0,4, 0, 0,4,0, 0, 4,0,4, 0, 0,4,0, 1,2,1,2,3,2,1,2,3,2,1],
+      // row 5
+      [4,4,4, 0, 0,4,0, 0, 4,0,4, 0, 0,4,0, 2,1,2,1,2,3,2,1,2,3,2],
+      // row 6 — bottom padding
+      [0,0,0, 0, 0,0,0, 0, 0,0,0, 0, 0,0,0, 0,0,0,0,0,0,0,0,0,0,0],
     ];
 
-    const noiseValues = [0, 0, 0, 1, 1, 2];
     const cells: number[] = [];
-    for (let col = 0; col < 52; col++) {
+    for (let col = 0; col < 26; col++) {
       for (let row = 0; row < 7; row++) {
-        const patternVal = winPattern[row][col];
-        if (patternVal === 0) {
-          const noiseIdx = (col * 7 + row) % 6;
-          cells.push(noiseValues[noiseIdx]);
-        } else {
-          cells.push(patternVal);
-        }
+        cells.push(winPattern[row][col]);
       }
     }
     setHeatmapData(cells);
@@ -77,7 +78,7 @@ const OnboardingScreen2: React.FC<OnboardingScreen2Props> = ({ onNext, onSkip })
       </div>
 
       {/* Headline Section */}
-      <div className="pt-8 mb-8 text-left">
+      <div className="pt-4 mb-5 text-left">
         <h1 className="text-[34px] font-extrabold text-white leading-[1.1] tracking-tight m-0">
           CONSISTENCY<br/>
           THAT<br/>
@@ -102,29 +103,33 @@ const OnboardingScreen2: React.FC<OnboardingScreen2Props> = ({ onNext, onSkip })
           </div>
         </div>
 
-        {/* HEATMAP SIZE & BREATHING ROOM */}
-        <div className="mt-4 mb-2 w-full px-2 min-h-[180px] overflow-visible">
-          <div className="flex justify-between mb-1 px-0.5">
-            {['JAN', 'APR', 'JUL', 'OCT'].map(m => (
+        {/* HEATMAP */}
+        <div className="mt-4 mb-2 overflow-visible mx-[-1.5rem] px-3">
+          <div className="flex justify-between mb-2 px-1">
+            {['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN'].map(m => (
               <span key={m} className="text-[10px] font-bold text-white/40 tracking-widest uppercase">{m}</span>
             ))}
           </div>
-          <div className="grid grid-cols-[repeat(52,1fr)] gap-[3px] w-full items-start">
+          <div style={{
+            display: 'grid',
+            gridTemplateRows: 'repeat(7, 1fr)',
+            gridAutoFlow: 'column',
+            gridAutoColumns: '1fr',
+            gap: '4px',
+            height: '200px',
+            width: '100%',
+          }}>
             {heatmapData.map((val, i) => (
-              <div 
-                key={i} 
-                style={{ width: '100%', aspectRatio: '1/1' }}
-                className={`rounded-[1.5px] transition-colors duration-500 ${getCellColor(val)}`} 
+              <div
+                key={i}
+                className={`rounded-[3px] transition-colors duration-500 ${getCellColor(val)}`}
               />
             ))}
           </div>
-          <div className="flex items-center justify-end gap-1.5 mt-2 opacity-50">
+          <div className="flex items-center justify-end gap-2 mt-3 px-1 opacity-60">
             <span className="text-[10px] text-white/30 tracking-tight">LESS</span>
             {[0, 1, 2, 3, 4].map(v => (
-              <div 
-                key={v} 
-                className={`w-2.5 h-2.5 rounded-[1px] ${getCellColor(v)}`} 
-              />
+              <div key={v} className={`w-4 h-4 rounded-[3px] ${getCellColor(v)}`} />
             ))}
             <span className="text-[10px] text-white/30 tracking-tight">MORE</span>
           </div>

@@ -316,7 +316,7 @@ const Login: React.FC = () => {
       </div>
 
       {/* BRANDING HEADER */}
-      <div className="flex flex-col items-center justify-center mt-24 mb-10">
+      <div className="flex flex-col items-center justify-center mt-36 mb-10">
         <h1 className="text-white font-extrabold text-5xl tracking-tight text-center leading-none mb-3">
           STAY HARDY
         </h1>

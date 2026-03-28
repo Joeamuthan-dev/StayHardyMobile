@@ -80,6 +80,20 @@ export class RevenueCatService {
   }
 
   /**
+   * Get the Tips offering specifically (for consumable tip purchases)
+   */
+  static async getTipsOffering(): Promise<PurchasesOffering | null> {
+    if (!Capacitor.isNativePlatform() || !this.isConfigured) return null;
+    try {
+      const offerings = await Purchases.getOfferings();
+      return offerings.all?.['Tips'] ?? null;
+    } catch (e) {
+      console.error(`${LOGTAG} Failed to fetch tips offering:`, e);
+      return null;
+    }
+  }
+
+  /**
    * Purchase a package
    */
   static async purchasePackage(pkg: PurchasesPackage): Promise<CustomerInfo | null> {

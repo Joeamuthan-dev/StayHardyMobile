@@ -8,11 +8,12 @@ import { isNative } from '../utils/platform';
 import { storage } from '../utils/storage';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { 
-  Camera, Zap, ChevronRight, 
-  Lock, Trash2, LogOut, 
-  MessageSquare, Heart, Megaphone, RotateCcw, Target
+  Camera, Zap, ChevronRight,
+  Lock, Trash2, LogOut,
+  MessageSquare, Heart, Megaphone, RotateCcw
 } from 'lucide-react';
 import { supabase } from '../supabase';
+import { hashPin, padPinForAuth } from '../utils/pinUtils';
 
 import { ProductivityService } from '../lib/ProductivityService';
 import SupportModal from '../components/SupportModal';
@@ -20,6 +21,8 @@ import { RevenueCatService } from '../services/revenuecat';
 
 import {
   invokeDeleteUserAccount,
+  wipeLocalDataAfterAccountDeletion,
+  setAccountDeletedToastFlag,
 } from '../lib/accountDeletion';
 import { CacheManager } from '../lib/smartCacheManager';
 
@@ -197,25 +200,53 @@ const Settings: React.FC = () => {
   const _handleUpdatePin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setPinError('');
+
     const currentPinStr = currentPin.join('');
     const pinStr = newPin.join('');
     const confirmPinStr = confirmPin.join('');
+
     const isFourDigits = (s: string) => /^\d{4}$/.test(s);
     if (!isFourDigits(currentPinStr)) return setPinError('Current PIN must be 4 digits.');
     if (!isFourDigits(pinStr)) return setPinError('New PIN must be 4 digits.');
     if (pinStr !== confirmPinStr) return setPinError('New PINs do not match.');
-    if (!user?.id) return setPinError('Not signed in.');
+    if (!user?.id || !user?.email) return setPinError('Not signed in.');
+
     setIsUpdatingPin(true);
     try {
-      const { data: dbUser } = await supabase.from('users').select('pin').eq('id', user.id).single();
-      if (!dbUser || (dbUser.pin || '').trim() !== currentPinStr.trim()) return setPinError('Incorrect current PIN.');
-      await supabase.from('users').update({ pin: pinStr.trim() }).eq('id', user.id);
-      setNotificationToast('PIN updated successfully!');
+      // Step 1: Verify current PIN via Supabase Auth (same as Login)
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: padPinForAuth(currentPinStr),
+      });
+      if (authError) {
+        setIsUpdatingPin(false);
+        return setPinError('Incorrect current PIN.');
+      }
+
+      // Step 2: Update Supabase Auth password
+      const { error: updateAuthError } = await supabase.auth.updateUser({
+        password: padPinForAuth(pinStr),
+      });
+      if (updateAuthError) throw updateAuthError;
+
+      // Step 3: Update users table with hashed new PIN
+      const hashedPin = await hashPin(pinStr);
+      const { error: dbError } = await supabase
+        .from('users')
+        .update({ pin: hashedPin })
+        .eq('id', user.id);
+      if (dbError) throw dbError;
+
+      // Step 4: Success — close modal, show toast, force logout
       setShowPinModal(false);
       resetPinModalFields();
+      setNotificationToast('PIN updated! Please log in again.');
       setTimeout(forceLogoutAfterPinChange, 1500);
-    } catch { setPinError('Update failed.'); }
-    finally { setIsUpdatingPin(false); }
+    } catch (err: any) {
+      setPinError(err?.message || 'Update failed. Please try again.');
+    } finally {
+      setIsUpdatingPin(false);
+    }
   };
 
   useEffect(() => {
@@ -392,7 +423,7 @@ const Settings: React.FC = () => {
           background: #000000; 
           min-height: 100dvh; 
           font-family: 'DM Sans', system-ui, sans-serif; 
-          padding: 24px 16px calc(110px + env(safe-area-inset-bottom, 0px)); 
+          padding: calc(env(safe-area-inset-top, 0px) + 60px) 16px calc(110px + env(safe-area-inset-bottom, 0px)); 
           overflow-y: auto; 
         }
         .set-switch { 
@@ -455,129 +486,145 @@ const Settings: React.FC = () => {
         }
       `}</style>
 
-      {/* Profile Card Section */}
+      {/* Profile Card — Redesigned */}
       <div style={{
-        background: '#121212',
+        position: 'relative',
         borderRadius: '24px',
-        padding: '24px 20px',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '14px',
+        overflow: 'hidden',
         margin: '0 0 4px 0',
+        background: isProUser
+          ? 'linear-gradient(135deg, #0B1A12 0%, #0D0D0D 50%, #0A1410 100%)'
+          : 'linear-gradient(135deg, #111111 0%, #0D0D0D 100%)',
+        border: isProUser
+          ? '1px solid rgba(0,230,118,0.2)'
+          : '1px solid rgba(255,255,255,0.07)',
+        boxShadow: isProUser
+          ? '0 0 60px rgba(0,230,118,0.07), 0 20px 40px rgba(0,0,0,0.5)'
+          : '0 20px 40px rgba(0,0,0,0.5)',
       }}>
-        {/* Avatar with camera overlay */}
-        <div
-          onClick={handleUpdatePhoto}
-          style={{
-            position: 'relative',
-            width: '88px',
-            height: '88px',
-            cursor: 'pointer',
-            flexShrink: 0,
-          }}
-        >
-          {isUploading && (
-            <div style={{ 
-              position: 'absolute', 
-              inset: 0, 
-              background: 'rgba(0,0,0,0.7)', 
-              borderRadius: '50%', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              zIndex: 2 
-            }}>
-              <Megaphone size={24} className="rotating" style={{ color: '#00E676' }} />
-            </div>
-          )}
-          {userProfile?.user_avatar_url ? (
-            <img
-              src={userProfile.user_avatar_url}
-              alt="Profile"
-              style={{
-                width: '88px',
-                height: '88px',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                display: 'block',
-                boxShadow: '0 0 0 3px rgba(0,230,118,0.4), 0 0 0 6px #121212',
-                transition: 'opacity 0.2s ease',
-              }}
-            />
-          ) : (
-            <div style={{
-              width: '88px',
-              height: '88px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #1a1a1a, #0d0d0d)',
-              boxShadow: '0 0 0 3px rgba(0,230,118,0.3), 0 0 0 6px #121212',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontFamily: 'Syne, sans-serif',
-              fontWeight: '800',
-              fontSize: '32px',
-              color: '#00E676',
-            }}>
-              {(userProfile?.user_name || userProfile?.user_email || 'S').charAt(0).toUpperCase()}
-            </div>
-          )}
+        {/* Decorative glow blob top-left */}
+        <div style={{
+          position: 'absolute', top: '-30px', left: '-20px',
+          width: '140px', height: '140px',
+          background: isProUser
+            ? 'radial-gradient(circle, rgba(0,230,118,0.1) 0%, transparent 70%)'
+            : 'radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
 
-          <div style={{
-            position: 'absolute',
-            bottom: '2px',
-            right: '2px',
-            width: '26px',
-            height: '26px',
-            borderRadius: '50%',
-            background: '#00E676',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '2px solid #121212',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-          }}>
-            <Camera size={13} color="#000000" />
+        {/* Decorative dots pattern top-right */}
+        <svg style={{ position: 'absolute', top: 0, right: 0, opacity: 0.06, pointerEvents: 'none' }}
+          width="80" height="80" viewBox="0 0 80 80">
+          {[0,1,2,3].map(row => [0,1,2,3].map(col => (
+            <circle key={`${row}-${col}`} cx={10 + col * 20} cy={10 + row * 20} r="1.5" fill="white"/>
+          )))}
+        </svg>
+
+        {/* Main content */}
+        <div style={{ padding: '16px', position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+
+            {/* Avatar */}
+            <div
+              onClick={handleUpdatePhoto}
+              style={{ position: 'relative', flexShrink: 0, cursor: 'pointer', width: '72px', height: '72px' }}
+            >
+              {isUploading && (
+                <div style={{
+                  position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)',
+                  borderRadius: '50%', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', zIndex: 2,
+                }}>
+                  <Megaphone size={20} className="rotating" style={{ color: '#00E676' }} />
+                </div>
+              )}
+              {userProfile?.user_avatar_url ? (
+                <img
+                  src={userProfile.user_avatar_url}
+                  alt="Profile"
+                  style={{
+                    width: '72px', height: '72px', borderRadius: '50%',
+                    objectFit: 'cover', display: 'block',
+                    boxShadow: isProUser
+                      ? '0 0 0 2px #00E676, 0 0 16px rgba(0,230,118,0.3)'
+                      : '0 0 0 2px rgba(255,255,255,0.15)',
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: '72px', height: '72px', borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #1a2e1e, #0d0d0d)',
+                  boxShadow: isProUser
+                    ? '0 0 0 2px #00E676, 0 0 16px rgba(0,230,118,0.3)'
+                    : '0 0 0 2px rgba(255,255,255,0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'Syne, sans-serif', fontWeight: '800',
+                  fontSize: '26px', color: '#00E676',
+                }}>
+                  {(userProfile?.user_name || userProfile?.user_email || 'S').charAt(0).toUpperCase()}
+                </div>
+              )}
+
+              {/* Camera badge */}
+              <div style={{
+                position: 'absolute', bottom: '1px', right: '1px',
+                width: '22px', height: '22px', borderRadius: '50%',
+                background: '#00E676', display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                border: '2px solid #0D0D0D',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              }}>
+                <Camera size={11} color="#000000" />
+              </div>
+            </div>
+
+            {/* Info block */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Name + Badge inline */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                <span style={{
+                  fontSize: '17px', fontWeight: '800', color: '#FFFFFF',
+                  fontFamily: 'Syne, sans-serif',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  maxWidth: '160px',
+                }}>
+                  {userProfile?.user_name || 'Soldier'}
+                </span>
+                <MembershipBadge
+                  email={userProfile?.user_email || user?.email || ''}
+                  isPro={isProUser}
+                />
+              </div>
+
+              {/* Email */}
+              <span style={{
+                fontSize: '11.5px', color: 'rgba(255,255,255,0.35)',
+                display: 'block', overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {userProfile?.user_email || user?.email || ''}
+              </span>
+
+              {/* Member since */}
+              {memberSince && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '7px' }}>
+                  <div style={{ width: '14px', height: '1px', background: 'rgba(255,255,255,0.12)' }} />
+                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.04em' }}>
+                    Since {memberSince}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Bottom accent line */}
         <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '6px',
-        }}>
-          <span style={{
-            fontSize: '18px',
-            fontWeight: '700',
-            color: '#FFFFFF',
-            fontFamily: 'Syne, sans-serif',
-            textAlign: 'center',
-          }}>
-            {userProfile?.user_name || 'Soldier'}
-          </span>
-
-          <span style={{
-            fontSize: '12px',
-            color: 'rgba(255,255,255,0.4)',
-            textAlign: 'center',
-          }}>
-            {userProfile?.user_email || user?.email || ''}
-          </span>
-
-          <MembershipBadge
-            email={userProfile?.user_email || user?.email || ''}
-            isPro={userProfile?.pro_member === true}
-          />
-          {memberSince && (
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', marginTop: '4px' }}>
-              Member since {memberSince}
-            </span>
-          )}
-        </div>
+          height: '2px',
+          background: isProUser
+            ? 'linear-gradient(90deg, transparent, #00E676 40%, rgba(0,230,118,0.3) 100%)'
+            : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06) 50%, transparent)',
+        }} />
       </div>
 
       {/* Account Section */}
@@ -797,21 +844,6 @@ const Settings: React.FC = () => {
         })()}
 
         <SettingsRow
-          icon={<RotateCcw size={16} />}
-          title="Reset Tasks"
-          subtitle="Clear all task history (Irreversible)"
-          onClick={() => setShowConfirmReset({ show: true, type: 'tasks' })}
-          danger={true}
-        />
-
-        <SettingsRow
-          icon={<Target size={16} />}
-          title="Reset Goals"
-          subtitle="Clear all your goals permanently"
-          onClick={() => setShowConfirmReset({ show: true, type: 'goals' })}
-          danger={true}
-        />
-        <SettingsRow
           icon={<Trash2 size={16} />}
           title="Delete My Account"
           subtitle="Wipe all data from the vault"
@@ -902,21 +934,31 @@ const Settings: React.FC = () => {
             <h2 style={{ color: '#fff', fontSize: '22px', fontWeight: '900', marginBottom: '12px' }}>Final Warning</h2>
             <p style={{ color: '#EF4444', fontSize: '13px', fontWeight: '700', marginBottom: '32px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>This is irreversible.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <button 
-                onClick={async () => { 
+              <button
+                onClick={async () => {
                   setIsDeletingAccount(true);
                   try {
-                    await invokeDeleteUserAccount({}); 
-                    await logout(); 
-                    navigate('/'); 
-                  } catch { 
+                    await invokeDeleteUserAccount({});
+                    setAccountDeletedToastFlag();
+                    await wipeLocalDataAfterAccountDeletion(user?.id ?? '');
+                    await logout();
+                    navigate('/');
+                  } catch {
                     setIsDeletingAccount(false);
-                    setNotificationToast('Deletion failed.');
+                    setNotificationToast('Deletion failed. Please try again.');
                   }
-                }} 
-                style={{ width: '100%', padding: '16px', borderRadius: '14px', background: '#EF4444', color: '#fff', border: 'none', fontWeight: '900', fontSize: '15px' }}
+                }}
+                disabled={isDeletingAccount}
+                style={{ width: '100%', padding: '16px', borderRadius: '14px', background: isDeletingAccount ? 'rgba(239,68,68,0.5)' : '#EF4444', color: '#fff', border: 'none', fontWeight: '900', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', cursor: isDeletingAccount ? 'not-allowed' : 'pointer' }}
               >
-                DELETE MY ACCOUNT NOW
+                {isDeletingAccount ? (
+                  <>
+                    <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2.5px solid rgba(255,255,255,0.3)', borderTop: '2.5px solid #fff', animation: 'rotating 0.8s linear infinite' }} />
+                    Deleting...
+                  </>
+                ) : (
+                  'DELETE MY ACCOUNT NOW'
+                )}
               </button>
               <button onClick={() => setShowDeleteFinalModal(false)} style={{ width: '100%', padding: '16px', borderRadius: '14px', color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', fontWeight: '700', fontSize: '14px' }}>
                 Wait, take me back
@@ -948,7 +990,25 @@ const Settings: React.FC = () => {
               
               <div style={{ display: 'flex', gap: '1rem', marginTop: '12px' }}>
                 <button type="button" onClick={() => setShowPinModal(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', color: '#fff', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', fontWeight: '700' }}>Cancel</button>
-                <button type="submit" disabled={isUpdatingPin} style={{ flex: 1, padding: '14px', borderRadius: '12px', background: '#00E676', color: '#000', border: 'none', fontWeight: '900' }}>
+                <button
+                  type="submit"
+                  disabled={
+                    isUpdatingPin ||
+                    currentPin.join('').length !== 4 ||
+                    newPin.join('').length !== 4 ||
+                    confirmPin.join('').length !== 4 ||
+                    newPin.join('') !== confirmPin.join('')
+                  }
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    borderRadius: '12px',
+                    background: (isUpdatingPin || currentPin.join('').length !== 4 || newPin.join('').length !== 4 || confirmPin.join('').length !== 4 || newPin.join('') !== confirmPin.join('')) ? 'rgba(0,230,118,0.3)' : '#00E676',
+                    color: '#000',
+                    border: 'none',
+                    fontWeight: '900'
+                  }}
+                >
                   {isUpdatingPin ? 'Updating...' : 'Save PIN'}
                 </button>
               </div>

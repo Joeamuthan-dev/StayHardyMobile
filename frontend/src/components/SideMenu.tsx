@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Home, CheckSquare, Target, Calendar,
   RefreshCw, BarChart2, X, LogOut,
-  ChevronRight
+  ChevronRight, Shield
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -120,7 +120,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
   }, []);
 
   const isProUserFromState = userRole === 'pro' || userRole === 'admin' || isPro;
-  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+  // Admin check: email match OR DB role === 'admin' (loaded by AuthContext from public.users)
+  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL || user?.role === 'admin';
   const isProUser = isPro || isAdmin;
 
 
@@ -505,6 +506,41 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
               </button>
             );
           })()}
+
+          {/* Admin Hub — only for joeamuthan2@gmail.com */}
+          {isAdmin && (
+            <button
+              onClick={() => { navigate('/admin'); onClose(); }}
+              className="flex items-center gap-3.5 w-full px-6 py-3.5 relative transition-all duration-200 group"
+              style={{
+                background: location.pathname === '/admin'
+                  ? 'linear-gradient(90deg, rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.04) 60%, transparent 100%)'
+                  : 'transparent',
+              }}
+            >
+              <div style={{
+                width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
+                background: 'rgba(245,158,11,0.12)',
+                border: '1px solid rgba(245,158,11,0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Shield size={16} style={{ color: '#F59E0B' }} strokeWidth={1.8} />
+              </div>
+              <span style={{ fontSize: '14px', fontWeight: '600', color: '#F59E0B', letterSpacing: '0.01em' }}>
+                Admin Hub
+              </span>
+              <div style={{
+                marginLeft: 'auto',
+                fontSize: '9px', fontWeight: '800', letterSpacing: '0.1em',
+                padding: '2px 7px', borderRadius: '6px',
+                background: 'rgba(245,158,11,0.15)',
+                border: '1px solid rgba(245,158,11,0.25)',
+                color: '#F59E0B',
+              }}>
+                ADMIN
+              </div>
+            </button>
+          )}
 
           {!isProUser && (
             <div className="px-4 mt-4 mb-2">
