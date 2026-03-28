@@ -85,16 +85,29 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
     const active = !!info.entitlements.active[ENTITLEMENT_ID];
 
     if (active) {
-      await supabase
+      const { error } = await supabase
         .from('users')
         .update({
           is_pro: true,
-          pro_activated_at: new Date().toISOString(),
-          revenuecat_customer_id: info.originalAppUserId
+          pro_purchase_date: new Date().toISOString(),
         })
         .eq('id', user.id);
+      if (error) {
+        console.error('[SubscriptionContext] Failed to sync is_pro=true to Supabase:', error);
+      } else {
+        console.log('[SubscriptionContext] is_pro=true + pro_purchase_date written to Supabase successfully');
+      }
       void syncRoleCache(true);
     } else {
+      const { error } = await supabase
+        .from('users')
+        .update({
+          is_pro: false,
+        })
+        .eq('id', user.id);
+      if (error) {
+        console.error('[SubscriptionContext] Failed to sync is_pro=false to Supabase:', error);
+      }
       void syncRoleCache(false);
     }
   }, [user]);
@@ -147,9 +160,9 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       setRcReady(false);
       return;
     }
-    
+
     let cancelled = false;
-    
+
     const initRC = async () => {
       try {
         console.log('=== STAGE 1: CONFIGURE REVENUECAT ===');
@@ -161,19 +174,19 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
         console.warn('[Sub] RC configure failed:', e);
       }
     };
-    
+
     initRC();
-    
+
     return () => { cancelled = true; };
   }, [user?.id]);
 
   // STEP 2: Setup listeners and fetch data AFTER rcReady
   useEffect(() => {
     if (!rcReady || !user?.id) return;
-    
+
     let listenerHandle: any = null;
     let appStateListener: any = null;
-    
+
     const setupRC = async () => {
       try {
         console.log('=== STAGE 2: SETUP REVENUECAT DATA ===');
@@ -196,29 +209,29 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
             refreshSubscription();
           }
         });
-        
+
         // Then fetch current data
         await refreshSubscription();
-        
+
       } catch (e) {
         console.warn('[Sub] RC setup failed:', e);
       } finally {
         setLoading(false);
       }
     };
-    
+
     setupRC();
-    
+
     // Cleanup: only remove if SDK is still configured
     return () => {
       if (RevenueCatService.isConfigured) {
         if (listenerHandle) {
           try {
             Purchases.removeCustomerInfoUpdateListener({ listenerToRemove: listenerHandle });
-          } catch (e) {}
+          } catch (e) { }
         }
         if (appStateListener) {
-          try { appStateListener.remove(); } catch (e) {}
+          try { appStateListener.remove(); } catch (e) { }
         }
       }
     };
