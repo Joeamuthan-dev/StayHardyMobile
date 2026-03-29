@@ -119,7 +119,8 @@ const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
       return handleWebPurchase();
     }
 
-    const pkg = packages.find((p) => p.identifier === selectedId);
+    const selectedTierAmount = tiers.find((t) => t.id === selectedId)?.amount ?? 0;
+    const pkg = packages.find((p) => Math.round(p.product.price) === selectedTierAmount);
     if (!pkg) {
       showToast('Selected option not available. Please try again.');
       return;

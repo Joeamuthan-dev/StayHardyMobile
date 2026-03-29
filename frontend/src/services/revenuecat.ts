@@ -86,7 +86,9 @@ export class RevenueCatService {
     if (!Capacitor.isNativePlatform() || !this.isConfigured) return null;
     try {
       const offerings = await Purchases.getOfferings();
-      return offerings.all?.['Tips'] ?? null;
+      const allKeys = Object.keys(offerings.all ?? {});
+      const tipsKey = allKeys.find((k) => k.toLowerCase() === 'tips');
+      return tipsKey ? offerings.all![tipsKey] : null;
     } catch (e) {
       console.error(`${LOGTAG} Failed to fetch tips offering:`, e);
       return null;
