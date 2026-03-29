@@ -37,4 +37,4 @@ ios/
 *.sw?
 
 # Local files
-*.local
+*.local.claude/
