@@ -26,19 +26,6 @@ export default function SignUp() {
   const pinInputRef = useRef<HTMLInputElement>(null);
   const confirmPinInputRef = useRef<HTMLInputElement>(null);
 
-  // Diagnostic check for Supabase connectivity
-  useEffect(() => {
-    const checkSupabaseConfig = async () => {
-      try {
-        await supabase.auth.getSession();
-        console.log('[SignUp] Supabase config check complete.');
-      } catch (err: any) {
-        console.error('[SignUp] Supabase config check failed:', err?.message);
-      }
-    };
-    checkSupabaseConfig();
-  }, []);
-
   // Prevent keyboard auto-trigger on mount
   useEffect(() => {
     if (document.activeElement instanceof HTMLElement) {
@@ -109,7 +96,9 @@ export default function SignUp() {
 
     try {
       // ─── ATTEMPT SIGNUP (uses PADDED pin for auth) ─────────────────
-      // Let Supabase handle duplicate detection
+      // Start hashing PIN in parallel with signUp — pin is already known
+      const hashPinPromise = hashPin(pin);
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password: padPinForAuth(pin),
@@ -171,7 +160,7 @@ export default function SignUp() {
         if (!checkError) {
           // Login worked = activated account
           // Sign out immediately — they should use login page
-          await supabase.auth.signOut();
+          void supabase.auth.signOut();
           setErrorMessage("This soldier already has a post. Sign in instead.");
           setShowGoToLogin(true);
         } else {
@@ -191,35 +180,29 @@ export default function SignUp() {
       }
 
       // ─── NEW USER SUCCESS ──────────────────
-      // Insert profile into public.users
-      // This is NON-FATAL — auth account is created
-      try {
-        const hashedPin = await hashPin(pin);
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: authData.user.id,
-            email: email.trim().toLowerCase(),
-            name: fullName.trim(),
-            pin: hashedPin,
-            created_at: new Date().toISOString(),
-          });
-
-        if (profileError) {
-          console.error('[SignUp] Profile insert failed:', profileError.message);
-          // Non fatal — continue
-        } else {
-          console.log('[SignUp] Profile created ✅');
-        }
-      } catch (hashErr: any) {
+      // Insert profile into public.users — NON-FATAL, run in background
+      const userId = authData.user.id;
+      const userEmail = email.trim().toLowerCase();
+      const userName = fullName.trim();
+      void hashPinPromise.then((hashedPin) =>
+        supabase.from('users').insert({
+          id: userId,
+          email: userEmail,
+          name: userName,
+          pin: hashedPin,
+          created_at: new Date().toISOString(),
+        }).then(({ error }) => {
+          if (error) console.error('[SignUp] Profile insert failed:', error.message);
+          else console.log('[SignUp] Profile created ✅');
+        })
+      ).catch((hashErr: any) => {
         console.error('[SignUp] Hash error:', hashErr?.message);
-        // Non fatal — continue
-      }
+      });
 
       // ─── STEP 4: SAVE PENDING + NAVIGATE ───
       setIsLoading(false);
-      await storage.set('pending_verification_email', email.trim().toLowerCase());
-      await storage.remove('user_session');
+      void storage.set('pending_verification_email', email.trim().toLowerCase());
+      void storage.remove('user_session');
       navigate('/verify-email');
     } catch (err: any) {
       console.error('[SignUp] Caught exception:', err?.message);

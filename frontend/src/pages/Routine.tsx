@@ -1257,6 +1257,7 @@ const Routine: React.FC = () => {
       await persistRoutineCaches(user.id, routines.map((r) => r.id === routine.id ? { ...r, completed: isNowCompleted } : r), isNowCompleted ? (logs.some((l) => l.routine_id === routine.id && l.completed_at === today) ? logs : [...logs, { routine_id: routine.id, completed_at: today }]) : logs.filter((l) => !(l.routine_id === routine.id && l.completed_at === today)));
       void invalidateUserStatsCache();
       void syncWidgetData();
+      window.dispatchEvent(new CustomEvent('routine_log_toggled', { detail: { routine_id: routine.id, completed_at: today, action: isNowCompleted ? 'add' : 'remove' } }));
       triggerGlobalRefresh();
       return;
     }
@@ -1298,6 +1299,7 @@ const Routine: React.FC = () => {
 
       void syncWidgetData();
       void invalidateUserStatsCache();
+      window.dispatchEvent(new CustomEvent('routine_log_toggled', { detail: { routine_id: routine.id, completed_at: today, action: isNowCompleted ? 'add' : 'remove' } }));
       triggerGlobalRefresh();
     } catch (err) {
       // FIX: Log the actual error message for diagnosability

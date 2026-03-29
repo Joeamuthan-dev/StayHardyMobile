@@ -531,7 +531,7 @@ const CategoryRadarChart = ({ categories }: { categories: { name: string; rate: 
       </div>
 
       <ResponsiveContainer width="100%" height={260}>
-        <RadarChart data={data} margin={{ top: 16, right: 32, bottom: 16, left: 32 }}>
+        <RadarChart key={categories.map(c => `${c.name}:${c.rate}`).join('|')} data={data} margin={{ top: 16, right: 32, bottom: 16, left: 32 }}>
           <PolarGrid stroke="rgba(255,255,255,0.07)" />
           <PolarAngleAxis
             dataKey="subject"
@@ -721,18 +721,30 @@ const Stats: React.FC = () => {
     };
     window.addEventListener('productivity_sync', scoreHandler);
 
+    const logToggleHandler = (e: CustomEvent<{ routine_id: string; completed_at: string; action: 'add' | 'remove' }>) => {
+      const { routine_id, completed_at, action } = e.detail;
+      setRoutineLogs((prev) => {
+        if (action === 'add') {
+          if (prev.some((l) => l.routine_id === routine_id && l.completed_at === completed_at)) return prev;
+          return [...prev, { routine_id, completed_at }];
+        } else {
+          return prev.filter((l) => !(l.routine_id === routine_id && l.completed_at === completed_at));
+        }
+      });
+    };
+    window.addEventListener('routine_log_toggled', logToggleHandler as EventListener);
+
     return () => {
       window.removeEventListener('stayhardy_refresh', handler);
       window.removeEventListener('productivity_sync', scoreHandler);
+      window.removeEventListener('routine_log_toggled', logToggleHandler as EventListener);
     };
   }, [user?.id, fetchAllData]);
 
-  const defaultCategories = ['Personal', 'Content', 'Health', 'Business'];
   const allCategories = Array.from(
     new Set([
-      ...defaultCategories,
+      ...routines.map((r: Routine) => r.category || 'General'),
       ...dbCategories,
-      ...routines.map((r: Routine) => r.category),
     ]),
   ).filter((c) => c && c !== '');
 
@@ -838,7 +850,6 @@ const Stats: React.FC = () => {
   const categoryStats = useMemo(() => {
     const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
-    now.setHours(0, 0, 0, 0);
 
     return allCategories
       .map((cat) => {
@@ -850,13 +861,13 @@ const Stats: React.FC = () => {
           let actual = 0;
           const catRoutineIds = new Set(catRoutines.map(r => r.id));
 
-          // Last 7 days discipline
+          // Last 7 days — use UTC date arithmetic to match how completed_at is stored
           for (let i = 0; i < 7; i++) {
             const d = new Date(now);
-            d.setDate(d.getDate() - i);
+            d.setUTCDate(d.getUTCDate() - i);
             const dStr = d.toISOString().split('T')[0];
-            const dayName = daysOfWeek[d.getDay()];
-            
+            const dayName = daysOfWeek[d.getUTCDay()];
+
             expected += catRoutines.filter(r => r.days?.includes(dayName)).length;
             actual += routineLogs.filter(l => l.completed_at === dStr && catRoutineIds.has(l.routine_id)).length;
           }
@@ -875,7 +886,7 @@ const Stats: React.FC = () => {
       .filter((stat): stat is NonNullable<typeof stat> => stat !== null && stat.hasHabits)
       .sort((a, b) => b.rate - a.rate)
       .slice(0, 10);
-  }, [tasks, routines, routineLogs, allCategories]);
+  }, [routines, routineLogs, allCategories]);
 
 
 
