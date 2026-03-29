@@ -1,21 +1,23 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
-import CategoryInsightCard from '../components/CategoryInsightCard';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired } from '../lib/cacheManager';
 import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
 import { loadStatsPageStale, persistStatsPageCache } from '../lib/statsPageCache';
 import { ProductivityService, type ProductivityScoreData } from '../lib/ProductivityService';
-import { calculateProductivityScore } from '../utils/productivity';
-import { loadTasksListStale, loadGoalsListStale, loadRoutinesRawStale, loadRoutineLogsListStale } from '../lib/listCaches';
+import { calculateProductivityScore, getScoreLabels } from '../utils/productivity';
+
 import { useLoading } from '../context/LoadingContext';
+import { useSubscription } from '../context/SubscriptionContext';
 import ProBlurGate from '../components/ProBlurGate';
 
 interface Task {
   id: string;
   status: 'pending' | 'completed';
-  category: string;
+
   createdAt: string;
   updatedAt?: string;
 }
@@ -117,7 +119,7 @@ const HabitHeatmap = ({
       <div style={{ background: 'rgba(255,255,255,0.03)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,232,122,0.15)', borderRadius: '16px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', animation: 'pillGlow 3s ease-in-out infinite' }}>
         {[
           { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>, label: 'ACTIVE DAYS', value: statsData.activeDays },
-          { icon: <span style={{ fontSize: '12px', filter: 'drop-shadow(0 0 4px rgba(255,100,0,0.8))' }}>🔥</span>, label: 'BEST STREAK', value: statsData.bestStreak },
+          { icon: <span style={{ fontSize: '12px', display: 'inline-block', animation: 'flamePulse 1.2s ease-in-out infinite' }}>🔥</span>, label: 'BEST STREAK', value: statsData.bestStreak },
           { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>, label: 'COMPLETION', value: `${statsData.completionRate}%` }
         ].map((stat, i) => (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, borderRight: i < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none', padding: '0 8px' }}>
@@ -451,7 +453,7 @@ const InsightsTrend = ({ data, activeRange, setActiveRange }: { data: { tasks: n
   );
 };
 
-const VerdictCard = ({ score, verdictText }: { score: number, verdictText: string }) => {
+const VerdictCard = ({ score, totalItems }: { score: number, totalItems: number }) => {
   const getVerdict = (s: number) => {
     if (s >= 90) return { icon: '🏆', title: 'PERFECT EXECUTION', color: '#FFD700', glow: 'rgba(255,215,0,0.3)' };
     if (s >= 75) return { icon: '⚡', title: 'ELITE PERFORMER', color: '#00E87A', glow: 'rgba(0,232,122,0.3)' };
@@ -461,6 +463,7 @@ const VerdictCard = ({ score, verdictText }: { score: number, verdictText: strin
     return { icon: '👻', title: 'GHOST MODE', color: '#6B7280', glow: 'rgba(107,114,128,0.2)' };
   };
   const v = getVerdict(score);
+  const labels = useMemo(() => getScoreLabels(score, totalItems), [score, totalItems]);
   return (
     <div style={{ 
       ...cardStyle, 
@@ -476,11 +479,11 @@ const VerdictCard = ({ score, verdictText }: { score: number, verdictText: strin
           <div style={{ position: 'relative', fontSize: '28px', filter: `drop-shadow(0 0 12px ${v.glow})` }}>{v.icon}</div>
           <div>
             <p style={{ fontSize: '9px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: '0 0 2px 0' }}>THE VERDICT</p>
-            <p style={{ fontSize: '14px', fontWeight: '900', color: v.color, margin: 0, letterSpacing: '0.04em', fontFamily: 'monospace' }}>{v.title}</p>
+            <p style={{ fontSize: '14px', fontWeight: '900', color: v.color, margin: 0, letterSpacing: '0.04em', fontFamily: 'monospace' }}>{labels.label}</p>
           </div>
         </div>
         <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', marginBottom: '14px' }} />
-        <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', margin: 0, lineHeight: 1.7, fontWeight: '400' }}>{verdictText}</p>
+        <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', margin: 0, lineHeight: 1.7, fontWeight: '400' }}>{labels.verdict}</p>
 
       </div>
     </div>
@@ -488,33 +491,94 @@ const VerdictCard = ({ score, verdictText }: { score: number, verdictText: strin
 };
 
 
-function getScoreBadge(score: number): { emoji: string; label: string; verdict: string; fullVerdict: string; bg: string; border: string; color: string } {
-  const s = Math.min(100, Math.max(0, Math.round(score)));
-  if (s === 0) return { emoji: '👻', label: 'GHOST MODE', verdict: "No tasks. No habits. No goals.", fullVerdict: "No tasks. No habits. No goals. You opened the app though — that's literally all you did.", bg: '#1a1a1a', border: 'rgba(255,255,255,0.1)', color: '#94a3b8' };
-  if (s <= 5) return { emoji: '💀', label: 'FLATLINE', verdict: "Technically alive. Barely.", fullVerdict: "One task? Half a habit? This isn't productivity — this is an accident.", bg: '#2e0a0a', border: 'rgba(239,68,68,0.2)', color: '#f87171' };
-  if (s <= 10) return { emoji: '🧊', label: 'COLD START', verdict: "Engine's cold.", fullVerdict: "You're doing the minimum required to say you tried. The bar is on the floor.", bg: '#2e140a', border: 'rgba(249,115,22,0.2)', color: '#fb923c' };
-  if (s <= 15) return { emoji: '🐌', label: 'SNAIL PACE', verdict: "Moving... technically.", fullVerdict: "Slow. Real slow. You move like you have all the time in the world — you don't.", bg: '#2e1e0a', border: 'rgba(245,158,11,0.2)', color: '#fbbf24' };
-  if (s <= 20) return { emoji: '🔆', label: 'WARMING UP', verdict: "Signs of life detected.", fullVerdict: "There's a pulse. Faint, but it's there. You've got potential buried under layers.", bg: '#1c2e0a', border: 'rgba(163,230,53,0.2)', color: '#a3e635' };
-  if (s <= 25) return { emoji: '🐢', label: 'CRAWLING', verdict: "Slow and steady...", fullVerdict: "You're crawling when you should be running. Every day you delay is a day lost.", bg: '#0a2e10', border: 'rgba(74,222,128,0.2)', color: '#4ade80' };
-  if (s <= 30) return { emoji: '🌱', label: 'GAINING GROUND', verdict: "Something's growing.", fullVerdict: "You're starting to build some traction. Don't let laziness take over now.", bg: '#0a2e1e', border: 'rgba(45,212,191,0.2)', color: '#2dd4bf' };
-  if (s <= 35) return { emoji: '🎵', label: 'FINDING RHYTHM', verdict: "You found a beat.", fullVerdict: "Now we care. You are gaining speed. Consistency is key from here on.", bg: '#0a2a2e', border: 'rgba(34,211,238,0.2)', color: '#22d3ee' };
-  if (s <= 40) return { emoji: '🏗️', label: 'BUILDING UP', verdict: "Foundation forming.", fullVerdict: "Brick by brick. You're setting up a solid day. Don't drop any.", bg: '#0a1d2e', border: 'rgba(56,189,248,0.2)', color: '#38bdf8' };
-  if (s <= 45) return { emoji: '💪', label: 'GETTING REAL', verdict: "Now we're talking.", fullVerdict: "You are pushing boundaries and it shows. Keep this energy rolling.", bg: '#0d0a2e', border: 'rgba(96,165,250,0.2)', color: '#60a5fa' };
-  if (s <= 50) return { emoji: '⚡', label: 'HALFWAY HERO', verdict: "Halfway there.", fullVerdict: "You crossed the midpoint. The slope is slightly easier now. Keep climbing.", bg: '#180a2e', border: 'rgba(129,140,248,0.2)', color: '#818cf8' };
-  if (s <= 55) return { emoji: '🔥', label: 'ON FIRE', verdict: "Burning bright.", fullVerdict: "Now you are getting somewhere. This is what momentum feels like.", bg: '#250a2e', border: 'rgba(167,139,250,0.2)', color: '#a78bfa' };
-  if (s <= 60) return { emoji: '🎯', label: 'LOCKED IN', verdict: "Focus is sharp.", fullVerdict: "Absolute focus. You are in deep state of performance. Stay there.", bg: '#2e0a25', border: 'rgba(192,132,252,0.2)', color: '#c084fc' };
-  if (s <= 65) return { emoji: '🦾', label: 'CRUSHING IT', verdict: "Machine mode.", fullVerdict: "No mercy for procrastination. You are executing task after task effortlessly.", bg: '#2e0a18', border: 'rgba(232,121,249,0.2)', color: '#e879f9' };
-  if (s <= 70) return { emoji: '🚀', label: 'MOMENTUM', verdict: "Hold on tight.", fullVerdict: "Escape velocity reached. You are flying through your list index Index setups.", bg: '#2e0a0d', border: 'rgba(244,114,182,0.2)', color: '#f472b6' };
-  if (s <= 75) return { emoji: '🏆', label: 'ELITE LEVEL', verdict: "Top tier.", fullVerdict: "Highest performing bracket. You belong here. Defend your spot.", bg: '#2e120a', border: 'rgba(251,113,133,0.2)', color: '#fb7185' };
-  if (s <= 80) return { emoji: '🦁', label: 'BEAST MODE', verdict: "Savage consistency.", fullVerdict: "Unstoppable force. You aren't just working, you are dictating your day Index Index indexing Index Index Index Index index INDEX INDEX!", bg: '#2e1c0d', border: 'rgba(252,165,165,0.2)', color: '#fca5a5' };
-  if (s <= 85) return { emoji: '⚜️', label: 'LEGENDARY', verdict: "Class of your own.", fullVerdict: "Elite output. You're showing what standard self-control looks like Index Index indexing Index Index Index Index index INDEX INDEX!", bg: '#2e250a', border: 'rgba(253,224,71,0.2)', color: '#fde047' };
-  if (s <= 90) return { emoji: '🌟', label: 'SUPERHUMAN', verdict: "Peak efficiency.", fullVerdict: "You are making this look incredibly easy. Exceptional output Index Index indexing Index Index Index Index index INDEX INDEX!", bg: '#202e0a', border: 'rgba(163,230,53,0.3)', color: '#a3e635' };
-  if (s <= 95) return { emoji: '👑', label: 'GODLIKE', verdict: "Unrivaled.", fullVerdict: "The crown is yours. Standard setter. Maintain absolute dominion Index Index indexing Index Index Index Index index INDEX INDEX!", bg: '#0d2e0a', border: 'rgba(74,222,128,0.3)', color: '#4ade80' };
-  return { emoji: '💎', label: 'PERFECT', verdict: "Flawless.", fullVerdict: "You are the ideal version of yourself. Zero complaints Index Index indexing Index Index Index Index index INDEX INDEX!", bg: '#0a2e1d', border: 'rgba(45,212,191,0.3)', color: '#2dd4bf' };
-}
 
 
 
+const CategoryRadarChart = ({ categories }: { categories: { name: string; rate: number }[] }) => {
+  const navigate = useNavigate();
+  if (categories.length === 0) {
+    return (
+      <div style={{ ...cardStyle, padding: '20px', border: '0.5px solid rgba(255,255,255,0.08)', margin: '0 16px 12px 16px' }}>
+        <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: '0 0 12px 0' }}>CATEGORY RADAR</p>
+        <p
+          onClick={() => navigate('/routine')}
+          style={{ fontSize: '12px', color: '#00E676', textAlign: 'center', cursor: 'pointer', margin: 0 }}
+        >
+          Create your first habit →
+        </p>
+      </div>
+    );
+  }
+
+  const data = categories.map(cat => ({
+    subject: cat.name.length > 9 ? cat.name.slice(0, 8) + '…' : cat.name,
+    score: cat.rate,
+    fullMark: 100,
+  }));
+
+  const strongest = categories[0];
+  const weakest = categories[categories.length - 1];
+
+  return (
+    <div style={{ ...cardStyle, padding: '20px', border: '0.5px solid rgba(0,232,122,0.15)', margin: '0 16px 12px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+        <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>
+          CATEGORY RADAR
+        </p>
+        <span style={{ fontSize: '9px', color: 'rgba(0,232,122,0.6)', fontWeight: '700', letterSpacing: '0.06em' }}>
+          {categories.length} {categories.length === 1 ? 'CATEGORY' : 'CATEGORIES'}
+        </span>
+      </div>
+
+      <ResponsiveContainer width="100%" height={260}>
+        <RadarChart data={data} margin={{ top: 16, right: 32, bottom: 16, left: 32 }}>
+          <PolarGrid stroke="rgba(255,255,255,0.07)" />
+          <PolarAngleAxis
+            dataKey="subject"
+            tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 700 }}
+          />
+          <Radar
+            name="Score"
+            dataKey="score"
+            stroke="#00E87A"
+            fill="#00E87A"
+            fillOpacity={0.18}
+            strokeWidth={2}
+            dot={{ fill: '#00E87A', r: 3 }}
+          />
+        </RadarChart>
+      </ResponsiveContainer>
+
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: '8px',
+        padding: '10px 14px',
+        background: 'rgba(0,232,122,0.04)',
+        border: '1px solid rgba(0,232,122,0.1)',
+        borderRadius: '12px'
+      }}>
+        <div>
+          <p style={{ fontSize: '8px', color: 'rgba(255,255,255,0.25)', fontWeight: '800', letterSpacing: '0.1em', margin: '0 0 3px 0' }}>STRONGEST</p>
+          <p style={{ fontSize: '13px', color: '#00E87A', fontWeight: '900', margin: 0, fontFamily: 'monospace' }}>
+            {strongest.name}&nbsp;
+            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: '700' }}>{strongest.rate}%</span>
+          </p>
+        </div>
+        {categories.length > 1 && (
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: '8px', color: 'rgba(255,255,255,0.25)', fontWeight: '800', letterSpacing: '0.1em', margin: '0 0 3px 0' }}>NEEDS WORK</p>
+            <p style={{ fontSize: '13px', color: '#F97316', fontWeight: '900', margin: 0, fontFamily: 'monospace' }}>
+              {weakest.name}&nbsp;
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: '700' }}>{weakest.rate}%</span>
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 const Stats: React.FC = () => {
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const [heatmapRange, setHeatmapRange] = useState<'30D' | '90D' | '1Y'>('30D');
@@ -527,6 +591,7 @@ const Stats: React.FC = () => {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [trendDays, setTrendDays] = useState(7);
   const { user } = useAuth();
+  const { isPro } = useSubscription();
   const { setLoading } = useLoading();
   const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
   const isMountedRef = useRef(true);
@@ -549,7 +614,7 @@ const Stats: React.FC = () => {
     const startDayStr = thirtyDaysAgo.getFullYear() + '-' + String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0') + '-' + String(thirtyDaysAgo.getDate()).padStart(2, '0');
 
     const [{ data: tasksData, error: taskErr }, { data: catData, error: catErr }, { data: routinesData }, { data: logsData }, { data: goalsData }] = await Promise.all([
-      supabase.from('tasks').select('id, status, category, createdAt, updatedAt').eq('userId', user.id),
+      supabase.from('tasks').select('id, status, createdAt, updatedAt').eq('userId', user.id),
       supabase.from('categories').select('name').eq('userId', user.id),
       supabase.from('routines').select('id, title, days, category').eq('user_id', user.id),
       supabase.from('routine_logs').select('routine_id, completed_at').eq('user_id', user.id).gte('completed_at', startDayStr),
@@ -566,6 +631,7 @@ const Stats: React.FC = () => {
     const goalsArr = (goalsData ?? []) as Goal[];
     const cats = catData?.map((c) => c.name) ?? [];
 
+    setTasks(tasksArr);
     setDbCategories(cats);
     setRoutines(routinesArr);
     setRoutineLogs(logsArr);
@@ -602,7 +668,7 @@ const Stats: React.FC = () => {
         setGoals((snap.goals ?? []) as Goal[]);
         setDbCategories(snap.dbCategories ?? []);
       }
-      await fetchAllData({ force: false });
+      await fetchAllData({ force: true });
     })();
 
     const tasksChannel = supabase
@@ -619,30 +685,33 @@ const Stats: React.FC = () => {
       })
       .subscribe();
 
+    const routinesChannel = supabase
+      .channel('stats_routines_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'routines', filter: `user_id=eq.${user.id}` }, () => {
+        void fetchAllData({ force: true });
+      })
+      .subscribe();
+
+    const routineLogsChannel = supabase
+      .channel('stats_routine_logs_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'routine_logs', filter: `user_id=eq.${user.id}` }, () => {
+        void fetchAllData({ force: true });
+      })
+      .subscribe();
+
     return () => {
       cancelled = true;
       supabase.removeChannel(tasksChannel);
       supabase.removeChannel(categoriesChannel);
+      supabase.removeChannel(routinesChannel);
+      supabase.removeChannel(routineLogsChannel);
     };
   }, [user, fetchAllData]);
 
   useEffect(() => {
     const handler = () => {
-      console.log('Stats refreshing from global event (optimistic cache load)...');
       if (user?.id) {
-        void Promise.all([
-          loadTasksListStale<Task>(user.id),
-          loadRoutinesRawStale<Routine>(user.id),
-          loadRoutineLogsListStale<RoutineLog>(user.id),
-          loadGoalsListStale<Goal>(user.id),
-          ProductivityService.getStoredScore(user.id)
-        ]).then(([t, r, l, g, s]) => {
-          if (t) setTasks(t);
-          if (r) setRoutines(r);
-          if (l) setRoutineLogs(l);
-          if (g) setGoals(g);
-          if (s) setScoreData(s);
-        });
+        void fetchAllData({ force: true });
       }
     };
     window.addEventListener('stayhardy_refresh', handler);
@@ -660,7 +729,11 @@ const Stats: React.FC = () => {
 
   const defaultCategories = ['Personal', 'Content', 'Health', 'Business'];
   const allCategories = Array.from(
-    new Set([...defaultCategories, ...dbCategories, ...tasks.map((t: Task) => t.category)]),
+    new Set([
+      ...defaultCategories,
+      ...dbCategories,
+      ...routines.map((r: Routine) => r.category),
+    ]),
   ).filter((c) => c && c !== '');
 
   const totalGoals = goals.length;
@@ -724,7 +797,8 @@ const Stats: React.FC = () => {
   const dynamicTodayScore = scoreData?.overall_score ?? calculateProductivityScore({
     tasksProgress: taskCompletionRate,
     routinesProgress: todayRoutineRate,
-    goalsProgress: avgGoalProgress
+    goalsProgress: avgGoalProgress,
+    isPro
   });
 
   const historicalData = useMemo(() => {
@@ -768,15 +842,7 @@ const Stats: React.FC = () => {
 
     return allCategories
       .map((cat) => {
-        const catTasks = tasks.filter((t: Task) => (t.category || 'Focus') === cat);
         const catRoutines = routines.filter((r: Routine) => (r.category || 'General') === cat);
-
-        // Core Calculation: Progress = (Habit_Completion * 0.7) + (Task_Completion * 0.3)
-        let taskRate: number | null = null;
-        if (catTasks.length > 0) {
-          const completed = catTasks.filter((t) => t.status === 'completed').length;
-          taskRate = completed / catTasks.length;
-        }
 
         let habitRate: number | null = null;
         if (catRoutines.length > 0) {
@@ -797,18 +863,16 @@ const Stats: React.FC = () => {
           habitRate = expected > 0 ? actual / expected : 0;
         }
 
-        // Simple average fallback
-        const rate = taskRate !== null ? taskRate : (habitRate !== null ? habitRate : 0);
+        const rate = habitRate ?? 0;
 
         return {
           name: cat,
           rate: Math.round(rate * 100),
-          hasTasks: taskRate !== null,
           hasHabits: habitRate !== null
         };
       })
 
-      .filter((stat): stat is NonNullable<typeof stat> => stat !== null && (stat.hasTasks || stat.hasHabits))
+      .filter((stat): stat is NonNullable<typeof stat> => stat !== null && stat.hasHabits)
       .sort((a, b) => b.rate - a.rate)
       .slice(0, 10);
   }, [tasks, routines, routineLogs, allCategories]);
@@ -865,6 +929,11 @@ const Stats: React.FC = () => {
         >
           <ScoreGauge score={dynamicTodayScore} />
 
+          <VerdictCard
+            score={dynamicTodayScore}
+            totalItems={totalUserTasks + totalGoals + totalRoutines}
+          />
+
           <InsightsTrend
             data={{
               tasks: historicalData.map(d => d.tasks),
@@ -873,11 +942,6 @@ const Stats: React.FC = () => {
             }}
             activeRange={trendDays === 7 ? '7D' : trendDays === 30 ? '30D' : '90D'}
             setActiveRange={(r) => setTrendDays(r === '7D' ? 7 : r === '30D' ? 30 : 90)}
-          />
-
-          <VerdictCard
-            score={dynamicTodayScore}
-            verdictText={getScoreBadge(dynamicTodayScore).fullVerdict}
           />
 
           <HabitHeatmap
@@ -893,6 +957,8 @@ const Stats: React.FC = () => {
               completionRate: activeDays > 0 ? Math.round((activeDays / getDaysArray(heatmapRange).length) * 100) : 0
             }}
           />
+
+          <CategoryRadarChart categories={categoryStats} />
 
           <InsightCard
             type="tasks"
@@ -921,42 +987,6 @@ const Stats: React.FC = () => {
               consistency: weeklyConsistency
             }}
           />
-
-          <section className="stats-category-section" style={{ marginBottom: '20px' }}>
-            <p style={{
-              fontSize: '10px',
-              fontWeight: '800',
-              color: 'rgba(255,255,255,0.25)',
-              letterSpacing: '0.15em',
-              padding: '8px 16px',
-              margin: '0 0 10px 0'
-            }}>
-              CATEGORY INSIGHT
-            </p>
-
-            <div style={{ padding: '0 0 24px 0' }}>
-              {categoryStats.length > 0 ? (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '12px',
-                  padding: '0 16px',
-                }}>
-                  {categoryStats.map((cat, i) => (
-                    <CategoryInsightCard
-                      key={i}
-                      categoryName={cat.name}
-                      score={cat.rate}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ padding: '0 16px', textAlign: 'center' }}>
-                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)' }}>No category data available yet.</p>
-                </div>
-              )}
-            </div>
-          </section>
         </main>
 
 
@@ -965,6 +995,10 @@ const Stats: React.FC = () => {
           @keyframes gaugeLoad {
             from { stroke-dashoffset: 565 }
             to { stroke-dashoffset: var(--target) }
+          }
+          @keyframes flamePulse {
+            0%, 100% { transform: scale(1) rotate(-8deg); filter: drop-shadow(0 0 4px rgba(255,100,0,0.8)); }
+            50% { transform: scale(1.35) rotate(8deg); filter: drop-shadow(0 0 12px rgba(255,160,0,1)); }
           }
           .stats-premium-main {
             display: flex;

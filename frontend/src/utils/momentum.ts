@@ -88,3 +88,56 @@ export const getAnimal = (score: number): string => {
   if (score <= 99) return "🐎"; // Horse
   return "🐉";                  // Dragon (100%)
 };
+// ─── Zero & Hundred variant pools (randomized per card) ────────────────────
+
+const TAGLINES_ZERO = [
+  "GHOST MODE", "NOT STARTED", "FLATLINE", "OFFLINE", "PRE-LAUNCH",
+  "HIBERNATING", "BUFFERING", "DAY ZERO", "INVISIBLE", "STILL SLEEPING"
+];
+
+const QUOTES_ZERO = [
+  "Your category is literally a ghost town.",
+  "Nothing happened here. Nothing.",
+  "Zero effort. Zero results. The math is brutal.",
+  "You opened the app. That's where the effort ended.",
+  "The couch won this round.",
+  "Even the snail has moved further than this.",
+  "A blank slate. Make it mean something.",
+  "Zero is just a starting point. Start.",
+  "This category didn't get the memo you exist.",
+  "Empty. Hollow. Yours to fill."
+];
+
+const TAGLINES_HUNDRED = [
+  "STAY HARDY", "UNTOUCHABLE", "CERTIFIED BEAST", "THE GOAT",
+  "FULL SEND", "LEGENDARY", "NO EXCUSES", "IMMACULATE",
+  "PERFECT GAME", "ALGORITHM BREAKER"
+];
+
+const QUOTES_HUNDRED = [
+  "The 1%. You didn't just reach it. You are it.",
+  "Flawless. Every single task. Every single habit. Done.",
+  "This category bows to no one. Neither do you.",
+  "100% means you ran out of things to conquer. Make more.",
+  "Clean sweep. Not a single thing left undone.",
+  "Perfect score. The standard is now you.",
+  "Every rep. Every habit. Every goal. Completed. Respect.",
+  "Zero excuses. Zero skips. Zero regrets.",
+  "This is what full commitment looks like. Remember it.",
+  "Maxed out. The only move now is to raise the ceiling."
+];
+
+const pickRandom = <T>(arr: T[]): T =>
+  arr[Math.floor(Math.random() * arr.length)];
+
+export const getTagline = (score: number): string => {
+  if (score === 0) return pickRandom(TAGLINES_ZERO);
+  if (score === 100) return pickRandom(TAGLINES_HUNDRED);
+  return TAGLINES[Math.min(TAGLINES.length - 1, Math.floor(score))];
+};
+
+export const getQuote = (score: number): string => {
+  if (score === 0) return pickRandom(QUOTES_ZERO);
+  if (score === 100) return pickRandom(QUOTES_HUNDRED);
+  return QUOTES[Math.min(QUOTES.length - 1, Math.floor(score))];
+};

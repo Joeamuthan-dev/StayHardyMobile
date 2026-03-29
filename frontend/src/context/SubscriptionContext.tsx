@@ -53,7 +53,8 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (profileRaw) {
           try {
             const profile = JSON.parse(profileRaw);
-            profile.pro_member = isProValue;
+            // FIX: Use correct DB column name is_pro in profile cache
+            profile.is_pro = isProValue;
             profile.role = isProValue ? 'pro' : 'user';
             profile.cached_at = Date.now();
             localStorage.setItem('cached_profile_fast_' + userId, JSON.stringify(profile));
@@ -68,7 +69,8 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (fullProfileRaw) {
           try {
             const fullProfile = JSON.parse(fullProfileRaw);
-            fullProfile.pro_member = isProValue;
+            // FIX: Use correct DB column name is_pro in full profile cache
+            fullProfile.is_pro = isProValue;
             fullProfile.role = isProValue ? 'pro' : 'user';
             fullProfile.cached_at = Date.now();
             await storage.set('cached_user_profile_' + userId, JSON.stringify(fullProfile));
@@ -113,19 +115,30 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, [user]);
 
   const updateStateFromInfo = useCallback((info: CustomerInfo | null) => {
+    // FIX: DB is_pro is the source of truth — RC entitlement can additionally grant pro
+    const dbIsPro = user?.isPro === true;
+
     if (!info) {
-      setIsPro(false);
+      // FIX: No RC info — fall back to DB value only
+      setIsPro(dbIsPro);
       setCustomerInfo(null);
       return;
     }
-    const active = !!info.entitlements.active[ENTITLEMENT_ID];
-    setIsPro(active);
-    void syncRoleCache(active);
+
+    // FIX: Check RC entitlement status
+    const rcActive = !!info.entitlements.active[ENTITLEMENT_ID];
+    // FIX: Pro if EITHER RC entitlement is active OR DB is_pro is true
+    const isProFinal = rcActive || dbIsPro;
+
+    setIsPro(isProFinal);
+    void syncRoleCache(isProFinal);
     setCustomerInfo(info);
-    if (active) {
+
+    // FIX: Only sync to Supabase when RC says active (don't overwrite manual DB grants)
+    if (rcActive) {
       syncToSupabase(info).catch(() => { });
     }
-  }, [syncToSupabase]);
+  }, [syncToSupabase, user?.isPro]);
 
   const refreshSubscription = useCallback(async () => {
     if (!Capacitor.isNativePlatform()) {
@@ -237,10 +250,24 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
   }, [rcReady, user?.id, refreshSubscription, updateStateFromInfo]);
 
+  const saveRcPaymentToSupabase = useCallback(async (productIdentifier: string, priceInr: number) => {
+    if (!user?.id || priceInr <= 0) return;
+    const { error } = await supabase.from('users').update({
+      payment_amount: Math.round(priceInr),
+      payment_id: `rc_${productIdentifier}`,
+    }).eq('id', user.id);
+    if (error) console.error('[SubscriptionContext] Failed to save RC payment amount:', error);
+  }, [user?.id]);
+
   const purchasePackage = async (pkg: PurchasesPackage): Promise<boolean> => {
     const info = await RevenueCatService.purchasePackage(pkg);
+    const active = !!info?.entitlements.active[ENTITLEMENT_ID];
+    // Save payment details so admin revenue tab shows real amounts
+    if (active && pkg.product.price > 0) {
+      void saveRcPaymentToSupabase(pkg.product.identifier, pkg.product.price);
+    }
     updateStateFromInfo(info);
-    return !!info?.entitlements.active[ENTITLEMENT_ID];
+    return active;
   };
 
   const restorePurchases = async (): Promise<boolean> => {
@@ -255,6 +282,21 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const presentPaywall = async () => {
     const info = await RevenueCatService.presentPaywall();
+    // If purchase happened via RC native paywall, save payment amount using loaded offerings
+    if (info) {
+      const active = !!info.entitlements.active[ENTITLEMENT_ID];
+      if (active) {
+        const activeSubs = (info.activeSubscriptions ?? []) as string[];
+        const monthlyPkg = offerings?.monthly;
+        const yearlyPkg = offerings?.yearly;
+        const matchedPkg =
+          (monthlyPkg && activeSubs.includes(monthlyPkg.product.identifier) ? monthlyPkg : null) ??
+          (yearlyPkg && activeSubs.includes(yearlyPkg.product.identifier) ? yearlyPkg : null);
+        if (matchedPkg && matchedPkg.product.price > 0) {
+          void saveRcPaymentToSupabase(matchedPkg.product.identifier, matchedPkg.product.price);
+        }
+      }
+    }
     updateStateFromInfo(info);
   };
 

@@ -2,6 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { RevenueCatService } from '../services/revenuecat';
 import { Capacitor } from '@capacitor/core';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../supabase';
+
+declare global { interface Window { Razorpay: any; } }
+
+const loadRazorpayScript = (): Promise<boolean> =>
+  new Promise((resolve) => {
+    if (window.Razorpay) { resolve(true); return; }
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
 
 interface SupportModalProps {
   isOpen: boolean;
@@ -15,6 +29,7 @@ const tiers = [
 ];
 
 const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
+  const { user } = useAuth();
   const [selectedId, setSelectedId]       = useState('tip_49');
   const [packages, setPackages]           = useState<PurchasesPackage[]>([]);
   const [isLoadingPkgs, setIsLoadingPkgs] = useState(false);
@@ -48,7 +63,62 @@ const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
     })();
   }, [isOpen]);
 
+  const handleWebPurchase = async () => {
+    const tier = tiers.find((t) => t.id === selectedId) ?? tiers[1];
+    setIsProcessing(true);
+    try {
+      const { data: order, error: orderErr } = await supabase.functions.invoke('razorpay-create-order', {
+        body: { purpose: 'support', amountInr: tier.amount },
+      });
+      if (orderErr || !order?.orderId) {
+        showToast('Could not initiate payment. Try again.');
+        return;
+      }
+      const loaded = await loadRazorpayScript();
+      if (!loaded) { showToast('Could not load payment gateway.'); return; }
+
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency ?? 'INR',
+        order_id: order.orderId,
+        name: 'StayHardy',
+        description: `Tip — ${tier.label}`,
+        prefill: { email: user?.email ?? '', name: user?.name ?? '' },
+        theme: { color: '#00E87A' },
+        handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          try {
+            const { error: verifyErr } = await supabase.functions.invoke('razorpay-verify', {
+              body: {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                device_platform: 'web',
+              },
+            });
+            if (verifyErr) { showToast('Verification failed. Contact support.'); return; }
+            showToast('Thank you for your support! ❤️');
+            setTimeout(onClose, 1500);
+          } catch {
+            showToast('Verification error. Contact support.');
+          } finally {
+            setIsProcessing(false);
+          }
+        },
+        modal: { ondismiss: () => setIsProcessing(false) },
+      });
+      rzp.open();
+    } catch {
+      showToast('Something went wrong. Try again.');
+      setIsProcessing(false);
+    }
+  };
+
   const handlePurchase = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      return handleWebPurchase();
+    }
+
     const pkg = packages.find((p) => p.identifier === selectedId);
     if (!pkg) {
       showToast('Selected option not available. Please try again.');
@@ -59,10 +129,20 @@ const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
     try {
       const result = await RevenueCatService.purchasePackage(pkg);
       if (result !== null) {
+        const amountInr = Math.round(pkg.product.price);
+        if (user?.id && amountInr > 0) {
+          void supabase.from('tips').insert({
+            user_id: user.id,
+            user_email: user.email ?? '',
+            user_name: user.name ?? '',
+            amount: amountInr,
+            payment_status: 'success',
+            device_platform: 'android',
+          });
+        }
         showToast('Thank you for your support! ❤️');
         setTimeout(onClose, 1500);
       }
-      // null means user cancelled — no error toast needed
     } catch {
       showToast('Payment failed. Please try again.');
     } finally {
@@ -282,10 +362,10 @@ const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
           <div style={{ padding: '24px 24px 0 24px' }}>
             <button
               onClick={handlePurchase}
-              disabled={isProcessing || isLoadingPkgs || packages.length === 0}
+              disabled={isProcessing || isLoadingPkgs || (Capacitor.isNativePlatform() && packages.length === 0)}
               style={{
                 width: '100%', height: '60px',
-                backgroundColor: (isProcessing || isLoadingPkgs || packages.length === 0)
+                backgroundColor: (isProcessing || isLoadingPkgs || (Capacitor.isNativePlatform() && packages.length === 0))
                   ? 'rgba(0,232,122,0.4)' : '#00E87A',
                 color: '#000000',
                 borderRadius: '18px',
@@ -320,7 +400,7 @@ const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
               gap: '4px',
             }}>
               <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>lock</span>
-              Secure payment via Google Play
+              {Capacitor.isNativePlatform() ? 'Secure payment via Google Play' : 'Secure payment via Razorpay'}
             </p>
           </div>
         </div>

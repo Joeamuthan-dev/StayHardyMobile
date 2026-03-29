@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { TAGLINES, QUOTES, getAnimal } from '../utils/momentum';
+import { getAnimal, getTagline, getQuote } from '../utils/momentum';
 
 interface CategoryInsightCardProps {
   categoryName: string;
@@ -24,8 +24,8 @@ const CategoryInsightCard: React.FC<CategoryInsightCardProps> = ({ categoryName,
   const [offset, setOffset] = useState(251); // 2 * PI * r (r=40) => ~251
   
   const safeScore = Math.max(0, Math.min(100, score));
-  const index = Math.min(TAGLINES.length - 1, Math.floor(safeScore));
-  const quoteIndex = Math.min(QUOTES.length - 1, Math.floor(safeScore));
+  const [tagline] = useState(() => getTagline(safeScore));
+  const [quote] = useState(() => getQuote(safeScore));
 
   const radius = 34;
   const circumference = 2 * Math.PI * radius;
@@ -209,7 +209,7 @@ const CategoryInsightCard: React.FC<CategoryInsightCardProps> = ({ categoryName,
           textTransform: 'uppercase',
           margin: '0 0 10px 0'
         }}>
-          {TAGLINES[index]}
+          {tagline}
         </p>
 
         {/* QUOTE PANEL */}
@@ -234,7 +234,7 @@ const CategoryInsightCard: React.FC<CategoryInsightCardProps> = ({ categoryName,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden'
           }}>
-            "{QUOTES[quoteIndex]}"
+            "{quote}"
           </p>
         </div>
       </div>

@@ -12,7 +12,6 @@ import {
   AreaChart,
   Area,
 } from 'recharts';
-import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
 import { isAdminHubUser } from '../config/adminOwner';
 import {
   maskEmail,
@@ -207,13 +206,13 @@ function FilterPill({
 const AdminDashboard: React.FC = () => {
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const { user } = useAuth();
-  const { settings: appSettings, loadSettings } = useAppSettings();
+  const { loadSettings } = useAppSettings();
   const navigate = useNavigate();
-  const [stats, setStats] = useState({ users: 0, tasks: 0, goals: 0, routines: 0, globalTasks: 0, globalRoutines: 0, globalTasksCompleted: 0 });
+  const [_stats, setStats] = useState({ users: 0, tasks: 0, goals: 0, routines: 0, globalTasks: 0, globalRoutines: 0, globalTasksCompleted: 0 }); void _stats;
   const [users, setUsers] = useState<any[]>([]);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'revenue' | 'tips' | 'users' | 'feedback' | 'settings'
+    'overview' | 'today' | 'revenue' | 'tips' | 'users' | 'feedback' | 'settings'
   >('overview');
   const [resetPinModal, setResetPinModal] = useState<{ show: boolean, userId: string, userName: string }>({ show: false, userId: '', userName: '' });
   const [deleteUserModal, setDeleteUserModal] = useState<{ show: boolean, userId: string, userName: string }>({ show: false, userId: '', userName: '' });
@@ -246,15 +245,13 @@ const AdminDashboard: React.FC = () => {
   const [hasMoreUsers, setHasMoreUsers] = useState(true);
   const userFetchGenRef = useRef(0);
 
-  const [newPrice, setNewPrice] = useState('');
-  const [newOriginalPrice, setNewOriginalPrice] = useState('');
-  const [isSavingPrice, setIsSavingPrice] = useState(false);
   const [annoTitle, setAnnoTitle] = useState('');
   const [annoMessage, setAnnoMessage] = useState('');
   const [annoCategory, setAnnoCategory] = useState<'update' | 'feature' | 'maintenance' | 'urgent' | 'general'>(
     'update'
   );
   const [isPosting, setIsPosting] = useState(false);
+  const [annoTarget, setAnnoTarget] = useState<'all' | 'pro' | 'basic'>('all');
   const [announcements, setAnnouncements] = useState<
     Array<{
       id: string;
@@ -273,6 +270,15 @@ const AdminDashboard: React.FC = () => {
   const [adminNotifCount, setAdminNotifCount] = useState(0);
   const proOverviewCacheRef = useRef<{ at: number; data: ProMembershipCounts; prevWeek: number } | null>(null);
 
+  const [todayData, setTodayData] = useState<{
+    signups: number;
+    proUpgrades: number;
+    tickets: number;
+    recentSignups: any[];
+    recentTickets: any[];
+  }>({ signups: 0, proUpgrades: 0, tickets: 0, recentSignups: [], recentTickets: [] });
+  const [todayLoading, setTodayLoading] = useState(false);
+
   const [revenueSummary, setRevenueSummary] = useState({
     totalRevenue: 0,
     last30Revenue: 0,
@@ -281,6 +287,7 @@ const AdminDashboard: React.FC = () => {
   const [revenueTransactions, setRevenueTransactions] = useState<
     Array<{
       id: string;
+      name: string | null;
       email: string | null;
       payment_id: string | null;
       payment_amount: number | null;
@@ -313,6 +320,7 @@ const AdminDashboard: React.FC = () => {
   const [tipsRecent, setTipsRecent] = useState<TipsRecentRow[]>([]);
   const [tipsTop, setTipsTop] = useState<TipsTopRow[]>([]);
   const [tipsLoadErr, setTipsLoadErr] = useState('');
+  const [tipsLoading, setTipsLoading] = useState(false);
   const tipsCacheRef = useRef<{
     at: number;
     financial: typeof tipsFinancial;
@@ -320,6 +328,37 @@ const AdminDashboard: React.FC = () => {
     recent: TipsRecentRow[];
     top: TipsTopRow[];
   } | null>(null);
+
+  const fetchTodayData = useCallback(async () => {
+    if (!user || !isAdminHubUser(user)) return;
+    setTodayLoading(true);
+    try {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayStr = todayStart.toISOString();
+
+      const [{ count: signups }, { count: proUpgrades }, { count: tickets }, { data: recentSignups }, { data: recentTickets }] =
+        await Promise.all([
+          supabase.from('users').select('id', { count: 'exact', head: true }).gte('created_at', todayStr),
+          supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_pro', true).gte('pro_purchase_date', todayStr),
+          supabase.from('feedback').select('id', { count: 'exact', head: true }).gte('created_at', todayStr),
+          supabase.from('users').select('id, name, email, is_pro, role, created_at').gte('created_at', todayStr).order('created_at', { ascending: false }).limit(10),
+          supabase.from('feedback').select('id, user_name, user_email, message, type, created_at').gte('created_at', todayStr).order('created_at', { ascending: false }).limit(10),
+        ]);
+
+      setTodayData({
+        signups: signups ?? 0,
+        proUpgrades: proUpgrades ?? 0,
+        tickets: tickets ?? 0,
+        recentSignups: recentSignups ?? [],
+        recentTickets: recentTickets ?? [],
+      });
+    } catch (e) {
+      console.error('fetchTodayData:', e);
+    } finally {
+      setTodayLoading(false);
+    }
+  }, [user]);
 
   const fetchTipsTab = useCallback(async () => {
     if (!user || !isAdminHubUser(user)) return;
@@ -335,6 +374,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     setTipsLoadErr('');
+    setTipsLoading(true);
     try {
       const { data, error, response } = await invokeEdgeFunctionWithUserJwt('admin-tips', {});
       if (error) {
@@ -397,6 +437,8 @@ const AdminDashboard: React.FC = () => {
     } catch (err) {
       console.error('Tips tab catch:', err);
       setTipsLoadErr(err instanceof Error ? err.message : 'Failed to load tips.');
+    } finally {
+      setTipsLoading(false);
     }
   }, [user]);
 
@@ -458,61 +500,52 @@ const AdminDashboard: React.FC = () => {
       return;
     }
 
-    const price =
-      Number.isFinite(appSettings.pro_price) && appSettings.pro_price >= 1
-        ? appSettings.pro_price
-        : LIFETIME_PRICE_INR;
     const d30 = new Date();
     d30.setDate(d30.getDate() - 30);
-    const t = new Date();
-    const startOfMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-    const [totalC, pro30C, monthC] = await Promise.all([
-      supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_pro', true),
-      supabase
-        .from('users')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_pro', true)
-        .gte('pro_purchase_date', d30.toISOString()),
-      supabase
-        .from('users')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_pro', true)
-        .gte('pro_purchase_date', startOfMonth.toISOString()),
+    // Fetch all pro users with actual payment amounts
+    const [allProRows, pro30Rows, monthC] = await Promise.all([
+      supabase.from('users').select('payment_amount, pro_purchase_date').eq('is_pro', true),
+      supabase.from('users').select('payment_amount').eq('is_pro', true).gte('pro_purchase_date', d30.toISOString()),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_pro', true).gte('pro_purchase_date', startOfMonth.toISOString()),
     ]);
 
-    const totalN = totalC.count ?? 0;
-    const n30 = pro30C.count ?? 0;
-    const nMonth = monthC.count ?? 0;
+    // Sum actual payment_amount — skip nulls (RevenueCat purchases without stored amount)
+    const totalRevenue = (allProRows.data ?? []).reduce((s, r) => s + (r.payment_amount ?? 0), 0);
+    const last30Revenue = (pro30Rows.data ?? []).reduce((s, r) => s + (r.payment_amount ?? 0), 0);
 
     const summary = {
-      totalRevenue: totalN * price,
-      last30Revenue: n30 * price,
-      monthNewMembers: nMonth,
+      totalRevenue,
+      last30Revenue,
+      monthNewMembers: monthC.count ?? 0,
     };
     setRevenueSummary(summary);
 
+    // Transactions — show ALL pro members, not just Razorpay
     const { data: txRows } = await supabase
       .from('users')
-      .select('id, email, payment_id, payment_amount, pro_purchase_date')
+      .select('id, name, email, payment_id, payment_amount, pro_purchase_date')
       .eq('is_pro', true)
-      .not('payment_id', 'is', null)
       .not('pro_purchase_date', 'is', null)
       .order('pro_purchase_date', { ascending: false })
-      .limit(10);
+      .limit(20);
 
     setRevenueTransactions(txRows ?? []);
 
+    // Bar chart — use actual payment_amount per day
     const { data: dayRows } = await supabase
       .from('users')
-      .select('pro_purchase_date')
+      .select('pro_purchase_date, payment_amount')
       .eq('is_pro', true)
       .not('pro_purchase_date', 'is', null)
-      .gte('pro_purchase_date', d30.toISOString())
-      .limit(50);
+      .gte('pro_purchase_date', d30.toISOString());
 
-    const dates = (dayRows ?? []).map((r) => r.pro_purchase_date).filter(Boolean) as string[];
-    const bar = aggregateDailyRevenue(dates, price, 30).map(({ name, revenue }) => ({ name, revenue }));
+    const barRows = (dayRows ?? []).map((r) => ({
+      date: r.pro_purchase_date as string,
+      amount: r.payment_amount ?? 0,
+    }));
+    const bar = aggregateDailyRevenue(barRows, 30).map(({ name, revenue }) => ({ name, revenue }));
     setRevenueBarData(bar);
 
     revenueCacheRef.current = {
@@ -521,7 +554,7 @@ const AdminDashboard: React.FC = () => {
       tx: txRows ?? [],
       bar,
     };
-  }, [user, appSettings.pro_price]);
+  }, [user]);
 
   const loadAnnouncements = useCallback(async () => {
     const { data, error } = await supabase
@@ -535,50 +568,6 @@ const AdminDashboard: React.FC = () => {
     }
     setAnnouncements(data ?? []);
   }, []);
-
-  const handleUpdatePrice = useCallback(async () => {
-    const np = parseInt(newPrice, 10);
-    const no = parseInt(newOriginalPrice, 10);
-    if (!Number.isFinite(np) || np < 1) {
-      window.alert('Enter a valid Pro price (₹).');
-      return;
-    }
-    setIsSavingPrice(true);
-    try {
-      const { error: e1 } = await supabase.from('app_settings').upsert(
-        {
-          key: 'pro_price',
-          value: String(np),
-          description: 'Pro membership price in INR',
-          updated_at: new Date().toISOString(),
-          updated_by: user?.email ?? 'admin',
-        },
-        { onConflict: 'key' }
-      );
-      if (e1) throw e1;
-      if (Number.isFinite(no) && no >= 1) {
-        const { error: e2 } = await supabase.from('app_settings').upsert(
-          {
-            key: 'pro_original_price',
-            value: String(no),
-            description: 'Pro original strike-through price in INR',
-            updated_at: new Date().toISOString(),
-            updated_by: user?.email ?? 'admin',
-          },
-          { onConflict: 'key' }
-        );
-        if (e2) throw e2;
-      }
-      await CacheManager.invalidate(CACHE_KEYS.APP_SETTINGS);
-      await loadSettings();
-      window.alert(`Price updated to ₹${np}.`);
-    } catch (e) {
-      console.error(e);
-      window.alert('Failed to update price.');
-    } finally {
-      setIsSavingPrice(false);
-    }
-  }, [newPrice, newOriginalPrice, user?.email, loadSettings]);
 
   const handlePostAnnouncement = useCallback(async () => {
     if (!annoTitle.trim()) {
@@ -597,6 +586,7 @@ const AdminDashboard: React.FC = () => {
           title: annoTitle.trim(),
           message: annoMessage.trim(),
           category: annoCategory,
+          target_audience: annoTarget,
           is_active: true,
           posted_by: user?.email ?? null,
         })
@@ -607,6 +597,7 @@ const AdminDashboard: React.FC = () => {
       setAnnoTitle('');
       setAnnoMessage('');
       setAnnoCategory('update');
+      setAnnoTarget('all');
       await CacheManager.invalidate(CACHE_KEYS.ANNOUNCEMENTS_LIST);
       window.alert('Announcement posted.');
     } catch (e) {
@@ -615,7 +606,7 @@ const AdminDashboard: React.FC = () => {
     } finally {
       setIsPosting(false);
     }
-  }, [annoTitle, annoMessage, annoCategory, user?.email]);
+  }, [annoTitle, annoMessage, annoCategory, annoTarget, user?.email]);
 
   const toggleAnnouncementActive = useCallback(
     async (id: string) => {
@@ -637,21 +628,14 @@ const AdminDashboard: React.FC = () => {
   );
 
   const deleteAnnouncement = useCallback(async (id: string) => {
-    if (!window.confirm('Delete this announcement?')) return;
     const { error } = await supabase.from('announcements').delete().eq('id', id);
     if (error) {
-      window.alert(error.message);
+      console.error('[deleteAnnouncement]', error.message);
       return;
     }
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
     await CacheManager.invalidate(CACHE_KEYS.ANNOUNCEMENTS_LIST);
   }, []);
-
-  useEffect(() => {
-    if (activeTab !== 'settings') return;
-    setNewPrice(String(appSettings.pro_price));
-    setNewOriginalPrice(String(appSettings.pro_original_price));
-  }, [activeTab, appSettings.pro_price, appSettings.pro_original_price]);
 
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedSearch(userSearchQuery), 400);
@@ -899,26 +883,17 @@ const AdminDashboard: React.FC = () => {
           .from('users')
           .select('id, name, created_at, role, is_pro')
           .order('created_at', { ascending: false })
-          .limit(5);
+          .limit(10);
         if (rSignups) setRecentSignups(rSignups);
 
-        const { data: chartUsers } = await supabase.from('users').select('created_at').limit(50);
-        const { data: rpcCounts } = await supabase.rpc('get_global_counts');
-        const tasks = (rpcCounts?.tasks || []).map((t: any) => ({ created_at: t.created_at, userId: t.userId }));
-        const goals = (rpcCounts?.goals || []).map((g: any) => ({ created_at: g.created_at, userId: g.userId }));
-        const routines = (rpcCounts?.routines || []).map((r: any) => ({ created_at: r.created_at, userId: r.userId }));
+        const chartFrom = new Date();
+        chartFrom.setDate(chartFrom.getDate() - timeRange);
+        const { data: chartUsers } = await supabase
+          .from('users')
+          .select('created_at')
+          .gte('created_at', chartFrom.toISOString());
 
-        setStats((prev) => ({
-          ...prev,
-          tasks: tasks.length,
-          goals: goals.length,
-          routines: routines.length,
-          globalTasks: rpcCounts?.total_tasks || 0,
-          globalTasksCompleted: rpcCounts?.pending_tasks || 0,
-          globalRoutines: rpcCounts?.total_routines || 0,
-        }));
-
-        processChartData(chartUsers || [], tasks, goals, routines, timeRange);
+        processChartData(chartUsers || [], timeRange);
 
         let countQuery = supabase.from('users').select('id', { count: 'exact', head: true });
         const { count: countResult } = await countQuery;
@@ -937,6 +912,10 @@ const AdminDashboard: React.FC = () => {
         return;
       }
       if (activeTab === 'feedback') {
+        return;
+      }
+      if (activeTab === 'today') {
+        await fetchTodayData();
         return;
       }
       if (activeTab === 'settings') {
@@ -979,6 +958,7 @@ const AdminDashboard: React.FC = () => {
     fetchProMembershipCounts,
     fetchRevenueTab,
     fetchTipsTab,
+    fetchTodayData,
     resyncUsersList,
     resyncFeedbackList,
     loadSettings,
@@ -990,28 +970,17 @@ const AdminDashboard: React.FC = () => {
     void fetchUsers(activeFilter, page, false);
   }, [hasMoreUsers, usersLoadingMore, usersLoading, users.length, fetchUsers, activeFilter, page]);
 
-  const processChartData = (usersData: any[], tasks: any[], goals: any[], routines: any[], days: number) => {
+  const processChartData = (usersData: any[], days: number) => {
     const data = [];
     const now = new Date();
-    
+
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       const displayDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
       const daySignups = usersData.filter(u => u.created_at && u.created_at.startsWith(dateStr)).length;
-      const dayTasks = tasks.filter(t => t.created_at && t.created_at.startsWith(dateStr)).length;
-      const dayGoals = goals.filter(g => g.created_at && g.created_at.startsWith(dateStr)).length;
-      const dayRoutines = routines.filter(r => r.created_at && r.created_at.startsWith(dateStr)).length;
-
-      data.push({
-        name: displayDate,
-        signups: daySignups,
-        tasks: dayTasks,
-        goals: dayGoals,
-        routines: dayRoutines
-      });
+      data.push({ name: displayDate, signups: daySignups });
     }
     setChartData(data);
   };
@@ -1231,15 +1200,6 @@ const AdminDashboard: React.FC = () => {
 
   const animUsers = useCountUp(totalUsersCount, 1000, activeTab === 'overview');
   const animPro = useCountUp(proCounts.total, 1000, activeTab === 'overview');
-  const animTasksDone = useCountUp(stats.globalTasksCompleted, 1000, activeTab === 'overview');
-  const animTasksTot = useCountUp(stats.globalTasks, 1000, activeTab === 'overview');
-  const animRoutineNum = useCountUp(stats.routines, 1000, activeTab === 'overview');
-  const animRoutineTot = useCountUp(stats.globalRoutines, 1000, activeTab === 'overview');
-
-  const taskProgressPct =
-    stats.globalTasks > 0 ? Math.min(100, (stats.globalTasksCompleted / stats.globalTasks) * 100) : 0;
-  const routineProgressPct =
-    stats.globalRoutines > 0 ? Math.min(100, (stats.routines / stats.globalRoutines) * 100) : 0;
 
   const sparkAllTime = useMemo(
     () => [
@@ -1269,40 +1229,17 @@ const AdminDashboard: React.FC = () => {
 
       <header className="admin-hub-header">
         <div className="admin-hub-header-top">
-          <div className="admin-hub-title-block">
-            <div className="admin-hub-title-row">
-              <h1 className="admin-hub-title">ADMIN HUB</h1>
-              <span className="admin-hub-badge">
-                <span className="material-symbols-outlined admin-hub-badge-shield" aria-hidden>
-                  shield
-                </span>
-                ADMIN ONLY
-              </span>
-            </div>
-          </div>
           <div className="admin-hub-header-actions">
             <button
               type="button"
               className="admin-hub-bell"
-              aria-label="Notifications"
-              onClick={() => setActiveTab('feedback')}
+              aria-label="Today's report"
+              onClick={() => setActiveTab('today')}
             >
               <span className="material-symbols-outlined">notifications</span>
               {adminNotifCount > 0 && <span className="admin-hub-bell-badge">{adminNotifCount > 99 ? '99+' : adminNotifCount}</span>}
             </button>
           </div>
-        </div>
-        <div className="admin-hub-marquee-wrap">
-          <div className="admin-hub-marquee-line" aria-hidden />
-          <div className="admin-hub-marquee" aria-label="Integrity Oversight System Control">
-            <span>
-              INTEGRITY. OVERSIGHT. SYSTEM CONTROL. &nbsp; INTEGRITY. OVERSIGHT. SYSTEM CONTROL. &nbsp;
-            </span>
-            <span aria-hidden="true">
-              INTEGRITY. OVERSIGHT. SYSTEM CONTROL. &nbsp; INTEGRITY. OVERSIGHT. SYSTEM CONTROL. &nbsp;
-            </span>
-          </div>
-          <div className="admin-hub-marquee-line admin-hub-marquee-line--bottom" aria-hidden />
         </div>
       </header>
 
@@ -1311,6 +1248,7 @@ const AdminDashboard: React.FC = () => {
           {(
             [
               ['overview', 'OVERVIEW'],
+              ['today', 'TODAY'],
               ['revenue', 'REVENUE'],
               ['tips', 'TIPS'],
               ['users', 'USERS'],
@@ -1459,36 +1397,6 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="admin-extended-row">
-              <div className="admin-ext-card admin-enter" style={{ animationDelay: '220ms' }}>
-                <div className="admin-ext-icon">
-                  <span className="material-symbols-outlined">task</span>
-                </div>
-                <div className="admin-ext-fraction">
-                  {animTasksDone} <span className="admin-ext-slash">/</span> {animTasksTot}
-                </div>
-                <p className="admin-ext-label">Total tasks created</p>
-                <div className="admin-progress-track">
-                  <div className="admin-progress-fill admin-progress-fill--blue" style={{ width: `${taskProgressPct}%` }} />
-                </div>
-              </div>
-              <div className="admin-ext-card admin-enter" style={{ animationDelay: '280ms' }}>
-                <div className="admin-ext-icon admin-ext-icon--violet">
-                  <span className="material-symbols-outlined">sync</span>
-                </div>
-                <div className="admin-ext-fraction">
-                  {animRoutineNum} <span className="admin-ext-slash">/</span> {animRoutineTot}
-                </div>
-                <p className="admin-ext-label">Total routines created</p>
-                <div className="admin-progress-track">
-                  <div
-                    className="admin-progress-fill admin-progress-fill--violet"
-                    style={{ width: `${routineProgressPct}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
             <div className="admin-bottom-grid">
               <div className="admin-signups-card admin-enter" style={{ animationDelay: '340ms' }}>
                 <div className="admin-signups-head">
@@ -1575,6 +1483,90 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'today' && (
+          <div className="admin-today-tab">
+            {todayLoading ? (
+              <div className="admin-today-loading">
+                <span className="material-symbols-outlined" style={{ fontSize: 32, color: ADM.accent, animation: 'spin 1s linear infinite' }}>progress_activity</span>
+              </div>
+            ) : (
+              <>
+                <div className="admin-today-date">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                </div>
+
+                <div className="admin-today-kpi-row">
+                  {[
+                    { label: 'New Signups', value: todayData.signups, icon: 'person_add', color: ADM.accent },
+                    { label: 'Pro Upgrades', value: todayData.proUpgrades, icon: 'workspace_premium', color: ADM.gold },
+                    { label: 'Support Tickets', value: todayData.tickets, icon: 'support_agent', color: '#60a5fa' },
+                  ].map((kpi) => (
+                    <div key={kpi.label} className="admin-today-kpi">
+                      <span className="material-symbols-outlined" style={{ color: kpi.color, fontSize: 22 }}>{kpi.icon}</span>
+                      <div className="admin-today-kpi-val" style={{ color: kpi.color }}>{kpi.value}</div>
+                      <div className="admin-today-kpi-lbl">{kpi.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="admin-today-section">
+                  <div className="admin-today-section-title">
+                    <span className="material-symbols-outlined" style={{ fontSize: 16, color: ADM.accent }}>person_add</span>
+                    Signups Today
+                  </div>
+                  {todayData.recentSignups.length === 0 ? (
+                    <div className="admin-empty-hint">No new signups today.</div>
+                  ) : (
+                    todayData.recentSignups.map((u) => {
+                      const av = adminInitialAvatarStyle(u.name || 'U');
+                      return (
+                        <div key={u.id} className="admin-signup-row">
+                          <div className="admin-su-avatar" style={{ background: av.bg, color: av.color }}>
+                            {(u.name || '?').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="admin-su-meta">
+                            <div className="admin-su-name">{u.name || '—'}</div>
+                            <div className="admin-su-date">{u.email}</div>
+                          </div>
+                          <div>
+                            {u.role === 'admin' ? (
+                              <span className="admin-role-pill admin-role-pill--admin">Admin</span>
+                            ) : u.is_pro ? (
+                              <span className="admin-role-pill admin-role-pill--pro">Pro</span>
+                            ) : (
+                              <span className="admin-role-pill">User</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="admin-today-section">
+                  <div className="admin-today-section-title">
+                    <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#60a5fa' }}>support_agent</span>
+                    Support Tickets Today
+                  </div>
+                  {todayData.recentTickets.length === 0 ? (
+                    <div className="admin-empty-hint">No tickets today. All quiet.</div>
+                  ) : (
+                    todayData.recentTickets.map((t) => (
+                      <div key={t.id} className="admin-today-ticket">
+                        <div className="admin-today-ticket-meta">
+                          <span className="admin-today-ticket-name">{t.user_name || t.user_email || '—'}</span>
+                          <span className="admin-today-ticket-type">{t.type || 'feedback'}</span>
+                        </div>
+                        <div className="admin-today-ticket-msg">{t.message}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {activeTab === 'revenue' && (
           <div className="admin-revenue-tab">
             <div className="admin-rev-kpi-grid">
@@ -1635,38 +1627,45 @@ const AdminDashboard: React.FC = () => {
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>USER EMAIL</th>
+                      <th>USER</th>
+                      <th>SOURCE</th>
                       <th>AMOUNT</th>
-                      <th>DATE AND TIME</th>
-                      <th>PAYMENT ID</th>
+                      <th>DATE</th>
                     </tr>
                   </thead>
                   <tbody>
                     {revenueTransactions.map((row, idx) => {
-                      const rawPid = row.payment_id ? String(row.payment_id).trim() : '';
-                      const pidCell =
-                        !rawPid ? '—' : rawPid.length <= 8 ? rawPid : `${rawPid.slice(0, 8)}…`;
-                      const dtLine =
-                        row.pro_purchase_date &&
-                        new Date(row.pro_purchase_date).toLocaleString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true,
-                        });
+                      const isRazorpay = !!row.payment_id && !String(row.payment_id).startsWith('rc_');
+                      const dtLine = row.pro_purchase_date
+                        ? new Date(row.pro_purchase_date).toLocaleDateString('en-IN', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                          })
+                        : '—';
                       return (
                         <tr key={row.id} className={idx % 2 === 1 ? 'admin-rev-tx-row--alt' : undefined}>
                           <td className="admin-rev-tx-num">{idx + 1}</td>
-                          <td className="admin-rev-tx-email">{maskEmail(row.email)}</td>
+                          <td className="admin-rev-tx-email">
+                            <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.72rem' }}>{row.name || '—'}</div>
+                            <div style={{ color: 'rgba(148,163,184,0.7)', fontSize: '0.65rem' }}>{maskEmail(row.email)}</div>
+                          </td>
+                          <td>
+                            <span style={{
+                              fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.08em',
+                              textTransform: 'uppercase', borderRadius: 999, padding: '2px 7px',
+                              background: isRazorpay ? 'rgba(96,165,250,0.12)' : 'rgba(200,255,61,0.1)',
+                              border: `1px solid ${isRazorpay ? 'rgba(96,165,250,0.3)' : 'rgba(200,255,61,0.25)'}`,
+                              color: isRazorpay ? '#60a5fa' : ADM.accent,
+                            }}>
+                              {isRazorpay ? 'Razorpay' : 'RevenueCat'}
+                            </span>
+                          </td>
                           <td className="admin-rev-tx-amt">
-                            ₹{Number(row.payment_amount ?? LIFETIME_PRICE_INR).toLocaleString('en-IN')}
+                            {row.payment_amount != null
+                              ? `₹${Number(row.payment_amount).toLocaleString('en-IN')}`
+                              : <span style={{ color: 'rgba(148,163,184,0.45)', fontSize: '0.7rem' }}>via store</span>
+                            }
                           </td>
-                          <td className="admin-rev-tx-dt">{dtLine || '—'}</td>
-                          <td className="admin-rev-tx-pid" title={rawPid || undefined}>
-                            {pidCell}
-                          </td>
+                          <td className="admin-rev-tx-dt">{dtLine}</td>
                         </tr>
                       );
                     })}
@@ -1779,12 +1778,16 @@ const AdminDashboard: React.FC = () => {
 
         {activeTab === 'tips' && (
           <div className="admin-revenue-tab admin-tips-tab">
-            {tipsLoadErr ? (
+            {tipsLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 32, color: ADM.accent, animation: 'spin 1s linear infinite' }}>progress_activity</span>
+              </div>
+            ) : tipsLoadErr ? (
               <p className="admin-tips-err" style={{ color: '#f87171', marginBottom: '1rem' }}>
                 {tipsLoadErr}
               </p>
-            ) : null}
-            <div className="admin-rev-kpi-grid">
+            ) : (
+              <><div className="admin-rev-kpi-grid">
               {[
                 {
                   label: 'TOTAL TIPS',
@@ -1928,6 +1931,8 @@ const AdminDashboard: React.FC = () => {
                 {tipsTop.length === 0 && <div className="admin-rev-tx-empty">No data yet.</div>}
               </div>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -2490,14 +2495,17 @@ const AdminDashboard: React.FC = () => {
                   background: '#000000CC',
                   zIndex: 1000,
                   display: 'flex',
-                  alignItems: 'flex-end',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '24px',
                 }}
               >
                 <div
                   style={{
                     width: '100%',
+                    maxWidth: '480px',
                     background: '#111',
-                    borderRadius: '20px 20px 0 0',
+                    borderRadius: '20px',
                     padding: '24px 20px',
                     border: '1px solid #222',
                   }}
@@ -2568,141 +2576,6 @@ const AdminDashboard: React.FC = () => {
 
         {activeTab === 'settings' && (
           <div className="admin-settings-tab">
-            <div className="admin-card admin-enter" style={{ marginBottom: 16 }}>
-              <p className="admin-mono-label" style={{ marginBottom: 8 }}>
-                APP SETTINGS
-              </p>
-              <h2 style={{ margin: '0 0 6px', fontFamily: 'Syne, sans-serif', fontWeight: 800, color: '#f8fafc' }}>
-                Control pricing &amp; announcements
-              </h2>
-              <p style={{ margin: 0, fontSize: 13, color: 'rgba(148,163,184,0.95)' }}>
-                Updates apply for all users after save (no app update required).
-              </p>
-            </div>
-
-            <div className="admin-settings-section-label-wrap" style={{ marginBottom: 10 }}>
-              <span className="admin-settings-section-line" />
-              <p className="admin-settings-section-label">💰 PRO MEMBERSHIP PRICING</p>
-            </div>
-            <div
-              style={{
-                background: 'rgba(0,232,122,0.06)',
-                border: '1px solid rgba(0,232,122,0.2)',
-                borderRadius: 16,
-                padding: 16,
-                marginBottom: 14,
-              }}
-            >
-              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, letterSpacing: '0.12em', margin: '0 0 8px', fontWeight: 700 }}>
-                CURRENT LIVE PRICE
-              </p>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 28, color: '#00E87A' }}>
-                  ₹{appSettings.pro_price}
-                </span>
-                <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', textDecoration: 'line-through' }}>
-                  ₹{appSettings.pro_original_price}
-                </span>
-              </div>
-              {appSettings.updated_at && (
-                <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 10, margin: '10px 0 0' }}>
-                  Last updated: {new Date(appSettings.updated_at).toLocaleString('en-IN')}
-                  {appSettings.updated_by ? ` · ${appSettings.updated_by}` : ''}
-                </p>
-              )}
-            </div>
-            <div
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 16,
-                padding: 16,
-                marginBottom: 14,
-              }}
-            >
-              <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, letterSpacing: '0.12em', margin: '0 0 14px', fontWeight: 700 }}>
-                UPDATE PRICE
-              </p>
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.65)', fontSize: 12, marginBottom: 6 }}>
-                New Pro Price (₹)
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={9999}
-                value={newPrice}
-                onChange={(e) => setNewPrice(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 12,
-                  padding: '12px 14px',
-                  color: '#fff',
-                  fontSize: 16,
-                  marginBottom: 12,
-                  boxSizing: 'border-box',
-                }}
-              />
-              <label style={{ display: 'block', color: 'rgba(255,255,255,0.65)', fontSize: 12, marginBottom: 6 }}>
-                Original (strikethrough) ₹
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={99999}
-                value={newOriginalPrice}
-                onChange={(e) => setNewOriginalPrice(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 12,
-                  padding: '12px 14px',
-                  color: '#fff',
-                  fontSize: 16,
-                  marginBottom: 12,
-                  boxSizing: 'border-box',
-                }}
-              />
-              <div
-                style={{
-                  background: 'rgba(245,158,11,0.06)',
-                  border: '1px solid rgba(245,158,11,0.2)',
-                  borderRadius: 10,
-                  padding: '10px 12px',
-                  marginBottom: 14,
-                  fontSize: 11,
-                  color: 'rgba(245,158,11,0.85)',
-                  lineHeight: 1.5,
-                }}
-              >
-                ⚠️ This changes Razorpay amount for new Pro purchases. Deploy Edge Functions that read{' '}
-                <code style={{ color: '#fde68a' }}>app_settings</code>.
-              </div>
-              <button
-                type="button"
-                disabled={isSavingPrice}
-                onClick={() => void handleUpdatePrice()}
-                style={{
-                  width: '100%',
-                  height: 48,
-                  borderRadius: 14,
-                  border: 'none',
-                  fontWeight: 800,
-                  cursor: isSavingPrice ? 'not-allowed' : 'pointer',
-                  background: isSavingPrice ? 'rgba(0,232,122,0.35)' : 'linear-gradient(135deg, #00E87A, #00C563)',
-                  color: '#000',
-                }}
-              >
-                {isSavingPrice ? 'Saving…' : 'Update Price'}
-              </button>
-            </div>
-
-            <div className="admin-settings-section-label-wrap" style={{ marginTop: 8, marginBottom: 10 }}>
-              <span className="admin-settings-section-line" />
-              <p className="admin-settings-section-label">📢 ANNOUNCEMENTS</p>
-            </div>
             <div
               style={{
                 background: 'rgba(255,255,255,0.03)',
@@ -2769,6 +2642,40 @@ const AdminDashboard: React.FC = () => {
                   </button>
                 ))}
               </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                {(
+                  [
+                    ['all', '🌐 All Users'],
+                    ['pro', '⚡ Pro Only'],
+                    ['basic', '👤 Basic Only'],
+                  ] as const
+                ).map(([k, lab]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setAnnoTarget(k)}
+                    style={{
+                      flex: 1,
+                      height: 36,
+                      borderRadius: 20,
+                      border: annoTarget === k
+                        ? `1px solid ${k === 'pro' ? 'rgba(0,232,122,0.5)' : k === 'basic' ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.35)'}`
+                        : '1px solid rgba(255,255,255,0.08)',
+                      background: annoTarget === k
+                        ? k === 'pro' ? 'rgba(0,232,122,0.15)' : k === 'basic' ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.1)'
+                        : 'rgba(255,255,255,0.04)',
+                      color: annoTarget === k
+                        ? k === 'pro' ? '#00E87A' : k === 'basic' ? '#818CF8' : '#fff'
+                        : 'rgba(255,255,255,0.4)',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {lab}
+                  </button>
+                ))}
+              </div>
               <input
                 type="text"
                 placeholder="Announcement title…"
@@ -2822,7 +2729,7 @@ const AdminDashboard: React.FC = () => {
                   color: '#000',
                 }}
               >
-                {isPosting ? 'Posting...' : '📢 Post to All Users'}
+                {isPosting ? 'Posting...' : annoTarget === 'pro' ? '⚡ Post to Pro Users' : annoTarget === 'basic' ? '👤 Post to Basic Users' : '🌐 Post to All Users'}
               </button>
             </div>
 
@@ -2946,22 +2853,17 @@ const AdminDashboard: React.FC = () => {
         }
         .admin-hub-header {
           margin-bottom: 1.25rem;
-          padding-top: 0;
+          padding-top: calc(env(safe-area-inset-top, 0px) + 60px);
           padding-bottom: 0;
-          padding-right: 0.25rem;
-          padding-left: 0.25rem;
-        }
-        @media (max-width: 767px) {
-          .page-shell.admin-hub-root .admin-hub-header {
-            padding-left: max(0.5rem, calc(42px + 1.15rem + 10px));
-            padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
-          }
+          padding-right: 0.75rem;
+          padding-left: 0.75rem;
         }
         .admin-hub-header-top {
           display: flex;
           align-items: center;
+          justify-content: flex-end;
           gap: 0.75rem;
-          margin-bottom: 0.85rem;
+          margin-bottom: 0;
         }
         .admin-hub-title-block {
           flex: 1;
@@ -3044,37 +2946,6 @@ const AdminDashboard: React.FC = () => {
           justify-content: center;
           border: 2px solid #020617;
         }
-        .admin-hub-marquee-wrap {
-          position: relative;
-          overflow: hidden;
-        }
-        .admin-hub-marquee-line {
-          height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(200, 255, 61, 0.45), transparent);
-          box-shadow: 0 0 12px rgba(200, 255, 61, 0.35);
-        }
-        .admin-hub-marquee-line--bottom {
-          margin-top: 0;
-        }
-        .admin-hub-marquee {
-          display: flex;
-          white-space: nowrap;
-          animation: admin-marquee 28s linear infinite;
-          font-family: 'JetBrains Mono', ui-monospace, monospace;
-          font-size: 0.62rem;
-          font-weight: 700;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-          color: rgba(200, 255, 61, 0.92);
-          padding: 0.45rem 0;
-        }
-        .admin-hub-marquee span {
-          padding-right: 3rem;
-        }
-        @keyframes admin-marquee {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
         .admin-hub-tabs-card {
           margin-bottom: 1.25rem;
           padding: 0.4rem;
@@ -3089,7 +2960,7 @@ const AdminDashboard: React.FC = () => {
           overflow-x: auto;
           scrollbar-width: none;
           -webkit-overflow-scrolling: touch;
-          padding-bottom: 140px;
+          padding-bottom: 2px;
         }
         .admin-hub-tabs-scroll::-webkit-scrollbar {
           display: none;
@@ -3119,6 +2990,122 @@ const AdminDashboard: React.FC = () => {
           padding-bottom: 5rem;
           padding-left: 0.25rem;
           padding-right: 0.25rem;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .admin-today-tab {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        .admin-today-loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 3rem;
+        }
+        .admin-today-date {
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          font-size: 0.65rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(148, 163, 184, 0.7);
+          padding: 0 0.25rem;
+        }
+        .admin-today-kpi-row {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 0.75rem;
+        }
+        .admin-today-kpi {
+          background: rgba(15, 23, 42, 0.75);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px;
+          padding: 1rem 0.75rem;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.25rem;
+          text-align: center;
+        }
+        .admin-today-kpi-val {
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          font-size: 1.75rem;
+          font-weight: 800;
+          line-height: 1;
+        }
+        .admin-today-kpi-lbl {
+          font-size: 0.58rem;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+          color: rgba(148, 163, 184, 0.6);
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+        }
+        .admin-today-section {
+          background: rgba(15, 23, 42, 0.75);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          padding: 1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.65rem;
+        }
+        .admin-today-section-title {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          font-size: 0.65rem;
+          font-weight: 800;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: rgba(248, 250, 252, 0.7);
+          margin-bottom: 0.25rem;
+        }
+        .admin-today-ticket {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 10px;
+          padding: 0.75rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
+        }
+        .admin-today-ticket-meta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+        }
+        .admin-today-ticket-name {
+          font-size: 0.75rem;
+          font-weight: 700;
+          color: #f8fafc;
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+        }
+        .admin-today-ticket-type {
+          font-size: 0.58rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: #60a5fa;
+          font-family: 'JetBrains Mono', ui-monospace, monospace;
+          background: rgba(96, 165, 250, 0.12);
+          border: 1px solid rgba(96, 165, 250, 0.25);
+          border-radius: 999px;
+          padding: 0.15rem 0.5rem;
+        }
+        .admin-today-ticket-msg {
+          font-size: 0.75rem;
+          color: rgba(148, 163, 184, 0.8);
+          line-height: 1.45;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
         .admin-users-tab {
           display: flex;

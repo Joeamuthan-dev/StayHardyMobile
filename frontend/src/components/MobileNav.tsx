@@ -7,7 +7,6 @@ import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
 import { isAdminHubUser } from '../config/adminOwner';
 import { useAppSettings } from '../hooks/useAppSettings';
 import SupportModal from './SupportModal';
-import { Home, Repeat, CheckSquare, Target, BarChart2, Calendar, User, HelpCircle, MessageSquare, Heart, LogOut, ChevronRight, Lock } from 'lucide-react';
 
 import pkg from '../../package.json';
 
@@ -16,7 +15,102 @@ interface MobileNavProps {
   setIsOpen: (open: boolean) => void;
 }
 
-
+/* ─── Inline SVG Icons ─────────────────────────────────────── */
+const IconHome = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/>
+    <path d="M9 21V12h6v9"/>
+  </svg>
+);
+const IconTasks = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="3" width="14" height="18" rx="2"/>
+    <path d="M9 9l2 2 4-4"/>
+    <line x1="9" y1="14" x2="15" y2="14"/>
+    <line x1="9" y1="17" x2="13" y2="17"/>
+  </svg>
+);
+const IconGoals = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <circle cx="12" cy="12" r="5"/>
+    <circle cx="12" cy="12" r="1" fill="currentColor"/>
+  </svg>
+);
+const IconHabits = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 12a9 9 0 109-9"/>
+    <path d="M3 12V7M3 12H8"/>
+    <path d="M12 7v5l3 3"/>
+  </svg>
+);
+const IconStats = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="13" width="4" height="8" rx="1"/>
+    <rect x="10" y="8" width="4" height="13" rx="1"/>
+    <rect x="17" y="3" width="4" height="18" rx="1"/>
+  </svg>
+);
+const IconCalendar = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+    <rect x="7" y="14" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"/>
+  </svg>
+);
+const IconProfile = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4"/>
+    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+  </svg>
+);
+const IconHelp = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M9.5 9a3 3 0 015 2c0 2-3 3-3 3"/>
+    <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+  </svg>
+);
+const IconFeedback = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+    <line x1="9" y1="9" x2="15" y2="9"/>
+    <line x1="9" y1="13" x2="12" y2="13"/>
+  </svg>
+);
+const IconSupport = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 21C12 21 4 14.5 4 9a8 8 0 0116 0c0 5.5-8 12-8 12z"/>
+    <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/>
+  </svg>
+);
+const IconAdmin = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.5C16.5 22.15 20 17.25 20 12V6l-8-4z"/>
+    <path d="M9 12l2 2 4-4"/>
+  </svg>
+);
+const IconLock = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="11" width="14" height="11" rx="2"/>
+    <path d="M8 11V7a4 4 0 018 0v4"/>
+  </svg>
+);
+const IconChevron = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 18l6-6-6-6"/>
+  </svg>
+);
+const IconLogout = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+);
+/* ─────────────────────────────────────────────────────────── */
 
 const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
   const navigate = useNavigate();
@@ -66,276 +160,313 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
     [setIsOpen],
   );
 
-  const rowStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '13px 16px',
-    cursor: 'pointer',
-    background: 'transparent',
-    border: 'none',
-    textAlign: 'left' as const,
-    width: '100%',
-    boxSizing: 'border-box' as const
-  };
+  const navItems = [
+    { path: '/home',      label: 'Home',   Icon: IconHome,   locked: false,    featured: false },
+    { path: '/dashboard', label: 'Tasks',  Icon: IconTasks,  locked: false,    featured: false },
+    { path: '/goals',     label: 'Goals',  Icon: IconGoals,  locked: false,    featured: false },
+    { path: '/routine',   label: 'Habits', Icon: IconHabits, locked: !isPro,   featured: true  },
+    { path: '/stats',     label: 'Stats',  Icon: IconStats,  locked: !isPro,   featured: false },
+  ];
 
-  const iconStyle = {
-    color: 'rgba(255,255,255,0.45)'
-  };
-
-  const labelStyle = {
-    flex: 1,
-    fontSize: '14px',
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.7)'
-  };
+  const accountItems = [
+    { path: '/calendar', label: 'Calendar', Icon: IconCalendar },
+    { path: '/settings', label: 'Profile',  Icon: IconProfile },
+  ];
 
   const drawerPanel = (
     <>
+      {/* Backdrop */}
       <div
         style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 400,
+          position: 'fixed', inset: 0, zIndex: 400,
           display: isOpen ? 'block' : 'none',
         }}
       >
         <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-          }}
+          style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
           onClick={() => setIsOpen(false)}
         />
+
+        {/* Drawer */}
         <aside
           onClick={(e) => e.stopPropagation()}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '78vw',
-            maxWidth: '300px',
-            height: '100vh',
-            background: '#0D1210',
-            overflowX: 'hidden',
-            overflowY: 'auto',
-            paddingBottom: '32px',
-            zIndex: 401,
-            transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 0.3s ease',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
           onTouchStart={onDrawerTouchStart}
           onTouchEnd={onDrawerTouchEnd}
+          style={{
+            position: 'absolute', top: 0, left: 0,
+            width: '78vw', maxWidth: '300px', height: '100vh',
+            background: 'linear-gradient(180deg, #0C1512 0%, #080D0B 100%)',
+            borderRight: '1px solid rgba(0,232,122,0.08)',
+            overflowX: 'hidden', overflowY: 'auto',
+            zIndex: 401,
+            transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.32s cubic-bezier(0.16,1,0.3,1)',
+            display: 'flex', flexDirection: 'column',
+          }}
         >
-          {/* ── SECTION 1: Branding Header ── */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '56px 16px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <div>
-              <span style={{ fontSize: '24px', fontWeight: '900', color: '#00E87A', letterSpacing: '-0.5px', display: 'block', marginBottom: '4px' }}>
-                StayHardy
-              </span>
-              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' }}>
-                The 1% starts here.
-              </span>
+
+          {/* ── Header ── */}
+          <div style={{
+            padding: 'calc(env(safe-area-inset-top, 0px) + 20px) 20px 20px 20px',
+            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            background: 'linear-gradient(180deg, rgba(0,232,122,0.06) 0%, transparent 100%)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+              <div>
+                <div style={{ fontSize: '20px', fontWeight: '900', color: '#00E87A', letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+                  STAY HARDY
+                </div>
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.12em', marginTop: '3px', textTransform: 'uppercase' }}>
+                  The 1% starts here.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                style={{
+                  width: '32px', height: '32px', borderRadius: '10px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round">
+                  <line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/>
+                </svg>
+              </button>
             </div>
 
+            {/* User Card */}
             <div
-              onClick={() => setIsOpen(false)}
+              onClick={() => handleNavigate('/settings')}
               style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                display: 'flex', alignItems: 'center', gap: '12px',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '14px',
+                padding: '12px 14px',
                 cursor: 'pointer',
-                flexShrink: 0
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round">
-                <line x1="1" y1="1" x2="13" y2="13"/>
-                <line x1="13" y1="1" x2="1" y2="13"/>
-              </svg>
-            </div>
-          </div>
-
-          {/* ── SECTION 2: NAVIGATE (The Command List) ── */}
-          <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '24px 16px 8px 20px', display: 'block', textTransform: 'uppercase' }}>
-            COMMAND CENTER
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 12px' }}>
-            {[
-              { path: '/home', label: 'Home', Icon: Home },
-              { path: '/dashboard', label: 'Tasks', Icon: CheckSquare },
-              { path: '/goals', label: 'Goals', Icon: Target },
-              { path: '/routine', label: 'Habits', Icon: Repeat, locked: !isPro },
-              { path: '/stats', label: 'Stats', Icon: BarChart2, locked: !isPro },
-            ].map(({ path, label, Icon, locked }) => {
-              const active = isActive(path);
-
-              return (
-                <button
-                  key={path}
-                  type="button"
-                  onClick={() => {
-                    if (locked) {
-                      handleNavigate('/lifetime-access');
-                    } else {
-                      handleNavigate(path);
-                    }
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '14px',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    transition: 'all 0.2s ease',
-                    width: '100%',
-                    background: active ? 'rgba(0, 230, 118, 0.1)' : 'transparent',
-                    borderLeft: active ? '2.5px solid #00E676' : '2.5px solid transparent',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    textAlign: 'left',
-                    opacity: locked ? 0.5 : 1
-                  }}
-                >
-                  <Icon 
-                    size={20} 
-                    style={{ 
-                      color: active ? '#00E676' : 'rgba(255,255,255,0.4)',
-                      filter: active ? 'drop-shadow(0 0 5px rgba(0, 230, 118, 0.3))' : 'none'
-                    }} 
-                  />
-                  <span style={{ 
-                    fontSize: '15px', 
-                    fontWeight: active ? '700' : '500', 
-                    color: active ? '#00E676' : 'rgba(255,255,255,0.6)',
-                    flex: 1
-                  }}>
-                    {label}
-                  </span>
-                  {locked && (
-                    <Lock size={14} color="#FFD700" style={{ opacity: 0.8 }} />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* ── SECTION 3: LIFETIME OFFER (The Funnel) ── */}
-          {upsell && (
-            <div
-              onClick={() => handleNavigate('/lifetime-access')}
-              style={{
-                margin: '20px 16px 8px 16px',
-                background: 'linear-gradient(135deg, rgba(0,230,118,0.08), rgba(0,230,118,0.02))',
-                border: '1px solid rgba(0,230,118,0.25)',
-                borderRadius: '16px',
-                padding: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-                cursor: 'pointer',
-                boxShadow: '0 8px 32px rgba(0,0,0,0.2), inset 0 0 20px rgba(0,230,118,0.05)',
-                transition: 'all 0.3s ease',
-                position: 'relative'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(0,230,118,0.4)'}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(0,230,118,0.25)'}
-            >
-              <div style={{ 
-                width: '32px', 
-                height: '32px', 
-                borderRadius: '10px', 
-                background: 'rgba(0,230,118,0.15)', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                flexShrink: 0 
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '12px',
+                background: 'linear-gradient(135deg, rgba(0,232,122,0.2), rgba(0,232,122,0.05))',
+                border: '1.5px solid rgba(0,232,122,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, overflow: 'hidden',
               }}>
-                <span style={{ fontSize: '18px', color: '#00E676' }}>⚡</span>
+                {user?.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#00E87A' }}>
+                    {user?.name?.charAt(0)?.toUpperCase() ?? 'U'}
+                  </span>
+                )}
               </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '14px', fontWeight: '900', color: '#00E676', display: 'block', letterSpacing: '-0.2px' }}>
-                  Lifetime ₹{displayLifetimePrice}
-                </span>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', display: 'block', fontWeight: '500' }}>
-                  Elite Access · No renewals
-                </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user?.name ?? 'User'}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                  {isAdmin ? (
+                    <span style={{ fontSize: '9px', fontWeight: '800', color: '#F59E0B', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '5px', padding: '1px 6px', letterSpacing: '0.08em' }}>ADMIN</span>
+                  ) : isPro ? (
+                    <span style={{ fontSize: '9px', fontWeight: '800', color: '#00E87A', background: 'rgba(0,232,122,0.1)', border: '1px solid rgba(0,232,122,0.25)', borderRadius: '5px', padding: '1px 6px', letterSpacing: '0.08em' }}>PRO</span>
+                  ) : (
+                    <span style={{ fontSize: '9px', fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.05em' }}>FREE</span>
+                  )}
+                </div>
               </div>
-              <ChevronRight size={16} color="rgba(0,230,118,0.4)" />
+              <IconChevron />
+            </div>
+          </div>
+
+          {/* ── Nav Items ── */}
+          <div style={{ padding: '16px 12px 8px 12px' }}>
+            <div style={{ fontSize: '9px', fontWeight: '800', letterSpacing: '0.18em', color: 'rgba(255,255,255,0.18)', padding: '0 6px 10px 6px', textTransform: 'uppercase' }}>
+              Navigate
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {navItems.map(({ path, label, Icon, locked, featured }) => {
+                const active = isActive(path);
+                return (
+                  <button
+                    key={path}
+                    type="button"
+                    onClick={() => locked ? handleNavigate('/lifetime-access') : handleNavigate(path)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '13px',
+                      padding: '11px 14px',
+                      borderRadius: '12px',
+                      width: '100%', textAlign: 'left',
+                      background: active
+                        ? 'rgba(0,232,122,0.12)'
+                        : featured
+                          ? 'linear-gradient(135deg, rgba(0,232,122,0.07) 0%, rgba(0,232,122,0.02) 100%)'
+                          : 'transparent',
+                      border: active
+                        ? '1px solid rgba(0,232,122,0.22)'
+                        : featured
+                          ? '1px solid rgba(0,232,122,0.14)'
+                          : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
+                      opacity: locked ? 0.55 : 1,
+                      color: active ? '#00E87A' : featured ? 'rgba(0,232,122,0.6)' : 'rgba(255,255,255,0.45)',
+                      position: 'relative',
+                    }}
+                  >
+                    {active && (
+                      <span style={{
+                        position: 'absolute', left: 0, top: '20%', bottom: '20%',
+                        width: '3px', borderRadius: '0 3px 3px 0',
+                        background: '#00E87A',
+                        boxShadow: '0 0 8px rgba(0,232,122,0.6)',
+                      }} />
+                    )}
+                    <Icon />
+                    <span style={{
+                      flex: 1,
+                      fontSize: '14px',
+                      fontWeight: active || featured ? '700' : '500',
+                      color: active ? '#00E87A' : featured ? 'rgba(0,232,122,0.85)' : 'rgba(255,255,255,0.65)',
+                      letterSpacing: active ? '-0.1px' : '0',
+                    }}>
+                      {label}
+                    </span>
+                    {featured && !active && (
+                      <span style={{ fontSize: '8px', fontWeight: '800', color: '#00E87A', background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.2)', borderRadius: '5px', padding: '2px 6px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Core</span>
+                    )}
+                    {locked && <IconLock />}
+                    {active && !locked && (
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#00E87A', boxShadow: '0 0 6px #00E87A' }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Lifetime Upsell ── */}
+          {upsell && (
+            <div style={{ padding: '4px 12px 8px 12px' }}>
+              <div
+                onClick={() => handleNavigate('/lifetime-access')}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(0,232,122,0.1) 0%, rgba(0,232,122,0.04) 100%)',
+                  border: '1px solid rgba(0,232,122,0.22)',
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  display: 'flex', alignItems: 'center', gap: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{
+                  width: '34px', height: '34px', borderRadius: '10px',
+                  background: 'rgba(0,232,122,0.12)',
+                  border: '1px solid rgba(0,232,122,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                  </svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#00E87A', letterSpacing: '-0.2px' }}>
+                    Unlock Lifetime Pro
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', marginTop: '2px' }}>
+                    ₹{displayLifetimePrice} · No renewals ever
+                  </div>
+                </div>
+                <IconChevron />
+              </div>
             </div>
           )}
 
-          {/* ── SECTION 4: ACCOUNT ── */}
-          <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '24px 16px 8px 20px', display: 'block', textTransform: 'uppercase' }}>
-            ACCOUNT
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 12px' }}>
-            {[
-              { path: '/calendar', label: 'Calendar', Icon: Calendar },
-              { path: '/settings', label: 'Profile', Icon: User },
-            ].map(({ path, label, Icon }) => (
-              <button 
-                key={path}
-                type="button" 
-                onClick={() => handleNavigate(path)} 
-                style={{
-                  ...rowStyle,
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                }}
+          {/* ── Account Section ── */}
+          <div style={{ padding: '8px 12px 8px 12px' }}>
+            <div style={{ fontSize: '9px', fontWeight: '800', letterSpacing: '0.18em', color: 'rgba(255,255,255,0.18)', padding: '8px 6px 10px 6px', textTransform: 'uppercase' }}>
+              Account
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {accountItems.map(({ path, label, Icon }) => {
+                const active = isActive(path);
+                return (
+                  <button
+                    key={path}
+                    type="button"
+                    onClick={() => handleNavigate(path)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '13px',
+                      padding: '11px 14px', borderRadius: '12px',
+                      width: '100%', textAlign: 'left',
+                      background: active ? 'rgba(0,232,122,0.1)' : 'transparent',
+                      border: active ? '1px solid rgba(0,232,122,0.18)' : '1px solid transparent',
+                      cursor: 'pointer', transition: 'all 0.18s ease',
+                      color: active ? '#00E87A' : 'rgba(255,255,255,0.45)',
+                    }}
+                  >
+                    <Icon />
+                    <span style={{ flex: 1, fontSize: '14px', fontWeight: active ? '700' : '500', color: active ? '#00E87A' : 'rgba(255,255,255,0.65)' }}>
+                      {label}
+                    </span>
+                    <IconChevron />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Support Section ── */}
+          <div style={{ padding: '0 12px 8px 12px' }}>
+            <div style={{ fontSize: '9px', fontWeight: '800', letterSpacing: '0.18em', color: 'rgba(255,255,255,0.18)', padding: '8px 6px 10px 6px', textTransform: 'uppercase' }}>
+              Support
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <button type="button" onClick={() => { handleNavigate('/welcome'); setIsOpen(false); }}
+                style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '11px 14px', borderRadius: '12px', width: '100%', textAlign: 'left', background: 'transparent', border: '1px solid transparent', cursor: 'pointer', color: 'rgba(255,255,255,0.45)' }}
               >
-                <Icon size={18} style={{ color: isActive(path) ? '#00E676' : 'rgba(255,255,255,0.4)' }} />
-                <span style={{ ...labelStyle, fontSize: '14px', color: isActive(path) ? '#FFFFFF' : 'rgba(255,255,255,0.6)' }}>{label}</span>
-                <ChevronRight size={14} style={{ opacity: 0.2 }} />
+                <IconHelp />
+                <span style={{ flex: 1, fontSize: '14px', fontWeight: '500', color: 'rgba(255,255,255,0.65)' }}>Expert Intelligence</span>
               </button>
-            ))}
+
+              {!isAdmin && (
+                <>
+                  <button type="button" onClick={() => { navigate('/feedback'); setIsOpen(false); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '11px 14px', borderRadius: '12px', width: '100%', textAlign: 'left', background: 'transparent', border: '1px solid transparent', cursor: 'pointer', color: 'rgba(255,255,255,0.45)' }}
+                  >
+                    <IconFeedback />
+                    <span style={{ flex: 1, fontSize: '14px', fontWeight: '500', color: 'rgba(255,255,255,0.65)' }}>Global Feedback</span>
+                  </button>
+                  <button type="button" onClick={() => { setShowSupportModal(true); setIsOpen(false); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '11px 14px', borderRadius: '12px', width: '100%', textAlign: 'left', background: 'transparent', border: '1px solid transparent', cursor: 'pointer', color: 'rgba(255,255,255,0.45)' }}
+                  >
+                    <IconSupport />
+                    <span style={{ flex: 1, fontSize: '14px', fontWeight: '500', color: 'rgba(255,255,255,0.65)' }}>Back the Mission</span>
+                  </button>
+                </>
+              )}
+
+              {isAdminHubUser(user) && (
+                <button type="button" onClick={() => handleNavigate('/admin')}
+                  style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '11px 14px', borderRadius: '12px', width: '100%', textAlign: 'left', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', cursor: 'pointer', color: '#F59E0B' }}
+                >
+                  <IconAdmin />
+                  <span style={{ flex: 1, fontSize: '14px', fontWeight: '700', color: '#F59E0B' }}>Admin Hub</span>
+                  <span style={{ fontSize: '9px', fontWeight: '800', color: '#F59E0B', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '5px', padding: '2px 6px', letterSpacing: '0.08em' }}>ADMIN</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* ── SECTION 5: HELP ── */}
-          <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.2)', padding: '24px 16px 8px 20px', display: 'block', textTransform: 'uppercase' }}>
-            SUPPORT
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 12px' }}>
-            <button type="button" onClick={() => { handleNavigate('/welcome'); setIsOpen(false); }} style={rowStyle}>
-              <HelpCircle size={18} style={iconStyle} />
-              <span style={{ ...labelStyle, fontSize: '14px' }}>Expert Intelligence</span>
-            </button>
-            {!isAdmin && (
-              <>
-                <button type="button" onClick={() => { navigate('/feedback'); setIsOpen(false); }} style={rowStyle}>
-                  <MessageSquare size={18} style={iconStyle} />
-                  <span style={{ ...labelStyle, fontSize: '14px' }}>Global Feedback</span>
-                </button>
-                <button type="button" onClick={() => { setShowSupportModal(true); setIsOpen(false); }} style={rowStyle}>
-                  <Heart size={18} style={iconStyle} />
-                  <span style={{ ...labelStyle, fontSize: '14px' }}>Back the Mission</span>
-                </button>
-              </>
-            )}
-            {isAdminHubUser(user) && (
-              <button type="button" onClick={() => handleNavigate('/admin')} style={rowStyle}>
-                <span style={{ fontSize: '20px' }}>🛡️</span>
-                <span style={{ ...labelStyle, fontSize: '14px' }}>Admin Protocol</span>
-              </button>
-            )}
-          </div>
-
-          {/* ── SECTION 6: FOOTER ── */}
-          <div style={{ marginTop: 'auto', padding: '16px 16px 32px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.15)', textAlign: 'center', display: 'block', marginBottom: '4px' }}>
-              StayHardy v{pkg.version}
-            </span>
-            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.15)', textAlign: 'center', display: 'block', marginBottom: '14px' }}>
-              Made with ❤️ in India
-            </span>
+          {/* ── Footer / Logout ── */}
+          <div style={{ marginTop: 'auto', padding: '16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.12)' }}>StayHardy v{pkg.version} · Made with ♥ in India</span>
+            </div>
             <button
               type="button"
               onClick={async () => {
@@ -345,24 +476,21 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
               }}
               style={{
                 width: '100%',
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.06)',
+                background: 'rgba(239,68,68,0.05)',
+                border: '1px solid rgba(239,68,68,0.15)',
                 borderRadius: '12px',
                 padding: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                transition: 'all 0.2s ease',
+                color: 'rgba(239,68,68,0.7)',
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.05)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
             >
-              <LogOut size={16} color="rgba(239,68,68,0.7)" />
-              <span style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(239,68,68,0.7)' }}>Terminate Session</span>
+              <IconLogout />
+              <span style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(239,68,68,0.7)' }}>Sign Out</span>
             </button>
           </div>
+
         </aside>
       </div>
     </>
@@ -386,7 +514,6 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
       {createPortal(drawerPanel, document.body)}
 
       <SupportModal isOpen={showSupportModal} onClose={() => setShowSupportModal(false)} />
-
     </>
   );
 };

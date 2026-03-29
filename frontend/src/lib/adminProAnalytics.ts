@@ -23,19 +23,18 @@ export function shortPaymentId(id: string | null | undefined): string {
   return s.slice(-8);
 }
 
-/** Build 30 daily buckets (₹) from pro_purchase_date rows; max 50 rows in → partial chart if more sales exist */
+/** Build daily revenue buckets from actual {date, amount} rows — uses real payment_amount */
 export function aggregateDailyRevenue(
-  dates: string[],
-  priceInr: number,
+  rows: { date: string; amount: number }[],
   days: number
 ): { name: string; revenue: number; iso: string }[] {
   const now = new Date();
   const buckets = new Map<string, number>();
 
-  for (const iso of dates) {
-    if (!iso) continue;
-    const d = iso.slice(0, 10);
-    buckets.set(d, (buckets.get(d) ?? 0) + 1);
+  for (const { date, amount } of rows) {
+    if (!date) continue;
+    const d = date.slice(0, 10);
+    buckets.set(d, (buckets.get(d) ?? 0) + amount);
   }
 
   const out: { name: string; revenue: number; iso: string }[] = [];
@@ -43,9 +42,8 @@ export function aggregateDailyRevenue(
     const date = new Date(now);
     date.setDate(date.getDate() - i);
     const iso = date.toISOString().slice(0, 10);
-    const count = buckets.get(iso) ?? 0;
     const display = date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-    out.push({ name: display, revenue: count * priceInr, iso });
+    out.push({ name: display, revenue: buckets.get(iso) ?? 0, iso });
   }
   return out;
 }

@@ -489,7 +489,8 @@ const HomeDashboard: React.FC = () => {
   const overallProgress = scoreData?.overall_score ?? calculateProductivityScore({
     tasksProgress,
     routinesProgress,
-    goalsProgress: avgGoalProgress
+    goalsProgress: avgGoalProgress,
+    isPro
   });
 
   const todayKey = `ps_delta_${localTodayStr}_${user?.id}`;
@@ -698,7 +699,7 @@ const HomeDashboard: React.FC = () => {
   const isProUser = !!isPro || isAdmin;
 
   return (
-    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)', paddingBottom: '140px', overflowY: 'auto' }}>
+    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 72px)', paddingBottom: '140px', overflowY: 'auto' }}>
       <style>{`
         .light-card::before {
           content: '';

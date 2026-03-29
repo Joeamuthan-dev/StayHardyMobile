@@ -13,7 +13,7 @@ import { ProductivityService } from '../lib/ProductivityService';
 // CelebrationOverlay import removed — task completions now use inline top toast
 import { isCompletedTaskToday } from '../lib/supportPopup';
 import { supabase } from '../supabase';
-import CategorySelector from '../components/CategorySelector';
+
 
 
 interface Task {
@@ -21,7 +21,7 @@ interface Task {
   title: string;
   description: string;
   status: 'pending' | 'completed';
-  category: string;
+
   priority: 'High' | 'Medium' | 'Low';
   createdAt: string;
   updatedAt?: string;
@@ -33,33 +33,7 @@ interface Task {
 
 
 
-const getCategoryColor = (category: string) => {
-  const cat = (category || 'General').toLowerCase();
-  const colors: Record<string, { bg: string, text: string, border: string }> = {
-    work: { bg: 'rgba(56, 189, 248, 0.08)', text: '#7dd3fc', border: 'rgba(56, 189, 248, 0.2)' },
-    personal: { bg: 'rgba(168, 85, 247, 0.08)', text: '#c084fc', border: 'rgba(168, 85, 247, 0.2)' },
-    fitness: { bg: 'rgba(34, 197, 94, 0.08)', text: '#4ade80', border: 'rgba(34, 197, 94, 0.2)' },
-    health: { bg: 'rgba(239, 68, 68, 0.08)', text: '#f87171', border: 'rgba(239, 68, 68, 0.2)' },
-    shopping: { bg: 'rgba(245, 158, 11, 0.08)', text: '#fbbf24', border: 'rgba(245, 158, 11, 0.2)' },
-    finance: { bg: 'rgba(234, 179, 8, 0.08)', text: '#facc15', border: 'rgba(234, 179, 8, 0.2)' },
-    growth: { bg: 'rgba(16, 185, 129, 0.08)', text: '#34d399', border: 'rgba(16, 185, 129, 0.2)' },
-    urgent: { bg: 'rgba(220, 38, 38, 0.1)', text: '#f87171', border: 'rgba(220, 38, 38, 0.3)' },
-  };
 
-  if (colors[cat]) return colors[cat];
-
-  // Default color generation based on string hash
-  let hash = 0;
-  for (let i = 0; i < cat.length; i++) {
-    hash = cat.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const h = Math.abs(hash % 360);
-  return {
-    bg: `hsla(${h}, 70%, 50%, 0.08)`,
-    text: `hsl(${h}, 70%, 75%)`,
-    border: `hsla(${h}, 70%, 50%, 0.2)`
-  };
-};
 
 
 
@@ -324,7 +298,6 @@ const Dashboard: React.FC = () => {
   const [detailTask, setDetailTask] = useState<Task | null>(null); // New details state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('General');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('Medium');
   const { t } = useLanguage();
 
@@ -333,7 +306,6 @@ const Dashboard: React.FC = () => {
 
   const [isExiting, setIsExiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [isSidebarHidden] = useState(() => {
     return localStorage.getItem('sidebarHidden') === 'true';
   });
@@ -390,7 +362,7 @@ const Dashboard: React.FC = () => {
 
       const { data, error: fetchError } = await supabase
         .from('tasks')
-        .select('id, title, description, status, category, priority, createdAt, updatedAt, order_index, image_url')
+        .select('id, title, description, status, priority, createdAt, updatedAt, order_index, image_url')
         .eq('userId', user.id)
         .order('order_index', { ascending: true });
 
@@ -414,24 +386,11 @@ const Dashboard: React.FC = () => {
     [user?.id],
   );
 
-  const fetchCategories = useCallback(async () => {
-    if (!user?.id) return;
-    const { data, error: fetchError } = await supabase
-      .from('categories')
-      .select('name')
-      .eq('userId', user.id);
 
-    if (fetchError) {
-      console.warn('Categories table might not exist yet:', fetchError.message);
-      return;
-    }
-    if (data) setCustomCategories(data.map(c => c.name));
-  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
     fetchTasks();
-    fetchCategories();
 
     const tasksChannel = supabase
       .channel('tasks_changes')
@@ -445,23 +404,12 @@ const Dashboard: React.FC = () => {
       })
       .subscribe();
 
-    const categoriesChannel = supabase
-      .channel('categories_changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'categories',
-        filter: `userId=eq.${user.id}`
-      }, () => {
-        fetchCategories();
-      })
-      .subscribe();
+
 
     return () => {
       supabase.removeChannel(tasksChannel);
-      supabase.removeChannel(categoriesChannel);
     };
-  }, [user?.id, fetchTasks, fetchCategories]);
+  }, [user?.id, fetchTasks]);
 
   const location = useLocation();
   useEffect(() => {
@@ -496,14 +444,12 @@ const Dashboard: React.FC = () => {
       setEditTask(task);
       setTitle(task.title);
       setDescription(task.description);
-      setCategory(task.category || 'Business');
       setPriority(task.priority || 'Medium');
       setImageUrl(task.image_url || '');
     } else {
       setEditTask(null);
       setTitle('');
       setDescription('');
-      setCategory('Business');
       setPriority('Medium');
       setImageUrl('');
     }
@@ -559,12 +505,11 @@ const Dashboard: React.FC = () => {
     const snapshot = {
       title: titleTrim,
       description: description.trim(),
-      category,
       priority,
       imageUrl,
       imageFile,
       editTask,
-      customCategoriesSnapshot: [...customCategories],
+
     };
 
     // Close modal early for optimistic feel if NOT editing? 
@@ -586,7 +531,7 @@ const Dashboard: React.FC = () => {
       const optimisticPatch = {
         title: snapshot.title,
         description: snapshot.description,
-        category: snapshot.category,
+
         priority: snapshot.priority,
         image_url: previewUrl || undefined,
         updatedAt: new Date().toISOString(),
@@ -611,24 +556,12 @@ const Dashboard: React.FC = () => {
           }
         }
 
-        if (
-          snapshot.category &&
-          !snapshot.customCategoriesSnapshot.includes(snapshot.category) &&
-          !['Personal', 'Content', 'Health', 'Business'].includes(snapshot.category)
-        ) {
-          await supabase
-            .from('categories')
-            .insert([{ userId: user.id, name: snapshot.category }])
-            .select();
-          setCustomCategories(prev =>
-            prev.includes(snapshot.category) ? prev : [...prev, snapshot.category],
-          );
-        }
+
 
         const payload = {
           title: snapshot.title,
           description: snapshot.description,
-          category: snapshot.category,
+
           priority: snapshot.priority,
           image_url: finalImageUrl || null,
           updatedAt: new Date().toISOString(),
@@ -667,7 +600,7 @@ const Dashboard: React.FC = () => {
           const patch = {
             title: snapshot.title,
             description: snapshot.description,
-            category: snapshot.category,
+
             priority: snapshot.priority,
             image_url: snapshot.imageUrl || null,
             updatedAt: new Date().toISOString(),
@@ -702,7 +635,7 @@ const Dashboard: React.FC = () => {
         id: tempId,
         title: snapshot.title,
         description: snapshot.description,
-        category: snapshot.category,
+
         priority: snapshot.priority,
         image_url: undefined, // temporary, will update if image uploads
         status: 'pending',
@@ -733,7 +666,7 @@ const Dashboard: React.FC = () => {
           .insert([{
             title: snapshot.title,
             description: snapshot.description,
-            category: snapshot.category,
+
             priority: snapshot.priority,
             image_url: finalImageUrl || null,
             userId: user!.id,
@@ -1473,10 +1406,7 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-                <CategorySelector
-                  selected={category}
-                  onSelect={setCategory}
-                />
+
 
               <div>
                 <label style={{ fontSize: '10px', fontWeight: '800', color: '#666666', letterSpacing: '0.12em', display: 'block', marginBottom: '10px' }}>PRIORITY</label>
@@ -1529,20 +1459,7 @@ const Dashboard: React.FC = () => {
                   {detailTask.title}
                 </h2>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', alignItems: 'center' }}>
-                  <span
-                    style={{
-                      background: getCategoryColor(detailTask.category).bg,
-                      color: getCategoryColor(detailTask.category).text,
-                      border: `1px solid ${getCategoryColor(detailTask.category).border}`,
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '0.75rem',
-                      fontSize: '0.7rem',
-                      fontWeight: 900,
-                      textTransform: 'uppercase'
-                    }}
-                  >
-                    {detailTask.category || 'General'}
-                  </span>
+
                   <span
                     style={{
                       background: 'rgba(255,255,255,0.03)',

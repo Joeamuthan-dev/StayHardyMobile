@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { PaywallModal } from '../components/PaywallModal';
+import { WebPaywallModal } from '../components/WebPaywallModal';
 
 type PaywallContextType = {
   isPaywallOpen: boolean;
@@ -23,16 +25,20 @@ export const PaywallProvider = ({ children }: { children: ReactNode }) => {
   const closePaywall = () => setPaywallOpen(false);
 
   return (
-    <PaywallContext.Provider 
-      value={{ 
-        isPaywallOpen, 
-        openPaywall, 
-        closePaywall 
+    <PaywallContext.Provider
+      value={{
+        isPaywallOpen,
+        openPaywall,
+        closePaywall
       }}
     >
       {children}
       {/* The Global Modal mounts here, above all routes */}
-      {isPaywallOpen && <PaywallModal onClose={() => setPaywallOpen(false)} />}
+      {isPaywallOpen && (
+        Capacitor.isNativePlatform()
+          ? <PaywallModal onClose={() => setPaywallOpen(false)} />
+          : <WebPaywallModal onClose={() => setPaywallOpen(false)} />
+      )}
     </PaywallContext.Provider>
   );
 };

@@ -82,28 +82,71 @@ function mapFetchedToRoutineState(
 
 
 
-const HABIT_SUGGESTIONS = [
-  { icon: '🧘', text: 'Morning meditation' },
-  { icon: '💧', text: 'Drink 8 glasses of water' },
-  { icon: '🏃', text: '30 min workout' },
-  { icon: '📚', text: 'Read for 20 minutes' },
-  { icon: '📵', text: 'No phone first hour' },
-  { icon: '😴', text: 'Sleep by 11 PM' },
-  { icon: '🚶', text: 'Evening walk' },
-  { icon: '✍️', text: 'Journaling' },
-  { icon: '🚿', text: 'Cold shower' },
-  { icon: '🥗', text: 'Healthy breakfast' },
-  { icon: '🤸', text: '10 min stretching' },
-  { icon: '🙏', text: 'Gratitude practice' },
-  { icon: '🎯', text: 'Learn something new' },
-  { icon: '🥦', text: 'No junk food' },
-  { icon: '🍱', text: 'Weekly meal prep' },
-  { icon: '📵', text: 'Digital detox hour' },
-  { icon: '🌬️', text: 'Breathing exercises' },
-  { icon: '🌿', text: 'Skincare routine' },
-  { icon: '📋', text: "Plan tomorrow's tasks" },
-  { icon: '📞', text: 'Call family or friends' },
-];
+const HABIT_SUGGESTION_CATEGORIES: Record<string, { emoji: string; habits: string[] }> = {
+  'Morning': {
+    emoji: '🌅',
+    habits: [
+      'Wake up before 7 AM', 'Drink water after waking', '5 min stretching',
+      'Meditation (5–10 min)', 'Write today\'s goals', 'Read 5 pages',
+      'Go for a walk', 'Workout', 'Plan your day', 'No phone for first 30 mins'
+    ]
+  },
+  'Health': {
+    emoji: '💪',
+    habits: [
+      'Drink 2L water', '10 min stretching', 'Walk 6000 steps', 'Workout',
+      'Eat fruits', 'No junk food today', '7-8 Hours Sleep', 'Track calories',
+      'Posture check', 'Take vitamins'
+    ]
+  },
+  'Mind': {
+    emoji: '🧘',
+    habits: [
+      'Meditation', 'Gratitude journaling', 'Deep breathing',
+      'No social media for 1 hour', 'Read a book', 'Listen to a podcast',
+      'Write journal', 'Positive affirmations', 'Digital detox', 'Early sleep'
+    ]
+  },
+  'Productivity': {
+    emoji: '🎯',
+    habits: [
+      'Plan tomorrow today', 'Complete top 3 tasks', 'No procrastination',
+      'Focus session (25 min)', 'Clean workspace', 'Reply to important emails',
+      'Track expenses', 'Learn something new', 'Organize files', 'Review goals'
+    ]
+  },
+  'Learning': {
+    emoji: '📚',
+    habits: [
+      'Read 10 pages', 'Watch educational video', 'Practice coding',
+      'Learn new word', 'Study 30 minutes', 'Work on side project',
+      'Write notes', 'Practice typing', 'Learn finance', 'Skill development'
+    ]
+  },
+  'Finance': {
+    emoji: '💰',
+    habits: [
+      'Track expenses', 'Save money today', 'No unnecessary spending',
+      'Learn investing', 'Check budget', 'Record income',
+      'Avoid impulse buying', 'Plan monthly budget'
+    ]
+  },
+  'Social': {
+    emoji: '👥',
+    habits: [
+      'Call parents', 'Talk to a friend', 'Family time', 'Help someone',
+      'Networking', 'No negative talk', 'Meet new people', 'Clean room'
+    ]
+  },
+  'Discipline': {
+    emoji: '⚡',
+    habits: [
+      'Restart today', 'Don\'t skip twice', 'Small progress today',
+      'Wake up on time', 'One task at a time', 'No zero day',
+      '5 min rule', 'Start again', 'Discipline over mood', 'Keep the streak alive'
+    ]
+  }
+};
 
 
 
@@ -117,26 +160,150 @@ const getCategoryColor = (category: string) => {
     'Work': '#3B82F6',
     'Hobby': '#F59E0B',
     'Learning': '#06B6D4',
+    'Comeback': '#FF6B35',
   };
   const randoms = ['#F97316', '#06B6D4', '#84CC16', '#EF4444', '#A855F7'];
   return colors[category] || randoms[Math.floor(Math.random() * randoms.length)];
 };
 
-const getCategoryIcon = (category: string) => {
-  const icons: Record<string, string> = {
-    'Growth': '🌱',
-    'Health': '💪',
-    'Hobby': '🎯',
-    'Home': '🏠',
-    'Learning': '📚',
-    'Mindset': '🧠',
-    'Social': '👥',
-    'Work': '💼',
-    'General': '✦',
-    'Custom': '⚡'
+const getCategoryIcon = (category: string): React.ReactNode => {
+  const c = 'rgba(255,255,255,0.72)';
+  switch (category) {
+    case 'General':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polygon points="12,5 13.8,11 12,12 10.2,11" fill={c} stroke="none"/>
+          <polygon points="12,19 10.2,13 12,12 13.8,13" fill={c} fillOpacity={0.35} stroke="none"/>
+          <circle cx="12" cy="12" r="1.5" fill={c} fillOpacity={0.6} stroke="none"/>
+        </svg>
+      );
+    case 'Comeback':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3,17 8,12 12,15 21,6"/>
+          <polyline points="16,6 21,6 21,11"/>
+          <circle cx="3" cy="17" r="1.8" fill={c} fillOpacity={0.4} stroke="none"/>
+        </svg>
+      );
+    case 'Growth':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 22V14"/>
+          <path d="M12 14c0 0-5-1.5-5-7 0 0 2-3 5-1.5C15 4 17 7 17 7c0 5.5-5 7-5 7z" fill={c} fillOpacity={0.2}/>
+          <path d="M12 18c0 0-3-1-4-3" strokeOpacity={0.5}/>
+        </svg>
+      );
+    case 'Health':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill={c} fillOpacity={0.2}/>
+          <path d="M8 12h2l1-2 2 4 1-2h2" strokeWidth={1.2}/>
+        </svg>
+      );
+    case 'Hobby':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill={c} fillOpacity={0.7} stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+      );
+    case 'Home':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill={c} fillOpacity={0.2}/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      );
+    case 'Learning':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" fill={c} fillOpacity={0.2}/>
+          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" fill={c} fillOpacity={0.2}/>
+        </svg>
+      );
+    case 'Mindset':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14z" fill={c} fillOpacity={0.2}/>
+          <line x1="9" y1="18" x2="15" y2="18"/>
+          <line x1="10" y1="22" x2="14" y2="22"/>
+        </svg>
+      );
+    case 'Social':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill={c} fillOpacity={0.2}/>
+          <line x1="8" y1="10" x2="16" y2="10" strokeOpacity={0.5}/>
+          <line x1="8" y1="14" x2="13" y2="14" strokeOpacity={0.5}/>
+        </svg>
+      );
+    case 'Work':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="7" width="20" height="14" rx="2" fill={c} fillOpacity={0.15}/>
+          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+          <line x1="2" y1="12" x2="22" y2="12" strokeOpacity={0.35}/>
+        </svg>
+      );
+    case 'Content':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9"/>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" fill={c} fillOpacity={0.2}/>
+        </svg>
+      );
+    case 'Finance':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" fill={c} fillOpacity={0.15}/>
+          <path d="M12 6v1.5"/>
+          <path d="M12 16.5V18"/>
+          <path d="M9.5 10a2.5 2.5 0 0 1 5 0c0 1.5-2.5 2-2.5 3s2.5 1.5 2.5 3a2.5 2.5 0 0 1-5 0"/>
+        </svg>
+      );
+    case 'Fitness':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="9" width="4" height="6" rx="1" fill={c} fillOpacity={0.3}/>
+          <rect x="18" y="9" width="4" height="6" rx="1" fill={c} fillOpacity={0.3}/>
+          <rect x="5.5" y="10.5" width="3" height="3" rx="0.5" fill={c} fillOpacity={0.5} stroke="none"/>
+          <rect x="15.5" y="10.5" width="3" height="3" rx="0.5" fill={c} fillOpacity={0.5} stroke="none"/>
+          <line x1="8.5" y1="12" x2="15.5" y2="12" strokeWidth={2.5}/>
+        </svg>
+      );
+    case 'Creative':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.1 0 2-.9 2-2v-.5c0-.55.45-1 1-1H17c2.76 0 5-2.24 5-5C22 6.48 17.52 2 12 2z" fill={c} fillOpacity={0.15}/>
+          <circle cx="8.5" cy="8.5" r="1.5" fill={c} stroke="none"/>
+          <circle cx="14.5" cy="8.5" r="1.5" fill={c} stroke="none"/>
+          <circle cx="8" cy="14" r="1.5" fill={c} stroke="none"/>
+          <circle cx="15.5" cy="13.5" r="1.5" fill={c} fillOpacity={0.55} stroke="none"/>
+        </svg>
+      );
+    case 'Travel':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 2L11 13"/>
+          <path d="M22 2L15 22 11 13 2 9l20-7z" fill={c} fillOpacity={0.2}/>
+        </svg>
+      );
+    case 'Custom':
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4" fill={c} fillOpacity={0.25}/>
+        </svg>
+      );
+    default:
+      return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.5" strokeLinecap="round">
+          <circle cx="12" cy="12" r="10"/>
+          <circle cx="12" cy="12" r="3" fill={c} fillOpacity={0.4} stroke="none"/>
+        </svg>
+      );
   }
-  return icons[category] || '✦'
-}
+};
 
 
 
@@ -666,8 +833,6 @@ const Routine: React.FC = () => {
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const [routines, setRoutines] = useState<RoutineData[]>([]);
   const [logs, setLogs] = useState<RoutineLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isVisible, setIsVisible] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
   const isTogglingRef = useRef(false);
@@ -679,6 +844,12 @@ const Routine: React.FC = () => {
     window.addEventListener('open-create-routine', handleOpenCreateRoutine);
     return () => window.removeEventListener('open-create-routine', handleOpenCreateRoutine);
   }, []);
+
+  useEffect(() => {
+    if (!showModal) {
+      setSuggestionCategory(null);
+    }
+  }, [showModal]);
 
 
 
@@ -700,19 +871,7 @@ const Routine: React.FC = () => {
     console.log('User in effect:', user?.id);
   }, []);
 
-  useEffect(() => {
-    // For basic users, show immediately — blur gate
-    // handles the visual. No delay needed.
-    const isBasic = !isPro;
-    if (isBasic) {
-      setIsVisible(true);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      setIsVisible(true);
-    }, 50);
-    return () => window.clearTimeout(timer);
-  }, [isPro]);
+
 
   const dismissStreakBanner = useCallback(() => {
     setStreakBannerLeaving(true);
@@ -725,18 +884,18 @@ const Routine: React.FC = () => {
   const [selectedIcon, setSelectedIcon] = useState('fitness_center');
   const [selectedCategory, setSelectedCategory] = useState('General');
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
-  const [isSuggestionsFocused, setIsSuggestionsFocused] = useState(false);
+  const [suggestionCategory, setSuggestionCategory] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState('');
 
 
 
-  const persistRoutineCaches = useCallback((uid: string, r: RoutineData[], l: RoutineLog[]) => {
+  const persistRoutineCaches = useCallback(async (uid: string, r: RoutineData[], l: RoutineLog[]) => {
     const rawRows: RoutineRow[] = r.map(({ completed, missed, isActiveToday, ...rest }) => rest as RoutineRow);
-    void persistRoutinesRaw(uid, rawRows);
-    void persistRoutineLogsList(uid, l);
-    void ProductivityService.recalculate(uid);
+    await persistRoutinesRaw(uid, rawRows);
+    await persistRoutineLogsList(uid, l);
+    await ProductivityService.recalculate(uid);
   }, []);
 
 
@@ -772,79 +931,82 @@ const Routine: React.FC = () => {
         return;
       }
       if (authLoading) {
-        setLoading(true);
         return;
       }
       if (!user?.id) {
         setRoutines([]);
         setLogs([]);
-        setLoading(false);
         return;
       }
-      if (isPro) {
-        setGlobalLoading(true);
-        setLoadingText("Loading Protocol Routines...");
-      }
-      setLoading(true);
-      try {
-        const rawR = await loadRoutinesRawStale<RoutineRow>(user.id);
-        const rawL = await loadRoutineLogsListStale<RoutineLog>(user.id);
-        if (rawR !== null && rawL !== null) {
-          const { mappedRoutines, logs } = mapFetchedToRoutineState(rawR, rawL, user.id);
-          setLogs(logs);
-          setRoutines(mappedRoutines);
+      // Background sync - do not block UI
+      const performSync = async () => {
+        try {
+          const rawR = await loadRoutinesRawStale<RoutineRow>(user.id);
+          const rawL = await loadRoutineLogsListStale<RoutineLog>(user.id);
+          if (rawR !== null && rawL !== null) {
+            // FIX: Do not overwrite optimistic toggle state with stale cache data
+            if (!isTogglingRef.current) {
+              const { mappedRoutines, logs } = mapFetchedToRoutineState(rawR, rawL, user.id);
+              setLogs(logs);
+              setRoutines(mappedRoutines);
+            }
+          }
+
+          const routinesExp = await isCacheExpired(CACHE_KEYS.routines_list, CACHE_EXPIRY_MINUTES.routines_list);
+          const logsExp = await isCacheExpired(CACHE_KEYS.routine_logs_list, CACHE_EXPIRY_MINUTES.routines_list);
+          const needNetwork =
+            options?.force ||
+            rawR === null ||
+            rawL === null ||
+            routinesExp ||
+            logsExp ||
+            false;
+
+          if (!needNetwork) {
+            return;
+          }
+
+          const { data: routinesData, error: rError } = await supabase
+            .from('routines')
+            .select('id, user_id, title, time, days, color, created_at, icon, category')
+            .eq('user_id', user.id);
+          if (rError) throw rError;
+          const now = new Date();
+          let daysToFetch = 7;
+
+          const startDate = new Date();
+          startDate.setDate(now.getDate() - daysToFetch);
+          const startDayStr = startDate.toISOString().split('T')[0];
+          const { data: logsData, error: lError } = await supabase
+            .from('routine_logs')
+            .select('routine_id, completed_at')
+            .eq('user_id', user.id)
+            .gte('completed_at', startDayStr);
+          if (lError) throw lError;
+
+          const logsArr = logsData || [];
+          const rrows = routinesData || [];
+          await persistRoutinesRaw(user.id, rrows);
+          await persistRoutineLogsList(user.id, logsArr);
+          void ProductivityService.recalculate(user.id);
+          // lastFetchedLogsRangeRef.current = '7d';
+
+          // FIX: Do not overwrite optimistic toggle state with network fetch data
+          if (!isTogglingRef.current) {
+            const { mappedRoutines, logs } = mapFetchedToRoutineState(rrows, logsArr, user.id);
+            setLogs(logs);
+            setRoutines(mappedRoutines);
+          }
+        } catch (err) {
+          console.error('Error fetching data:', err);
+        } finally {
+          if (isPro) {
+            setGlobalLoading(false);
+          }
         }
+      };
 
-        const routinesExp = await isCacheExpired(CACHE_KEYS.routines_list, CACHE_EXPIRY_MINUTES.routines_list);
-        const logsExp = await isCacheExpired(CACHE_KEYS.routine_logs_list, CACHE_EXPIRY_MINUTES.routines_list);
-        const needNetwork =
-          options?.force ||
-          rawR === null ||
-          rawL === null ||
-          routinesExp ||
-          logsExp ||
-          false;
-
-        if (!needNetwork) {
-          return;
-        }
-
-        const { data: routinesData, error: rError } = await supabase
-          .from('routines')
-          .select('id, user_id, title, time, days, color, created_at, icon, category')
-          .eq('user_id', user.id);
-        if (rError) throw rError;
-        const now = new Date();
-        let daysToFetch = 7;
-
-        const startDate = new Date();
-        startDate.setDate(now.getDate() - daysToFetch);
-        const startDayStr = startDate.toISOString().split('T')[0];
-        const { data: logsData, error: lError } = await supabase
-          .from('routine_logs')
-          .select('routine_id, completed_at')
-          .eq('user_id', user.id)
-          .gte('completed_at', startDayStr);
-        if (lError) throw lError;
-
-        const logsArr = logsData || [];
-        const rrows = routinesData || [];
-        await persistRoutinesRaw(user.id, rrows);
-        await persistRoutineLogsList(user.id, logsArr);
-        void ProductivityService.recalculate(user.id);
-        // lastFetchedLogsRangeRef.current = '7d';
-
-        const { mappedRoutines, logs } = mapFetchedToRoutineState(rrows, logsArr, user.id);
-        setLogs(logs);
-        setRoutines(mappedRoutines);
-      } catch (err) {
-        console.error('Error fetching data:', err);
-      } finally {
-        setLoading(false);
-        if (isPro) {
-          setGlobalLoading(false);
-        }
-      }
+      void performSync();
     },
     [authLoading, user?.id, setGlobalLoading, setLoadingText],
   );
@@ -1086,7 +1248,7 @@ const Routine: React.FC = () => {
           timestamp: Date.now(),
         });
       }
-      persistRoutineCaches(user.id, routines.map((r) => r.id === routine.id ? { ...r, completed: isNowCompleted } : r), isNowCompleted ? (logs.some((l) => l.routine_id === routine.id && l.completed_at === today) ? logs : [...logs, { routine_id: routine.id, completed_at: today }]) : logs.filter((l) => !(l.routine_id === routine.id && l.completed_at === today)));
+      await persistRoutineCaches(user.id, routines.map((r) => r.id === routine.id ? { ...r, completed: isNowCompleted } : r), isNowCompleted ? (logs.some((l) => l.routine_id === routine.id && l.completed_at === today) ? logs : [...logs, { routine_id: routine.id, completed_at: today }]) : logs.filter((l) => !(l.routine_id === routine.id && l.completed_at === today)));
       void invalidateUserStatsCache();
       void syncWidgetData();
       triggerGlobalRefresh();
@@ -1095,12 +1257,15 @@ const Routine: React.FC = () => {
 
     try {
       if (isNowCompleted) {
-        const { error } = await supabase.from('routine_logs').insert([{
+        // FIX: Use upsert instead of insert to handle duplicate logs gracefully.
+        // Unique constraint is on (routine_id, completed_at).
+        // ignoreDuplicates: true means if the log already exists, silently skip — no error thrown.
+        const { error } = await supabase.from('routine_logs').upsert([{
           routine_id: routine.id,
           user_id: user.id,
           completed_at: today,
           created_at: new Date().toISOString()
-        }]);
+        }], { onConflict: 'routine_id,completed_at', ignoreDuplicates: true });
         if (error) throw error;
       } else {
         const { error } = await supabase.from('routine_logs')
@@ -1110,11 +1275,27 @@ const Routine: React.FC = () => {
           .eq('completed_at', today);
         if (error) throw error;
       }
+
+      // FIX: Persist updated state to local cache after confirmed DB write.
+      // Without this, navigating away and back reloads stale cache and
+      // shows habits as uncompleted even though DB is correct.
+      const nextRoutines = routines.map((r) =>
+        r.id === routine.id ? { ...r, completed: isNowCompleted } : r
+      );
+      const nextLogs = isNowCompleted
+        ? (logs.some(l => l.routine_id === routine.id && l.completed_at === today)
+            ? logs
+            : [...logs, { routine_id: routine.id, completed_at: today }])
+        : logs.filter(l => !(l.routine_id === routine.id && l.completed_at === today));
+      // Await cache write so stayhardy_refresh reads fresh data
+      await persistRoutineCaches(user.id, nextRoutines, nextLogs);
+
       void syncWidgetData();
       void invalidateUserStatsCache();
       triggerGlobalRefresh();
     } catch (err) {
-      console.error('Failed to sync routine status:', err);
+      // FIX: Log the actual error message for diagnosability
+      console.error('Failed to sync routine status:', (err as any)?.message || JSON.stringify(err), err);
       // Rollback
       setRoutines((prev) =>
         prev.map((r) => (r.id === routine.id ? { ...r, completed: !isNowCompleted } : r))
@@ -1141,7 +1322,7 @@ const Routine: React.FC = () => {
     const online = await isOnline();
     if (!online) {
       await enqueueSync({ action: 'delete', entity: 'routine', data: { id }, timestamp: Date.now() });
-      persistRoutineCaches(user.id, nextR, nextL);
+      await persistRoutineCaches(user.id, nextR, nextL);
       void invalidateUserStatsCache();
       triggerGlobalRefresh();
       return;
@@ -1149,7 +1330,7 @@ const Routine: React.FC = () => {
     try {
       const { error } = await supabase.from('routines').delete().eq('id', id);
       if (error) throw error;
-      persistRoutineCaches(user.id, nextR, nextL);
+      await persistRoutineCaches(user.id, nextR, nextL);
       void invalidateUserStatsCache();
       triggerGlobalRefresh();
     } catch (err) {
@@ -1159,27 +1340,7 @@ const Routine: React.FC = () => {
     }
   };
 
-  if (loading && routines.length === 0 && isPro) {
-    return (
-      <ProBlurGate featureName="Habits">
-        <div className={`page-shell routine-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', minHeight: '100vh' }}>
-          <div className="aurora-bg">
-            <div className="aurora-gradient-1" />
-            <div className="aurora-gradient-2" />
-          </div>
-          <div className="routine-syncing" style={{ color: '#fff', paddingTop: '120px' }}>Syncing sequence...</div>
-        </div>
-      </ProBlurGate>
-    );
-  }
 
-  if (!isVisible) {
-    return (
-      <ProBlurGate featureName="Habits">
-        <div className={`page-shell routine-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', minHeight: '100vh' }} />
-      </ProBlurGate>
-    );
-  }
 
   return (
     <ProBlurGate featureName="Habits">
@@ -1252,9 +1413,7 @@ const Routine: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }} className="bouncing-scroll">
-          {loading ? (
-            <div className="routine-syncing">Syncing…</div>
-          ) : routines.length === 0 ? (
+          {routines.length === 0 ? (
             <button type="button" className="routine-empty-tile" onClick={() => setShowModal(true)}>Add your first habit.</button>
           ) : orderedForToday.length === 0 ? (
             <p className="routine-filter-empty">No habits scheduled today.</p>
@@ -1266,7 +1425,18 @@ const Routine: React.FC = () => {
         </div>
 
         {showModal && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 700, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 700,
+            display: 'flex',
+            alignItems: 'center', // CHANGED
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', // CHANGED
+            paddingTop: 'env(safe-area-inset-top, 20px)', // CHANGED
+            paddingLeft: '12px', // CHANGED
+            paddingRight: '12px', // CHANGED
+            boxSizing: 'border-box' // CHANGED
+          }}>
             <div onClick={() => setShowModal(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }} />
             <div
               onClick={e => e.stopPropagation()}
@@ -1276,12 +1446,12 @@ const Routine: React.FC = () => {
                 background: 'rgba(5,5,5,0.97)',
                 backdropFilter: 'blur(40px)',
                 WebkitBackdropFilter: 'blur(40px)',
-                borderRadius: '32px 32px 0 0',
+                borderRadius: '32px', // CHANGED
                 border: '1px solid rgba(0,232,122,0.35)',
-                borderBottom: 'none',
-                paddingBottom: '48px',
+                // borderBottom: 'none', // REMOVED
+                paddingBottom: '32px', // CHANGED
                 animation: 'modalUp 0.4s cubic-bezier(0.34,1.56,0.64,1), modalGlow 3s ease-in-out infinite',
-                maxHeight: '90vh',
+                maxHeight: 'calc(100vh - 180px)', // CHANGED
                 overflowY: 'auto'
               }}
             >
@@ -1320,38 +1490,73 @@ const Routine: React.FC = () => {
                       placeholder="e.g. Morning run, Read 20 pages..."
                       value={title}
                       onChange={e => setTitle(e.target.value)}
-                      onFocus={() => { setFocusedField('name'); setIsSuggestionsFocused(true); }}
-                      onBlur={() => { setFocusedField(''); setTimeout(() => setIsSuggestionsFocused(false), 200); }}
+                      onFocus={() => { setFocusedField('name'); }}
+                      onBlur={() => { setFocusedField(''); }}
                       style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '15px', fontWeight: '600', color: '#FFFFFF', caretColor: '#00E87A', boxSizing: 'border-box' }}
                     />
-                    {isSuggestionsFocused && (title.length === 0 || title.length < 3) && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1A2118', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px', marginTop: '4px', maxHeight: '200px', overflowY: 'auto', zIndex: 100 }}>
-                        {HABIT_SUGGESTIONS.map((suggestion, index) => (
-                          <div key={index} onClick={() => { setTitle(suggestion.text); setIsSuggestionsFocused(false); }} className="suggestion-item" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                            <span style={{ fontSize: '16px', width: '28px', textAlign: 'center' }}>{suggestion.icon}</span>
-                            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>{suggestion.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
 
+                {/* Smart Habit Finder */}
                 <div>
-                  <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', margin: '0 0 10px 0' }}>⚡ QUICK START</p>
+                  <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', margin: '0 0 10px 0' }}>⚡ FIND YOUR HABIT</p>
+
                   <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                    {[
-                      { label: 'Meditation', emoji: '🧘' }, { label: 'Workout', emoji: '🏃' }, { label: 'Read', emoji: '📚' },
-                      { label: 'Journal', emoji: '✍️' }, { label: 'Cold Shower', emoji: '🚿' }, { label: 'Walk', emoji: '🚶' },
-                      { label: 'Hydrate', emoji: '💧' }, { label: 'Sleep Early', emoji: '🌙' }, { label: 'No Phone', emoji: '📵' },
-                      { label: 'Stretch', emoji: '🤸' }
-                    ].map((pick, i) => (
-                      <div key={i} onClick={() => setTitle(pick.label)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: title === pick.label ? 'rgba(0,232,122,0.12)' : 'rgba(255,255,255,0.04)', border: '1px solid ' + (title === pick.label ? 'rgba(0,232,122,0.5)' : 'rgba(255,255,255,0.1)'), borderRadius: '20px', padding: '8px 14px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.2s ease', boxShadow: title === pick.label ? '0 0 12px rgba(0,232,122,0.3)' : 'none' }}>
-                        <span style={{ fontSize: '14px' }}>{pick.emoji}</span>
-                        <span style={{ fontSize: '12px', fontWeight: '700', color: title === pick.label ? '#00E87A' : 'rgba(255,255,255,0.6)' }}>{pick.label}</span>
-                      </div>
-                    ))}
+                    {Object.keys(HABIT_SUGGESTION_CATEGORIES).map(cat => {
+                      const isSelected = suggestionCategory === cat;
+                      return (
+                        <div
+                          key={cat}
+                          onClick={() => setSuggestionCategory(isSelected ? null : cat)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: isSelected ? 'rgba(0,232,122,0.12)' : 'rgba(255,255,255,0.04)',
+                            border: '1px solid ' + (isSelected ? 'rgba(0,232,122,0.5)' : 'rgba(255,255,255,0.1)'),
+                            borderRadius: '20px',
+                            padding: '8px 14px',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                            transition: 'all 0.2s ease',
+                            boxShadow: isSelected ? '0 0 12px rgba(0,232,122,0.3)' : 'none'
+                          }}
+                        >
+                          <span style={{ fontSize: '14px' }}>{HABIT_SUGGESTION_CATEGORIES[cat].emoji}</span>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: isSelected ? '#00E87A' : 'rgba(255,255,255,0.6)' }}>{cat}</span>
+                        </div>
+                      );
+                    })}
                   </div>
+
+                  {suggestionCategory && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                      {HABIT_SUGGESTION_CATEGORIES[suggestionCategory].habits.map((habit, i) => (
+                        <div
+                          key={i}
+                          onClick={() => {
+                            setTitle(habit);
+                            setSuggestionCategory(null);
+                          }}
+                          style={{
+                            background: 'rgba(0,232,122,0.07)',
+                            border: '1px solid rgba(0,232,122,0.25)',
+                            borderRadius: '20px',
+                            padding: '7px 14px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            color: 'rgba(255,255,255,0.75)',
+                            transition: 'all 0.15s ease',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {habit}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -1417,7 +1622,12 @@ const Routine: React.FC = () => {
             inset: 0,
             zIndex: 800,
             display: 'flex',
-            alignItems: 'flex-end'
+            alignItems: 'center', // CHANGED
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)', // CHANGED
+            paddingTop: 'env(safe-area-inset-top, 20px)', // CHANGED
+            paddingLeft: '12px', // CHANGED
+            paddingRight: '12px', // CHANGED
+            boxSizing: 'border-box' // CHANGED
           }}>
             <div onClick={() => setShowAllModal(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }} />
             <div
@@ -1426,10 +1636,10 @@ const Routine: React.FC = () => {
                 position: 'relative',
                 width: '100%',
                 background: '#0D0D0D',
-                borderRadius: '32px 32px 0 0',
-                borderTop: '1px solid #00E676',
-                paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0px))',
-                maxHeight: '80vh',
+                borderRadius: '32px', // CHANGED
+                border: '1px solid #00E676', // CHANGED
+                paddingBottom: '24px', // CHANGED
+                maxHeight: 'calc(100vh - 180px)', // CHANGED
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 -10px 40px rgba(0,230,118,0.1)',
@@ -1479,16 +1689,86 @@ const Routine: React.FC = () => {
                     <div
                       key={r.id}
                       style={{
-                        background: 'rgba(255,255,255,0.05)',
-                        padding: '12px',
-                        borderRadius: '12px',
+                        background: 'linear-gradient(145deg, #111411, #0d0f0d)',
+                        border: '1px solid rgba(0,232,122,0.15)',
+                        borderRadius: '18px',
+                        padding: '14px 16px',
                         display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        gap: '14px',
+                        boxShadow: 'inset 2px 2px 6px rgba(0,0,0,0.5), inset -1px -1px 3px rgba(255,255,255,0.03), 0 2px 8px rgba(0,0,0,0.4)',
+                        transition: 'all 0.2s ease'
                       }}
                     >
-                      <span style={{ color: '#fff' }}>{r.title}</span>
-                      <button onClick={() => handleDeleteRoutine(r.id)} style={{ color: '#EF4444', background: 'none', border: 'none' }}>Delete</button>
+                      {/* Category icon */}
+                      <div style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '12px',
+                        background: 'rgba(0,232,122,0.08)',
+                        border: '1px solid rgba(0,232,122,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '18px',
+                        flexShrink: 0
+                      }}>
+                        {getCategoryIcon(r.category)}
+                      </div>
+
+                      {/* Title + category */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '14px',
+                          fontWeight: '800',
+                          color: '#FFFFFF',
+                          letterSpacing: '-0.2px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {r.title}
+                        </p>
+                        <p style={{
+                          margin: '2px 0 0 0',
+                          fontSize: '10px',
+                          fontWeight: '600',
+                          color: 'rgba(255,255,255,0.3)',
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase'
+                        }}>
+                          {r.category || 'General'} · {r.days.length === 7 ? 'Every Day' : r.days.join(', ')}
+                        </p>
+                      </div>
+
+                      {/* Trash icon delete button */}
+                      <button
+                        onClick={() => handleDeleteRoutine(r.id)}
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '12px',
+                          background: 'rgba(239,68,68,0.08)',
+                          border: '1px solid rgba(239,68,68,0.2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                          transition: 'all 0.2s ease',
+                          boxShadow: 'inset 2px 2px 5px rgba(0,0,0,0.4)'
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                          stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        </svg>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -1499,10 +1779,13 @@ const Routine: React.FC = () => {
 
 
         <style>{`
-            .streak-glass-banner { position: relative; display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem; border-radius: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); }
+            .streak-glass-banner { position: relative; display: flex; align-items: center; gap: 0.75rem; padding: 1rem; border-radius: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); }
             .streak-glass-banner__sparkle { color: #6ee7b7; font-size: 20px !important; }
+            .streak-glass-banner__copy { flex: 1; }
             .streak-glass-banner__head { margin: 0; font-size: 0.9rem; font-weight: 900; color: #fff; }
             .streak-glass-banner__sub { margin: 0; font-size: 0.7rem; color: rgba(255,255,255,0.6); }
+            .streak-glass-banner__close { background: none; border: none; padding: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,0.4); transition: color 0.2s; }
+            .streak-glass-banner__close:hover { color: #fff; }
             .routine-syncing { text-align: center; font-size: 13px; color: rgba(255,255,255,0.4); }
             .routine-empty-tile { width: 100%; padding: 30px; border: 1px dashed rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.4); border-radius: 16px; cursor: pointer; }
             .routine-filter-empty { text-align: center; padding: 40px; color: rgba(255,255,255,0.3); font-size: 13px; }

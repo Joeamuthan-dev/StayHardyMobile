@@ -50,7 +50,7 @@ function isAllowlistedAdminEmail(email: string | undefined): boolean {
   if (!e) return false;
   const raw = Deno.env.get('ADMIN_EMAILS');
   if (raw === undefined || raw.trim() === '') {
-    return e === 'joe@gmail.com';
+    return e === 'joeamuthan2@gmail.com';
   }
   const allowed = raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
   return allowed.includes(e);

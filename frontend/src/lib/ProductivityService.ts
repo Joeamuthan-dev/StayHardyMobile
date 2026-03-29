@@ -53,11 +53,11 @@ export class ProductivityService {
     // Fetch user role from Supabase users table
     const { data: userData } = await supabase
       .from('users')
-      .select('pro_member, email')
+      .select('is_pro, email')
       .eq('id', userId)
       .maybeSingle();
 
-    const isBasic = !userData?.pro_member && userData?.email !== import.meta.env.VITE_ADMIN_EMAIL;
+    const isBasic = !userData?.is_pro;
 
     let overallScore = 0;
     if (isBasic) {
