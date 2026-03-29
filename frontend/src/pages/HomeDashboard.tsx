@@ -861,8 +861,8 @@ const HomeDashboard: React.FC = () => {
         padding: '20px',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(214,255,46,0.12), 0 2px 8px rgba(0,0,0,0.6)',
-        border: '1px solid rgba(214,255,46,0.18)'
+        boxShadow: '0 8px 32px rgba(0,232,122,0.12), 0 2px 8px rgba(0,0,0,0.6)',
+        border: '1px solid rgba(0,232,122,0.18)'
       }}>
         <div style={{ position: 'relative', zIndex: 1 }}>
           {/* Top HUD Row */}
@@ -881,7 +881,7 @@ const HomeDashboard: React.FC = () => {
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Arial Black", sans-serif',
                     fontWeight: '900',
                     fontSize: '72px',
-                    color: '#D6FF2E',
+                    color: '#00E87A',
                     letterSpacing: '-3px',
                     lineHeight: '1',
                     display: 'inline-block',
@@ -892,7 +892,7 @@ const HomeDashboard: React.FC = () => {
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Arial Black", sans-serif',
                     fontWeight: '900',
                     fontSize: '28px',
-                    color: '#D6FF2E',
+                    color: '#00E87A',
                     lineHeight: '1',
                     marginTop: '10px',
                     display: 'inline-block',
@@ -942,13 +942,13 @@ const HomeDashboard: React.FC = () => {
                 width: '48px',
                 height: '48px',
                 borderRadius: '50%',
-                background: 'rgba(214,255,46,0.1)',
+                background: 'rgba(0,232,122,0.1)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '1px solid rgba(214,255,46,0.35)',
-                color: '#D6FF2E',
-                boxShadow: '0 2px 12px rgba(214,255,46,0.15)',
+                border: '1px solid rgba(0,232,122,0.35)',
+                color: '#00E87A',
+                boxShadow: '0 2px 12px rgba(0,232,122,0.15)',
                 flexShrink: 0,
                 cursor: 'pointer'
               }}
@@ -992,7 +992,7 @@ const HomeDashboard: React.FC = () => {
                   width: activeSection === idx ? '6px' : '5px',
                   height: activeSection === idx ? '6px' : '5px',
                   borderRadius: '50%',
-                  background: activeSection === idx ? '#D6FF2E' : 'rgba(255,255,255,0.2)',
+                  background: activeSection === idx ? '#00E87A' : 'rgba(255,255,255,0.2)',
                   transition: 'all 0.2s'
                 }}
               />
