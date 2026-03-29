@@ -716,7 +716,9 @@ const HomeDashboard: React.FC = () => {
         margin: '0 16px 12px 16px',
         borderRadius: '28px',
         padding: '20px 20px 32px 20px',
-        background: 'linear-gradient(135deg, #e8f5e9 0%, #f0fdf4 30%, #e0f2fe 60%, #f0e6ff 100%)',
+        background: 'linear-gradient(135deg, #0C1812 0%, #111F18 60%, #0A1510 100%)',
+        border: '1px solid rgba(0,232,122,0.12)',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
         position: 'relative',
         minHeight: 'fit-content'
       }}>
@@ -727,7 +729,7 @@ const HomeDashboard: React.FC = () => {
           <span style={{
             fontSize: '28px',
             fontWeight: '900',
-            color: '#000000',
+            color: '#FFFFFF',
             lineHeight: 1.1,
           }}>
             Hello
@@ -744,8 +746,8 @@ const HomeDashboard: React.FC = () => {
               height: '36px',
               borderRadius: '50%',
               overflow: 'hidden',
-              border: '2px solid rgba(0,0,0,0.1)',
-              backgroundColor: 'rgba(0,0,0,0.08)',
+              border: '2px solid rgba(255,255,255,0.12)',
+              backgroundColor: 'rgba(255,255,255,0.06)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -761,7 +763,7 @@ const HomeDashboard: React.FC = () => {
           <span style={{
             fontSize: '28px',
             fontWeight: '900',
-            color: '#000000',
+            color: '#00E87A',
             lineHeight: 1.1,
             maxWidth: '200px',
             overflow: 'hidden',
@@ -775,7 +777,7 @@ const HomeDashboard: React.FC = () => {
           </span>
         </div>
 
-        <div style={{ fontSize: '24px', fontWeight: 700, color: '#000000', lineHeight: 1.3, marginBottom: '20px', letterSpacing: '-0.5px' }}>
+        <div style={{ fontSize: '22px', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.3, marginBottom: '20px', letterSpacing: '-0.5px' }}>
           {/* Role-based greeting subtitle */}
           {isProUser ? (
             // PRO + ADMIN: show habits pending
@@ -787,7 +789,7 @@ const HomeDashboard: React.FC = () => {
                     onClick={() => navigate('/routine')}
                     style={{
                       fontWeight: '900',
-                      color: '#000000',
+                      color: '#00E87A',
                       textDecoration: 'underline',
                       textDecorationStyle: 'dotted',
                       cursor: 'pointer',
@@ -815,7 +817,7 @@ const HomeDashboard: React.FC = () => {
                     onClick={() => navigate('/dashboard')}
                     style={{
                       fontWeight: '900',
-                      color: '#000000',
+                      color: '#00E87A',
                       textDecoration: 'underline',
                       textDecorationStyle: 'dotted',
                       cursor: 'pointer',
@@ -839,14 +841,14 @@ const HomeDashboard: React.FC = () => {
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ color: '#EF4444', fontSize: '14px' }}>🎯</span>
-            <span style={{ fontSize: '13px', color: 'rgba(0,0,0,0.5)', fontWeight: 500 }}>Goals:</span>
-            <span style={{ fontSize: '13px', color: '#000000', fontWeight: 700 }}>{goals.filter(g => g.status === 'completed').length}/{goals.length}</span>
+            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>Goals:</span>
+            <span style={{ fontSize: '13px', color: '#FFFFFF', fontWeight: 700 }}>{goals.filter(g => g.status === 'completed').length}/{goals.length}</span>
           </div>
-          <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(0,0,0,0.3)' }} />
+          <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <HeroFire />
-            <span style={{ fontSize: '13px', color: 'rgba(0,0,0,0.5)', fontWeight: 500 }}>Streak</span>
-            <span style={{ fontSize: '13px', color: '#000000', fontWeight: 700 }}>{currentStreak} Days</span>
+            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>Streak</span>
+            <span style={{ fontSize: '13px', color: '#FFFFFF', fontWeight: 700 }}>{currentStreak} Days</span>
           </div>
         </div>
       </section>
@@ -854,13 +856,13 @@ const HomeDashboard: React.FC = () => {
       {/* SECTION 2 — DAILY PROGRESS CARD (Productivity Score) */}
       <section style={{
         margin: '0 16px 12px 16px',
-        background: '#D6FF2E',
+        background: 'linear-gradient(135deg, #0D0D0D 0%, #141414 100%)',
         borderRadius: '24px',
         padding: '20px',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(214,255,46,0.35), 0 2px 8px rgba(0,0,0,0.3)',
-        border: '1px solid rgba(255,255,255,0.2)'
+        boxShadow: '0 8px 32px rgba(214,255,46,0.12), 0 2px 8px rgba(0,0,0,0.6)',
+        border: '1px solid rgba(214,255,46,0.18)'
       }}>
         <div style={{ position: 'relative', zIndex: 1 }}>
           {/* Top HUD Row */}
@@ -874,30 +876,43 @@ const HomeDashboard: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
               {/* Score row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{
-                  fontFamily: 'Syne, sans-serif',
-                  fontWeight: '800',
-                  fontSize: '56px',
-                  color: '#000000',
-                  letterSpacing: '-2px',
-                  lineHeight: '1',
-                  display: 'inline-block',
-                }}>
-                  {animatedScore}%
-                </span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '2px' }}>
+                  <span style={{
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Arial Black", sans-serif',
+                    fontWeight: '900',
+                    fontSize: '72px',
+                    color: '#D6FF2E',
+                    letterSpacing: '-3px',
+                    lineHeight: '1',
+                    display: 'inline-block',
+                  }}>
+                    {animatedScore}
+                  </span>
+                  <span style={{
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Arial Black", sans-serif',
+                    fontWeight: '900',
+                    fontSize: '28px',
+                    color: '#D6FF2E',
+                    lineHeight: '1',
+                    marginTop: '10px',
+                    display: 'inline-block',
+                  }}>
+                    %
+                  </span>
+                </div>
 
                 {/* Delta pill */}
                 {animatedScore > 0 && scoreDelta !== null && (
                   <span style={{
-                    background: scoreDelta > 0 ? 'rgba(0,180,0,0.18)' : scoreDelta < 0 ? 'rgba(220,0,0,0.14)' : 'rgba(0,0,0,0.14)',
-                    color: scoreDelta > 0 ? '#00C853' : scoreDelta < 0 ? '#FF3B30' : '#000000',
+                    background: scoreDelta > 0 ? 'rgba(0,232,122,0.15)' : scoreDelta < 0 ? 'rgba(255,59,48,0.15)' : 'rgba(255,255,255,0.1)',
+                    color: scoreDelta > 0 ? '#00E87A' : scoreDelta < 0 ? '#FF3B30' : 'rgba(255,255,255,0.6)',
                     padding: '5px 10px',
                     borderRadius: '10px',
                     fontSize: '12px',
                     fontWeight: '700',
-                    fontFamily: 'Syne, sans-serif',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                     letterSpacing: '0.02em',
-                    border: '1px solid rgba(0,0,0,0.08)',
+                    border: '1px solid rgba(255,255,255,0.08)',
                     display: 'inline-flex',
                     alignItems: 'center',
                   }}>
@@ -908,11 +923,12 @@ const HomeDashboard: React.FC = () => {
 
               {/* Label */}
               <span style={{
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: '600',
-                color: 'rgba(0,0,0,0.55)',
-                fontFamily: 'Syne, sans-serif',
-                letterSpacing: '0.01em',
+                color: 'rgba(255,255,255,0.45)',
+                fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
                 marginTop: '4px',
               }}>
                 Productivity Score
@@ -926,13 +942,13 @@ const HomeDashboard: React.FC = () => {
                 width: '48px',
                 height: '48px',
                 borderRadius: '50%',
-                background: '#D6FF2E',
+                background: 'rgba(214,255,46,0.1)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '2px solid rgba(0,0,0,0.12)',
-                color: '#000000',
-                boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+                border: '1px solid rgba(214,255,46,0.35)',
+                color: '#D6FF2E',
+                boxShadow: '0 2px 12px rgba(214,255,46,0.15)',
                 flexShrink: 0,
                 cursor: 'pointer'
               }}
@@ -956,9 +972,9 @@ const HomeDashboard: React.FC = () => {
                 width: '28px',
                 height: '28px',
                 borderRadius: '50%',
-                background: 'rgba(0,0,0,0.15)',
-                border: '1px solid rgba(0,0,0,0.1)',
-                color: '#000000',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                color: 'rgba(255,255,255,0.7)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -976,7 +992,7 @@ const HomeDashboard: React.FC = () => {
                   width: activeSection === idx ? '6px' : '5px',
                   height: activeSection === idx ? '6px' : '5px',
                   borderRadius: '50%',
-                  background: activeSection === idx ? '#000000' : 'rgba(0,0,0,0.25)',
+                  background: activeSection === idx ? '#D6FF2E' : 'rgba(255,255,255,0.2)',
                   transition: 'all 0.2s'
                 }}
               />
@@ -989,9 +1005,9 @@ const HomeDashboard: React.FC = () => {
                 width: '28px',
                 height: '28px',
                 borderRadius: '50%',
-                background: 'rgba(0,0,0,0.15)',
-                border: '1px solid rgba(0,0,0,0.1)',
-                color: '#000000',
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                color: 'rgba(255,255,255,0.7)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1007,16 +1023,16 @@ const HomeDashboard: React.FC = () => {
             {activeSection === 0 && (
               <>
                 {/* TO DO (Tasks) */}
-                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>To Do</div>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{pendingTasks.length}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>tasks pending</div>
+                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>To Do</div>
+                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{pendingTasks.length}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>tasks pending</div>
                 </div>
                 {/* DONE (Tasks) */}
-                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Done</div>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{completedTasksTotal}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>completed today</div>
+                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Done</div>
+                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{completedTasksTotal}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>completed today</div>
                 </div>
               </>
             )}
@@ -1024,16 +1040,16 @@ const HomeDashboard: React.FC = () => {
             {activeSection === 1 && (
               <>
                 {/* ACTIVE (Goals) */}
-                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Active</div>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{activeGoalsCount}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>goals in progress</div>
+                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Active</div>
+                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{activeGoalsCount}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>goals in progress</div>
                 </div>
                 {/* DONE (Goals) */}
-                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Done</div>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{completedGoalsCount}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>achieved 🏆</div>
+                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Done</div>
+                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{completedGoalsCount}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>achieved 🏆</div>
                 </div>
               </>
             )}
@@ -1041,16 +1057,16 @@ const HomeDashboard: React.FC = () => {
             {activeSection === 2 && (
               <>
                 {/* TODAY (Habits) */}
-                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Today</div>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{completedHabitsTodayFresh}/{totalHabitsTodayFresh}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>habits done</div>
+                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Today</div>
+                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{completedHabitsTodayFresh}/{totalHabitsTodayFresh}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>habits done</div>
                 </div>
                 {/* BEST STREAK (Habits) */}
-                <div style={{ background: 'rgba(0,0,0,0.12)', borderRadius: '16px', padding: '14px', flex: 1 }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(0,0,0,0.5)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Best Streak</div>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#000000', fontFamily: 'Syne, sans-serif', lineHeight: 1 }}>{bestStreakDays}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(0,0,0,0.45)', marginTop: '4px' }}>days record</div>
+                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Best Streak</div>
+                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{bestStreakDays}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>days record</div>
                 </div>
               </>
             )}

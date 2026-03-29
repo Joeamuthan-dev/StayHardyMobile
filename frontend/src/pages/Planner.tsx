@@ -91,7 +91,7 @@ const SwipeDeleteRow: React.FC<{
     <div className="hist-swipe-wrap" ref={wrapRef}>
       <div className="hist-swipe-actions">
         <button type="button" className="hist-swipe-del-btn" onClick={onDelete} aria-label="Delete">
-          <span className="material-symbols-outlined">delete</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
         </button>
       </div>
       <div
@@ -883,16 +883,15 @@ const Planner: React.FC = () => {
                 }}
               >
                 <div className="hist-section-head-left">
-                  <span className="hist-section-icon hist-section-icon--tasks material-symbols-outlined">
-                    check_circle
-                  </span>
+                  <svg className="hist-section-icon hist-section-icon--tasks" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                   <h2 className="hist-section-title hist-section-title--tasks">Completed Tasks</h2>
                   <span className="hist-count-badge">{filteredTasks.length}</span>
                 </div>
                 <span
-                  className={`material-symbols-outlined hist-chevron${isTasksExpanded ? ' hist-chevron--open' : ''}`}
+                  className={`hist-chevron${isTasksExpanded ? ' hist-chevron--open' : ''}`}
+                  style={{ display: 'inline-flex' }}
                 >
-                  expand_more
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </span>
               </div>
               {isTasksExpanded && (
@@ -940,7 +939,7 @@ const Planner: React.FC = () => {
                                   <p className="hist-card-title">{item.title}</p>
                                 </button>
                                 <div className="hist-done-chip">
-                                  <span className="material-symbols-outlined">verified</span>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                   DONE{' '}
                                   {new Date(done).toLocaleTimeString('en-US', {
                                     hour: 'numeric',
@@ -975,16 +974,15 @@ const Planner: React.FC = () => {
                 }}
               >
                 <div className="hist-section-head-left">
-                  <span className="hist-section-icon hist-section-icon--goals material-symbols-outlined">
-                    emoji_events
-                  </span>
+                  <svg className="hist-section-icon hist-section-icon--goals" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
                   <h2 className="hist-section-title hist-section-title--goals">Completed Goals</h2>
                   <span className="hist-count-badge">{filteredGoals.length}</span>
                 </div>
                 <span
-                  className={`material-symbols-outlined hist-chevron${isGoalsExpanded ? ' hist-chevron--open' : ''}`}
+                  className={`hist-chevron${isGoalsExpanded ? ' hist-chevron--open' : ''}`}
+                  style={{ display: 'inline-flex' }}
                 >
-                  expand_more
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </span>
               </div>
               {isGoalsExpanded && (
@@ -1012,12 +1010,7 @@ const Planner: React.FC = () => {
                               >
                                 <div className="hist-card-stars" aria-hidden />
                                 <div className="hist-card-top">
-                                  <span
-                                    className="hist-section-icon hist-section-icon--goals material-symbols-outlined"
-                                    style={{ width: 36, height: 36, fontSize: 20 }}
-                                  >
-                                    emoji_events
-                                  </span>
+                                  <svg className="hist-section-icon hist-section-icon--goals" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 36, height: 36, padding: 8, boxSizing: 'border-box' }}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
                                 </div>
                                 <button
                                   type="button"
@@ -1034,7 +1027,7 @@ const Planner: React.FC = () => {
                                   <p className="hist-card-title">{item.name}</p>
                                 </button>
                                 <div className="hist-done-chip hist-done-chip--gold">
-                                  <span className="material-symbols-outlined">emoji_events</span>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
                                   ACHIEVED{' '}
                                   {new Date(done).toLocaleDateString('en-US', {
                                     month: 'short',

@@ -44,7 +44,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({ onClose, userName })
           justifyContent: 'center',
           margin: '0 auto 20px auto'
         }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '36px', color: '#00E676' }}>task_alt</span>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#00E676" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         </div>
         
         <h2 style={{

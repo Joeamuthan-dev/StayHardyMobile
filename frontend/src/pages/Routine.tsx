@@ -1375,13 +1375,17 @@ const Routine: React.FC = () => {
           {streakBannerMounted && (
             <div className={`streak-glass-banner ${streakBannerLeaving ? 'streak-glass-banner--leave' : ''}`} style={{ margin: '10px 16px' }}>
               <div className="streak-glass-banner__accent" />
-              <span className="material-symbols-outlined streak-glass-banner__sparkle">auto_awesome</span>
+              <svg className="streak-glass-banner__sparkle" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}>
+                <path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25zM11.5 9.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25z"/>
+              </svg>
               <div className="streak-glass-banner__copy">
                 <p className="streak-glass-banner__head">Today&apos;s Habits</p>
                 <p className="streak-glass-banner__sub">Mark your habits done. Log today only.</p>
               </div>
               <button type="button" className="streak-glass-banner__close" onClick={dismissStreakBanner}>
-                <span className="material-symbols-outlined">close</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
               </button>
             </div>
           )}
@@ -1693,7 +1697,9 @@ const Routine: React.FC = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
                 </button>
               </div>
 

@@ -93,7 +93,9 @@ const Tips: React.FC = () => {
           onClick={() => navigate('/settings')}
           className="size-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
         >
-          <span className="material-symbols-outlined">arrow_back</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
+          </svg>
         </button>
         <div>
           <h1 className="text-2xl font-black tracking-tight">Support the Dev</h1>
@@ -175,7 +177,9 @@ const Tips: React.FC = () => {
             </>
           ) : (
             <>
-              <span className="material-symbols-outlined">payments</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+              </svg>
               Pay ₹{selectedAmount > 0 ? selectedAmount : '—'} via Razorpay
             </>
           )}
