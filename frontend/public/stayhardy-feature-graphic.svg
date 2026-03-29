@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <!-- Deep dark background -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0A1410"/>
+      <stop offset="100%" stop-color="#060C09"/>
+    </linearGradient>
+
+    <!-- Green ambient glow — right side (heatmap area) -->
+    <radialGradient id="rightGlow" cx="78%" cy="54%" r="44%">
+      <stop offset="0%" stop-color="#00E87A" stop-opacity="0.13"/>
+      <stop offset="100%" stop-color="#00E87A" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Very faint green glow — left side (behind text) -->
+    <radialGradient id="leftGlow" cx="18%" cy="50%" r="38%">
+      <stop offset="0%" stop-color="#00E87A" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#00E87A" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Glow filter — peak cells (level 5) -->
+    <filter id="glow5" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Glow filter — high cells (level 4) -->
+    <filter id="glow4" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ── Background layers ── -->
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <rect width="1024" height="500" fill="url(#rightGlow)"/>
+  <rect width="1024" height="500" fill="url(#leftGlow)"/>
+
+  <!-- Subtle background dot grid (decorative, very faint) -->
+  <pattern id="dots" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+    <circle cx="16" cy="16" r="1.2" fill="#00E87A" opacity="0.06"/>
+  </pattern>
+  <rect width="1024" height="500" fill="url(#dots)"/>
+
+  <!-- Vertical centre divider -->
+  <line x1="512" y1="50" x2="512" y2="450"
+    stroke="#00E87A" stroke-width="0.8" stroke-opacity="0.12"
+    stroke-dasharray="4 6"/>
+
+  <!-- ══════════════════════════════════════
+       LEFT SIDE — Brand & Copy
+       Content vertically centred ~y 130–360
+       ══════════════════════════════════════ -->
+
+  <!-- Category label -->
+  <text x="72" y="158"
+    font-family="'Arial', Helvetica, sans-serif"
+    font-size="11" font-weight="700"
+    fill="#00E87A" letter-spacing="3.5">PRODUCTIVITY APP</text>
+
+  <!-- App name -->
+  <text x="68" y="240"
+    font-family="'Arial Black', 'Arial Bold', Helvetica, sans-serif"
+    font-size="82" font-weight="900"
+    fill="#FFFFFF" letter-spacing="-3">StayHardy</text>
+
+  <!-- Green accent underline -->
+  <rect x="68" y="254" width="230" height="3.5" rx="2" fill="#00E87A" opacity="0.9"/>
+
+  <!-- Tagline -->
+  <text x="68" y="298"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="19" font-weight="400"
+    fill="rgba(255,255,255,0.50)" letter-spacing="0.3">Stay Disciplined. Stay Consistent.</text>
+
+  <!-- Feature pills -->
+  <!-- Pill 1 -->
+  <rect x="68" y="326" width="138" height="34" rx="17"
+    fill="rgba(0,232,122,0.09)" stroke="#00E87A" stroke-width="1" stroke-opacity="0.45"/>
+  <text x="137" y="348"
+    font-family="Arial, sans-serif" font-size="12.5" font-weight="600"
+    fill="#00E87A" text-anchor="middle">Tasks &amp; Goals</text>
+
+  <!-- Pill 2 -->
+  <rect x="218" y="326" width="128" height="34" rx="17"
+    fill="rgba(0,232,122,0.09)" stroke="#00E87A" stroke-width="1" stroke-opacity="0.45"/>
+  <text x="282" y="348"
+    font-family="Arial, sans-serif" font-size="12.5" font-weight="600"
+    fill="#00E87A" text-anchor="middle">Daily Habits</text>
+
+  <!-- Pill 3 -->
+  <rect x="358" y="326" width="120" height="34" rx="17"
+    fill="rgba(0,232,122,0.09)" stroke="#00E87A" stroke-width="1" stroke-opacity="0.45"/>
+  <text x="418" y="348"
+    font-family="Arial, sans-serif" font-size="12.5" font-weight="600"
+    fill="#00E87A" text-anchor="middle">1-Year Stats</text>
+
+  <!-- ══════════════════════════════════════
+       RIGHT SIDE — Heatmap Grid
+       7 cols × 5 rows | cell=44px | gap=9px | step=53
+       gridW = 7×44 + 6×9 = 308+54 = 362
+       gridH = 5×44 + 4×9 = 220+36 = 256
+       Centred at x=790, y=252
+       startX = 790 - 181 = 609
+       startY = 252 - 128 = 124
+
+       Level colours:
+         0 = #0C1612   (empty)
+         1 = #0F3A27   (very low)
+         2 = #1B6644   (low)
+         3 = #00994D   (medium)
+         4 = #00CC66   (high — soft glow)
+         5 = #00E87A   (peak — full glow)
+
+       Pattern (upward trend, bottom-right brightest):
+         Row 0:  0  1  0  1  2  0  1
+         Row 1:  1  0  2  0  1  3  2
+         Row 2:  0  2  1  3  2  2  3
+         Row 3:  2  1  3  2  4  3  4
+         Row 4:  1  3  3  4  5  4  5
+       ══════════════════════════════════════ -->
+
+  <!-- Row 0 — y=124 -->
+  <rect x="609" y="124" width="44" height="44" rx="9" fill="#0C1612"/>
+  <rect x="662" y="124" width="44" height="44" rx="9" fill="#0F3A27"/>
+  <rect x="715" y="124" width="44" height="44" rx="9" fill="#0C1612"/>
+  <rect x="768" y="124" width="44" height="44" rx="9" fill="#0F3A27"/>
+  <rect x="821" y="124" width="44" height="44" rx="9" fill="#1B6644"/>
+  <rect x="874" y="124" width="44" height="44" rx="9" fill="#0C1612"/>
+  <rect x="927" y="124" width="44" height="44" rx="9" fill="#0F3A27"/>
+
+  <!-- Row 1 — y=177 -->
+  <rect x="609" y="177" width="44" height="44" rx="9" fill="#0F3A27"/>
+  <rect x="662" y="177" width="44" height="44" rx="9" fill="#0C1612"/>
+  <rect x="715" y="177" width="44" height="44" rx="9" fill="#1B6644"/>
+  <rect x="768" y="177" width="44" height="44" rx="9" fill="#0C1612"/>
+  <rect x="821" y="177" width="44" height="44" rx="9" fill="#0F3A27"/>
+  <rect x="874" y="177" width="44" height="44" rx="9" fill="#00994D"/>
+  <rect x="927" y="177" width="44" height="44" rx="9" fill="#1B6644"/>
+
+  <!-- Row 2 — y=230 -->
+  <rect x="609" y="230" width="44" height="44" rx="9" fill="#0C1612"/>
+  <rect x="662" y="230" width="44" height="44" rx="9" fill="#1B6644"/>
+  <rect x="715" y="230" width="44" height="44" rx="9" fill="#0F3A27"/>
+  <rect x="768" y="230" width="44" height="44" rx="9" fill="#00994D"/>
+  <rect x="821" y="230" width="44" height="44" rx="9" fill="#1B6644"/>
+  <rect x="874" y="230" width="44" height="44" rx="9" fill="#1B6644"/>
+  <rect x="927" y="230" width="44" height="44" rx="9" fill="#00994D"/>
+
+  <!-- Row 3 — y=283 -->
+  <rect x="609" y="283" width="44" height="44" rx="9" fill="#1B6644"/>
+  <rect x="662" y="283" width="44" height="44" rx="9" fill="#0F3A27"/>
+  <rect x="715" y="283" width="44" height="44" rx="9" fill="#00994D"/>
+  <rect x="768" y="283" width="44" height="44" rx="9" fill="#1B6644"/>
+  <rect x="821" y="283" width="44" height="44" rx="9" fill="#00CC66" filter="url(#glow4)"/>
+  <rect x="874" y="283" width="44" height="44" rx="9" fill="#00994D"/>
+  <rect x="927" y="283" width="44" height="44" rx="9" fill="#00CC66" filter="url(#glow4)"/>
+
+  <!-- Row 4 (most recent) — y=336 -->
+  <rect x="609" y="336" width="44" height="44" rx="9" fill="#0F3A27"/>
+  <rect x="662" y="336" width="44" height="44" rx="9" fill="#00994D"/>
+  <rect x="715" y="336" width="44" height="44" rx="9" fill="#00994D"/>
+  <rect x="768" y="336" width="44" height="44" rx="9" fill="#00CC66" filter="url(#glow4)"/>
+  <rect x="821" y="336" width="44" height="44" rx="9" fill="#00E87A" filter="url(#glow5)"/>
+  <rect x="874" y="336" width="44" height="44" rx="9" fill="#00CC66" filter="url(#glow4)"/>
+  <rect x="927" y="336" width="44" height="44" rx="9" fill="#00E87A" filter="url(#glow5)"/>
+
+  <!-- Label below heatmap -->
+  <text x="790" y="410"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="11.5" font-weight="400" letter-spacing="2.5"
+    fill="rgba(255,255,255,0.25)" text-anchor="middle">YOUR PRODUCTIVITY, VISUALIZED</text>
+
+  <!-- Bottom green accent bar -->
+  <rect x="0" y="495" width="1024" height="5" rx="0" fill="#00E87A" opacity="0.55"/>
+</svg>

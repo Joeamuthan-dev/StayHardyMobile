@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { isWeb } from '../utils/platform';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -628,6 +629,7 @@ const Dashboard: React.FC = () => {
     const persistInsert = async () => {
       setIsLoading(true);
       setError(null);
+      isCreatingTask.current = true;
 
       // Optimistic Update
       const tempId = crypto.randomUUID();
@@ -703,6 +705,7 @@ const Dashboard: React.FC = () => {
         });
       } finally {
         setIsLoading(false);
+        isCreatingTask.current = false;
       }
     };
 
@@ -843,14 +846,25 @@ const Dashboard: React.FC = () => {
       
 
       {/* STICKY HEADER WRAPPER */}
-      <div style={{ 
-        position: 'sticky', 
-        top: 0, 
-        zIndex: 50, 
-        background: '#000000', 
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+        background: '#000000',
         paddingTop: 'env(safe-area-inset-top, 0px)',
         paddingBottom: '4px'
       }}>
+        {isWeb && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px 4px 16px' }}>
+            <span style={{ fontSize: '18px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '-0.3px' }}>Tasks</span>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('open-create-task'))}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#00E87A', border: 'none', borderRadius: '12px', padding: '8px 16px', fontSize: '13px', fontWeight: '800', color: '#000', cursor: 'pointer' }}
+            >
+              <span style={{ fontSize: '18px', lineHeight: 1 }}>+</span> New Task
+            </button>
+          </div>
+        )}
         {/* GLASSMORPHIC HEADER */}
         {(() => {
           const pendingTasks = tasks.filter(t => t.status === 'pending')

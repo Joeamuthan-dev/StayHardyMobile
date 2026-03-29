@@ -1,6 +1,7 @@
 // src/pages/HomeDashboard.tsx
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { BarChart2 } from 'lucide-react';
+import UserAvatar from '../components/UserAvatar';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -753,36 +754,7 @@ const HomeDashboard: React.FC = () => {
               background: 'none',
             }}
           >
-            {user?.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt="Profile"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  borderRadius: '50%',
-                }}
-              />
-            ) : (
-              /* Default avatar — person silhouette */
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                style={{ width: '20px', height: '20px' }}
-              >
-                <circle
-                  cx="12" cy="8" r="4"
-                  fill="rgba(0,0,0,0.3)"
-                />
-                <path
-                  d="M4 20c0-4 3.6-7 8-7s8 3 8 7"
-                  stroke="rgba(0,0,0,0.3)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            )}
+            <UserAvatar src={user?.avatarUrl} size={36} />
           </button>
 
           {/* Name — truncated to 12 chars max */}

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { isNative } from '../utils/platform';
+import { isNative, isWeb } from '../utils/platform';
 
 const triggerHaptic = async (style = 'Light') => {
   if (!isNative) return;
@@ -176,9 +176,9 @@ const BottomNav: React.FC<{
     if (premium) items.push({ path: '/routine', icon: 'calendar_check', label: 'Habits', hasBadge: true, badgeText: 'NEW' });
     if (upsell) items.push({ path: '/lifetime-access', icon: 'workspace_premium', label: `Lifetime ₹${displayLifetimePrice}` });
     items.push(
-      { path: '/calendar', icon: 'calendar_month', label: 'Calendar' },
-      { path: '/planner', icon: 'history', label: t('timeline') }
+      { path: '/calendar', icon: 'calendar_month', label: 'Calendar' }
     );
+    if (!isWeb) items.push({ path: '/planner', icon: 'history', label: t('timeline') });
     if (isAdminHubUser(user)) items.push({ path: '/admin', icon: 'admin_panel_settings', label: 'Admin Hub' });
     items.push({ path: '/settings', icon: 'person', label: t('profile') });
     return items;
@@ -207,7 +207,8 @@ const BottomNav: React.FC<{
   return (
     <>
       {/* ── MOBILE NAVBAR (FLOATING DOCK) ── */}
-      {!hideFloatingShelfByRoute &&
+      {!isWeb &&
+        !hideFloatingShelfByRoute &&
         !isMobileMenuOpen &&
         !hideFloatingShelf &&
         !hideMobileNavChrome && (

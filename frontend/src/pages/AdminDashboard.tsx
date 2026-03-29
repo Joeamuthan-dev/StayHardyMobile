@@ -219,7 +219,7 @@ const AdminDashboard: React.FC = () => {
   const [newPinInput, setNewPinInput] = useState(['', '', '', '']);
   const [timeRange, setTimeRange] = useState<7 | 30>(7);
   const [chartData, setChartData] = useState<any[]>([]);
-  const [feedbackActiveFilter, setFeedbackActiveFilter] = useState<'all' | 'feature' | 'support'>('all');
+  const [feedbackActiveFilter, setFeedbackActiveFilter] = useState<'all' | 'feature' | 'support' | 'pro'>('all');
   const [feedbackSortOrder, setFeedbackSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [totalFeedbackCount, setTotalFeedbackCount] = useState(0);
   const [feedbacksLoading, setFeedbacksLoading] = useState(false);
@@ -821,6 +821,29 @@ const AdminDashboard: React.FC = () => {
     if (!user || !isAdminHubUser(user)) return;
     setFeedbacksLoading(true);
     try {
+      // For the pro filter, resolve pro user emails first
+      if (feedbackActiveFilter === 'pro') {
+        const { data: proUsers } = await supabase
+          .from('users')
+          .select('email')
+          .eq('is_pro', true);
+        const proEmails = (proUsers || []).map((u: any) => u.email).filter(Boolean);
+        if (proEmails.length === 0) {
+          setFeedbacks([]);
+          setTotalFeedbackCount(0);
+          return;
+        }
+        const { data, error } = await supabase
+          .from('feedback')
+          .select('id, user_name, user_email, message, type, ticket_id, status, admin_note, admin_note_date, created_at')
+          .in('user_email', proEmails)
+          .order('created_at', { ascending: feedbackSortOrder === 'oldest' });
+        if (error) { console.error('Error fetching pro feedback:', error); return; }
+        setFeedbacks(data || []);
+        setTotalFeedbackCount((data || []).length);
+        return;
+      }
+
       let query = supabase
         .from('feedback')
         .select('id, user_name, user_email, message, type, ticket_id, status, admin_note, admin_note_date, created_at')
@@ -1016,6 +1039,22 @@ const AdminDashboard: React.FC = () => {
       await fetchUserCounts();
     } catch (err) {
       console.error('Failed to make pro:', err);
+      alert('Failed to update ❌');
+    }
+  }, [fetchUserCounts]);
+
+  const handleRevokePro = useCallback(async (targetUser: any) => {
+    if (!window.confirm(`Revoke Pro from ${targetUser.name || targetUser.email}?`)) return;
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ is_pro: false, pro_purchase_date: null })
+        .eq('id', targetUser.id);
+      if (error) throw error;
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, is_pro: false } : u)));
+      await fetchUserCounts();
+    } catch (err) {
+      console.error('Failed to revoke pro:', err);
       alert('Failed to update ❌');
     }
   }, [fetchUserCounts]);
@@ -2147,7 +2186,7 @@ const AdminDashboard: React.FC = () => {
                                 📧 Resend Verification
                               </button>
                             )}
-                            {!u.is_pro && (
+                            {!u.is_pro ? (
                               <button
                                 type="button"
                                 onClick={() => void handleMakePro(u)}
@@ -2164,6 +2203,24 @@ const AdminDashboard: React.FC = () => {
                                 }}
                               >
                                 ⚡ Make Pro
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => void handleRevokePro(u)}
+                                style={{
+                                  padding: '6px 12px',
+                                  background: 'rgba(239,68,68,0.1)',
+                                  border: '1px solid rgba(239,68,68,0.4)',
+                                  borderRadius: '8px',
+                                  color: '#EF4444',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  marginLeft: 'auto',
+                                }}
+                              >
+                                Revoke Pro
                               </button>
                             )}
                           </div>
@@ -2261,6 +2318,13 @@ const AdminDashboard: React.FC = () => {
                 active={feedbackActiveFilter === 'support'}
                 color="#FF9500"
                 onClick={() => setFeedbackActiveFilter('support')}
+              />
+              <FilterPill
+                label="⚡ PRO"
+                count={feedbackActiveFilter === 'pro' ? totalFeedbackCount : 0}
+                active={feedbackActiveFilter === 'pro'}
+                color={ADM.gold}
+                onClick={() => setFeedbackActiveFilter('pro')}
               />
             </div>
 

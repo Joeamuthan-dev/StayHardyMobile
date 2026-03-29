@@ -7,11 +7,12 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { isNative } from '../utils/platform';
 import { storage } from '../utils/storage';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { 
+import {
   Camera, Zap, ChevronRight,
   Lock, Trash2, LogOut,
   MessageSquare, Heart, Megaphone, RotateCcw
 } from 'lucide-react';
+import UserAvatar from '../components/UserAvatar';
 import { supabase } from '../supabase';
 import { hashPin, padPinForAuth } from '../utils/pinUtils';
 
@@ -185,6 +186,7 @@ const Settings: React.FC = () => {
   const [showPinModal, setShowPinModal] = useState(false);
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState<{ show: boolean; type: 'tasks' | 'habits' | 'goals' | '' }>({ show: false, type: '' });
   const [showDeleteStep1Modal, setShowDeleteStep1Modal] = useState(false);
@@ -400,9 +402,40 @@ const Settings: React.FC = () => {
       const avatarUrl = urlData.publicUrl + '?t=' + Date.now();
       await supabase.from('users').update({ avatar_url: avatarUrl }).eq('id', user.id);
       setCurrentUser({ ...user, avatarUrl });
+      // Sync sidebar cache so it reflects the new photo immediately
+      try {
+        const cacheKey = 'cached_profile_fast_' + user.id;
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          localStorage.setItem(cacheKey, JSON.stringify({ ...JSON.parse(cached), user_avatar_url: avatarUrl }));
+        }
+      } catch {}
       setNotificationToast('Profile photo updated ✅');
     } catch (err: any) { if (!err.message?.includes('cancel')) alert('Error: ' + err.message); }
     finally { setIsUploading(false); }
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!user?.id) return;
+    setShowPhotoOptions(false);
+    setIsUploading(true);
+    try {
+      await supabase.storage.from('profile-images').remove([`${user.id}/avatar.jpg`]);
+      await supabase.from('users').update({ avatar_url: null }).eq('id', user.id);
+      setCurrentUser({ ...user, avatarUrl: undefined });
+      try {
+        const cacheKey = 'cached_profile_fast_' + user.id;
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          localStorage.setItem(cacheKey, JSON.stringify({ ...JSON.parse(cached), user_avatar_url: null }));
+        }
+      } catch {}
+      setNotificationToast('Profile photo removed');
+    } catch {
+      setNotificationToast('Failed to remove photo');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // --- COMPATIBILITY MAPPING ---
@@ -526,7 +559,7 @@ const Settings: React.FC = () => {
 
             {/* Avatar */}
             <div
-              onClick={handleUpdatePhoto}
+              onClick={() => setShowPhotoOptions(true)}
               style={{ position: 'relative', flexShrink: 0, cursor: 'pointer', width: '72px', height: '72px' }}
             >
               {isUploading && (
@@ -538,32 +571,15 @@ const Settings: React.FC = () => {
                   <Megaphone size={20} className="rotating" style={{ color: '#00E676' }} />
                 </div>
               )}
-              {userProfile?.user_avatar_url ? (
-                <img
-                  src={userProfile.user_avatar_url}
-                  alt="Profile"
-                  style={{
-                    width: '72px', height: '72px', borderRadius: '50%',
-                    objectFit: 'cover', display: 'block',
-                    boxShadow: isProUser
-                      ? '0 0 0 2px #00E676, 0 0 16px rgba(0,230,118,0.3)'
-                      : '0 0 0 2px rgba(255,255,255,0.15)',
-                  }}
-                />
-              ) : (
-                <div style={{
-                  width: '72px', height: '72px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #1a2e1e, #0d0d0d)',
+              <UserAvatar
+                src={userProfile?.user_avatar_url}
+                size={72}
+                style={{
                   boxShadow: isProUser
                     ? '0 0 0 2px #00E676, 0 0 16px rgba(0,230,118,0.3)'
                     : '0 0 0 2px rgba(255,255,255,0.15)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'Syne, sans-serif', fontWeight: '800',
-                  fontSize: '26px', color: '#00E676',
-                }}>
-                  {(userProfile?.user_name || userProfile?.user_email || 'S').charAt(0).toUpperCase()}
-                </div>
-              )}
+                }}
+              />
 
               {/* Camera badge */}
               <div style={{
@@ -1019,6 +1035,83 @@ const Settings: React.FC = () => {
 
       <SupportModal isOpen={showSupportModal} onClose={() => setShowSupportModal(false)} />
       {notificationToast && <div className="sp-toast">{notificationToast}</div>}
+
+      {/* Photo Options Sheet */}
+      {showPhotoOptions && (
+        <>
+          <div
+            onClick={() => setShowPhotoOptions(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10010 }}
+          />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0,
+            background: '#111111',
+            borderTop: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '24px 24px 0 0',
+            padding: '12px 16px calc(env(safe-area-inset-bottom, 0px) + 24px)',
+            zIndex: 10011,
+          }}>
+            {/* Handle */}
+            <div style={{ width: '36px', height: '4px', background: 'rgba(255,255,255,0.15)', borderRadius: '99px', margin: '0 auto 20px' }} />
+            <p style={{ fontSize: '12px', fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center', marginBottom: '16px' }}>
+              Profile Photo
+            </p>
+
+            {/* Upload */}
+            <button
+              onClick={() => { setShowPhotoOptions(false); handleUpdatePhoto(); }}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: '14px',
+                padding: '16px', borderRadius: '16px', marginBottom: '8px',
+                background: 'rgba(0,230,118,0.08)', border: '1px solid rgba(0,230,118,0.15)',
+                cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(0,230,118,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Camera size={18} color="#00E676" />
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <p style={{ fontSize: '15px', fontWeight: '700', color: '#FFFFFF', margin: '0 0 2px' }}>Upload Photo</p>
+                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>Take a photo or choose from gallery</p>
+              </div>
+            </button>
+
+            {/* Remove — only if photo exists */}
+            {userProfile?.user_avatar_url && (
+              <button
+                onClick={handleDeletePhoto}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '14px',
+                  padding: '16px', borderRadius: '16px', marginBottom: '8px',
+                  background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)',
+                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Trash2 size={18} color="#EF4444" />
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                  <p style={{ fontSize: '15px', fontWeight: '700', color: '#EF4444', margin: '0 0 2px' }}>Remove Photo</p>
+                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>Revert to default initials avatar</p>
+                </div>
+              </button>
+            )}
+
+            {/* Cancel */}
+            <button
+              onClick={() => setShowPhotoOptions(false)}
+              style={{
+                width: '100%', padding: '16px', borderRadius: '16px',
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+                fontSize: '15px', fontWeight: '600', color: 'rgba(255,255,255,0.5)',
+                cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
       {isDeletingAccount && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10001 }}>
           <RotateCcw size={32} className="rotating" style={{ color: '#EF4444', marginBottom: '16px' }} />

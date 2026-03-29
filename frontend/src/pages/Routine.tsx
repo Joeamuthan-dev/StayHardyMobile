@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
 import { useLanguage } from '../context/LanguageContext';
+import { isWeb } from '../utils/platform';
 import { supabase } from '../supabase';
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired, invalidateUserStatsCache } from '../lib/cacheManager';
@@ -885,6 +886,7 @@ const Routine: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('General');
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   const [suggestionCategory, setSuggestionCategory] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focusedField, setFocusedField] = useState('');
@@ -1169,6 +1171,8 @@ const Routine: React.FC = () => {
       setShowModal(false);
       setTitle('');
       setSelectedIcon('fitness_center');
+      setSuggestionCategory(null);
+      setShowSuggestions(false);
       triggerGlobalRefresh();
       return;
     }
@@ -1190,6 +1194,8 @@ const Routine: React.FC = () => {
       setShowModal(false);
       setTitle('');
       setSelectedIcon('fitness_center');
+      setSuggestionCategory(null);
+      setShowSuggestions(false);
       void fetchRoutinesAndLogs({ force: true });
       if (user?.id) void ProductivityService.recalculate(user.id);
       triggerGlobalRefresh();
@@ -1382,12 +1388,22 @@ const Routine: React.FC = () => {
             <StreakCard streak={streakCount} weekData={getWeekDays()} />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '12px 20px 8px 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px 8px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
               <h2 style={{ fontSize: '16px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '0.04em', margin: 0, textTransform: 'uppercase' }}>DAILY ACTIONS</h2>
               <p style={{ fontSize: '11px', fontWeight: '600', color: 'rgba(255,255,255,0.3)', margin: 0 }}>{todayDoneCount}/{todayTotalCount}</p>
             </div>
-            <button onClick={() => setShowAllModal(true)} style={{ background: 'none', border: 'none', fontSize: '12px', fontWeight: '800', color: '#00E676', cursor: 'pointer' }}>MANAGE</button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {isWeb && (
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('open-create-routine'))}
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#00E87A', border: 'none', borderRadius: '10px', padding: '7px 14px', fontSize: '12px', fontWeight: '800', color: '#000', cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span> New Habit
+                </button>
+              )}
+              <button onClick={() => setShowAllModal(true)} style={{ background: 'none', border: 'none', fontSize: '12px', fontWeight: '800', color: '#00E676', cursor: 'pointer' }}>MANAGE</button>
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', padding: '0 16px 12px 16px', scrollbarWidth: 'none' }} className="no-scrollbar">
@@ -1490,16 +1506,17 @@ const Routine: React.FC = () => {
                       placeholder="e.g. Morning run, Read 20 pages..."
                       value={title}
                       onChange={e => setTitle(e.target.value)}
-                      onFocus={() => { setFocusedField('name'); }}
-                      onBlur={() => { setFocusedField(''); }}
+                      onFocus={() => { setFocusedField('name'); setShowSuggestions(true); }}
+                      onBlur={() => { setFocusedField(''); setTimeout(() => setShowSuggestions(false), 200); }}
                       style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '15px', fontWeight: '600', color: '#FFFFFF', caretColor: '#00E87A', boxSizing: 'border-box' }}
                     />
                   </div>
                 </div>
 
-                {/* Smart Habit Finder */}
-                <div>
-                  <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', margin: '0 0 10px 0' }}>⚡ FIND YOUR HABIT</p>
+                {/* Smart Habit Finder — shown only when input is focused */}
+                {showSuggestions && (
+                <div onMouseDown={e => e.preventDefault()}>
+                  <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', margin: '0 0 10px 0' }}>⚡ SUGGESTIONS</p>
 
                   <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     {Object.keys(HABIT_SUGGESTION_CATEGORIES).map(cat => {
@@ -1538,6 +1555,7 @@ const Routine: React.FC = () => {
                           onClick={() => {
                             setTitle(habit);
                             setSuggestionCategory(null);
+                            setShowSuggestions(false);
                           }}
                           style={{
                             background: 'rgba(0,232,122,0.07)',
@@ -1558,6 +1576,7 @@ const Routine: React.FC = () => {
                     </div>
                   )}
                 </div>
+                )}
 
                 <div>
                   <CategorySelector

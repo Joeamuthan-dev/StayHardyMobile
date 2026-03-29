@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="60%" r="75%">
+      <stop offset="0%" stop-color="#0E1E18"/>
+      <stop offset="100%" stop-color="#060C0A"/>
+    </radialGradient>
+    <radialGradient id="glowPool" cx="78%" cy="82%" r="48%">
+      <stop offset="0%" stop-color="#00E87A" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#00E87A" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow5" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow4" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="iconClip">
+      <rect width="512" height="512" rx="96"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#iconClip)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <rect width="512" height="512" fill="url(#glowPool)"/>
+
+    <!--
+      Grid: 7 cols x 5 rows
+      cell=36px  gap=8px  step=44
+      gridW = 7×36 + 6×8 = 252+48 = 300
+      gridH = 5×36 + 4×8 = 180+32 = 212
+      startX = (512-300)/2 = 106
+      startY = (512-212)/2 = 150
+      → 106px padding on sides, 150px top/bottom
+      → safely inside Android adaptive icon safe zone
+    -->
+
+    <!-- Row 0 — y=150 -->
+    <rect x="106" y="150" width="36" height="36" rx="7" fill="#0C1612"/>
+    <rect x="150" y="150" width="36" height="36" rx="7" fill="#0F3A27"/>
+    <rect x="194" y="150" width="36" height="36" rx="7" fill="#0C1612"/>
+    <rect x="238" y="150" width="36" height="36" rx="7" fill="#0F3A27"/>
+    <rect x="282" y="150" width="36" height="36" rx="7" fill="#1B6644"/>
+    <rect x="326" y="150" width="36" height="36" rx="7" fill="#0C1612"/>
+    <rect x="370" y="150" width="36" height="36" rx="7" fill="#0F3A27"/>
+
+    <!-- Row 1 — y=194 -->
+    <rect x="106" y="194" width="36" height="36" rx="7" fill="#0F3A27"/>
+    <rect x="150" y="194" width="36" height="36" rx="7" fill="#0C1612"/>
+    <rect x="194" y="194" width="36" height="36" rx="7" fill="#1B6644"/>
+    <rect x="238" y="194" width="36" height="36" rx="7" fill="#0C1612"/>
+    <rect x="282" y="194" width="36" height="36" rx="7" fill="#0F3A27"/>
+    <rect x="326" y="194" width="36" height="36" rx="7" fill="#00994D"/>
+    <rect x="370" y="194" width="36" height="36" rx="7" fill="#1B6644"/>
+
+    <!-- Row 2 — y=238 -->
+    <rect x="106" y="238" width="36" height="36" rx="7" fill="#0C1612"/>
+    <rect x="150" y="238" width="36" height="36" rx="7" fill="#1B6644"/>
+    <rect x="194" y="238" width="36" height="36" rx="7" fill="#0F3A27"/>
+    <rect x="238" y="238" width="36" height="36" rx="7" fill="#00994D"/>
+    <rect x="282" y="238" width="36" height="36" rx="7" fill="#1B6644"/>
+    <rect x="326" y="238" width="36" height="36" rx="7" fill="#1B6644"/>
+    <rect x="370" y="238" width="36" height="36" rx="7" fill="#00994D"/>
+
+    <!-- Row 3 — y=282 -->
+    <rect x="106" y="282" width="36" height="36" rx="7" fill="#1B6644"/>
+    <rect x="150" y="282" width="36" height="36" rx="7" fill="#0F3A27"/>
+    <rect x="194" y="282" width="36" height="36" rx="7" fill="#00994D"/>
+    <rect x="238" y="282" width="36" height="36" rx="7" fill="#1B6644"/>
+    <rect x="282" y="282" width="36" height="36" rx="7" fill="#00CC66" filter="url(#glow4)"/>
+    <rect x="326" y="282" width="36" height="36" rx="7" fill="#00994D"/>
+    <rect x="370" y="282" width="36" height="36" rx="7" fill="#00CC66" filter="url(#glow4)"/>
+
+    <!-- Row 4 — y=326 -->
+    <rect x="106" y="326" width="36" height="36" rx="7" fill="#0F3A27"/>
+    <rect x="150" y="326" width="36" height="36" rx="7" fill="#00994D"/>
+    <rect x="194" y="326" width="36" height="36" rx="7" fill="#00994D"/>
+    <rect x="238" y="326" width="36" height="36" rx="7" fill="#00CC66" filter="url(#glow4)"/>
+    <rect x="282" y="326" width="36" height="36" rx="7" fill="#00E87A" filter="url(#glow5)"/>
+    <rect x="326" y="326" width="36" height="36" rx="7" fill="#00CC66" filter="url(#glow4)"/>
+    <rect x="370" y="326" width="36" height="36" rx="7" fill="#00E87A" filter="url(#glow5)"/>
+  </g>
+
+  <rect width="512" height="512" rx="96" fill="none" stroke="#00E87A" stroke-width="1.5" stroke-opacity="0.18"/>
+</svg>

@@ -3,8 +3,9 @@ import React, { useEffect, useState } from 'react';
 import {
   Home, CheckSquare, Target, Calendar,
   RefreshCw, BarChart2, X, LogOut,
-  ChevronRight, Shield
+  ChevronRight, Shield, Bell, Info
 } from 'lucide-react';
+import UserAvatar from './UserAvatar';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -193,6 +194,38 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
     return () => document.body.classList.remove('mobile-drawer-open');
   }, [isOpen]);
 
+  const [notifCount, setNotifCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const lastSeen = localStorage.getItem('sh_notif_last_seen') ?? '1970-01-01T00:00:00Z';
+
+    const fetchCount = async () => {
+      let count = 0;
+
+      // Unread announcements
+      const { count: annCount } = await supabase
+        .from('announcements')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true)
+        .gt('created_at', lastSeen);
+      if (annCount) count += annCount;
+
+      // Support ticket updates (status changed from 'open')
+      const { count: ticketCount } = await supabase
+        .from('feedback')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .neq('status', 'open')
+        .gt('updated_at', lastSeen);
+      if (ticketCount) count += ticketCount;
+
+      setNotifCount(count);
+    };
+
+    fetchCount();
+  }, [user?.id, isOpen]);
+
   return (
     <>
       {isOpen && (
@@ -251,7 +284,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
             const isProUser =
               displayProfile?.pro_member === true || isPro === true;
             const badge = getMembershipBadge(email, isProUser);
-            const avatarUrl = displayProfile?.user_avatar_url;
+            // Always prefer live AuthContext avatarUrl so photo updates reflect immediately
+            const avatarUrl = user?.avatarUrl || displayProfile?.user_avatar_url;
             const displayName =
               displayProfile?.user_name || email || 'Soldier';
 
@@ -295,42 +329,12 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
               >
                 {/* AVATAR */}
                 <div style={{
-                  width: '40px',
-                  height: '40px',
                   borderRadius: '50%',
                   flexShrink: 0,
                   position: 'relative',
                   boxShadow: '0 0 0 2px rgba(0,230,118,0.5), 0 0 0 4px #0A0A0A',
                 }}>
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt="Avatar"
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                        display: 'block',
-                      }}
-                    />
-                  ) : (
-                    <div style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #1a1a1a, #0d0d0d)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontFamily: 'Syne, sans-serif',
-                      fontWeight: '800',
-                      fontSize: '16px',
-                      color: '#00E676',
-                    }}>
-                      {displayName.charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                  <UserAvatar src={avatarUrl} size={40} />
                 </div>
 
                 {/* TEXT BLOCK */}
@@ -359,12 +363,35 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                   </span>
                 </div>
 
-                {/* CHEVRON — replaces green dot */}
-                <ChevronRight
-                  size={18}
-                  color="rgba(255,255,255,0.25)"
-                  style={{ flexShrink: 0, marginLeft: 'auto' }}
-                />
+                {/* NOTIFICATION BELL + COUNT */}
+                <div style={{ flexShrink: 0, marginLeft: 'auto', position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  {notifCount > 0 ? (
+                    <>
+                      <Bell size={17} color="rgba(255,255,255,0.5)" />
+                      <span style={{
+                        position: 'absolute',
+                        top: '-6px',
+                        right: '-6px',
+                        minWidth: '16px',
+                        height: '16px',
+                        borderRadius: '8px',
+                        background: '#EF4444',
+                        color: '#fff',
+                        fontSize: '9px',
+                        fontWeight: '900',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0 3px',
+                        boxShadow: '0 0 6px rgba(239,68,68,0.8)',
+                      }}>
+                        {notifCount > 99 ? '99+' : notifCount}
+                      </span>
+                    </>
+                  ) : (
+                    <ChevronRight size={18} color="rgba(255,255,255,0.25)" />
+                  )}
+                </div>
               </button>
             );
           })()}
@@ -438,24 +465,43 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                 </button>
               );
             }
+            if (isProUserFromState) {
+              return (
+                <button
+                  onClick={() => { navigate('/routine'); onClose(); }}
+                  className="flex items-center gap-3.5 w-full px-6 py-3.5 group transition-all duration-200"
+                  style={{ background: 'rgba(0,230,118,0.04)' }}
+                >
+                  <div style={{ color: 'rgba(0,230,118,0.6)', filter: 'drop-shadow(0 0 4px rgba(0,230,118,0.3))' }}>
+                    <RefreshCw size={18} strokeWidth={1.6} />
+                  </div>
+                  <span className="text-sm font-semibold flex-1 text-left" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                    Habits
+                  </span>
+                  <span className="text-[8px] font-black tracking-widest px-2 py-0.5 rounded-md"
+                    style={{ background: 'rgba(0,230,118,0.12)', color: 'rgba(0,230,118,0.8)', border: '1px solid rgba(0,230,118,0.2)', letterSpacing: '0.12em' }}
+                  >
+                    KEY
+                  </span>
+                </button>
+              );
+            }
             return (
               <button
                 onClick={() => { navigate('/routine'); onClose(); }}
                 className="flex items-center gap-3.5 w-full px-6 py-3.5 group hover:bg-white/3 transition-all duration-200"
               >
-                <div className={`${isProUserFromState ? "text-white/30 group-hover:text-white/60" : "text-white/20 group-hover:text-white/40"} transition-colors duration-200`}>
+                <div className="text-white/20 group-hover:text-white/40 transition-colors duration-200">
                   <RefreshCw size={18} strokeWidth={1.5} />
                 </div>
-                <span className={`${isProUserFromState ? "text-white/40 group-hover:text-white/70" : "text-white/25 group-hover:text-white/40"} text-sm font-medium flex-1 text-left transition-colors duration-200`}>
+                <span className="text-white/25 group-hover:text-white/40 text-sm font-medium flex-1 text-left transition-colors duration-200">
                   Habits
                 </span>
-                {!isProUserFromState && (
-                  <span className="text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md"
-                    style={{ background: 'rgba(0,230,118,0.1)', color: 'rgba(0,230,118,0.7)', letterSpacing: '0.15em' }}
-                  >
-                    PRO
-                  </span>
-                )}
+                <span className="text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md"
+                  style={{ background: 'rgba(0,230,118,0.1)', color: 'rgba(0,230,118,0.7)', letterSpacing: '0.15em' }}
+                >
+                  PRO
+                </span>
               </button>
             );
           })()}
@@ -485,24 +531,43 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                 </button>
               );
             }
+            if (isProUserFromState) {
+              return (
+                <button
+                  onClick={() => { navigate('/stats'); onClose(); }}
+                  className="flex items-center gap-3.5 w-full px-6 py-3.5 group transition-all duration-200"
+                  style={{ background: 'rgba(0,230,118,0.04)' }}
+                >
+                  <div style={{ color: 'rgba(0,230,118,0.6)', filter: 'drop-shadow(0 0 4px rgba(0,230,118,0.3))' }}>
+                    <BarChart2 size={18} strokeWidth={1.6} />
+                  </div>
+                  <span className="text-sm font-semibold flex-1 text-left" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                    Stats
+                  </span>
+                  <span className="text-[8px] font-black tracking-widest px-2 py-0.5 rounded-md"
+                    style={{ background: 'rgba(0,230,118,0.12)', color: 'rgba(0,230,118,0.8)', border: '1px solid rgba(0,230,118,0.2)', letterSpacing: '0.12em' }}
+                  >
+                    KEY
+                  </span>
+                </button>
+              );
+            }
             return (
               <button
                 onClick={() => { navigate('/stats'); onClose(); }}
                 className="flex items-center gap-3.5 w-full px-6 py-3.5 group hover:bg-white/3 transition-all duration-200"
               >
-                <div className={`${isProUserFromState ? "text-white/30 group-hover:text-white/60" : "text-white/20 group-hover:text-white/40"} transition-colors duration-200`}>
+                <div className="text-white/20 group-hover:text-white/40 transition-colors duration-200">
                   <BarChart2 size={18} strokeWidth={1.5} />
                 </div>
-                <span className={`${isProUserFromState ? "text-white/40 group-hover:text-white/70" : "text-white/25 group-hover:text-white/40"} text-sm font-medium flex-1 text-left transition-colors duration-200`}>
+                <span className="text-white/25 group-hover:text-white/40 text-sm font-medium flex-1 text-left transition-colors duration-200">
                   Stats
                 </span>
-                {!isProUserFromState && (
-                  <span className="text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md"
-                    style={{ background: 'rgba(0,230,118,0.1)', color: 'rgba(0,230,118,0.7)', letterSpacing: '0.15em' }}
-                  >
-                    PRO
-                  </span>
-                )}
+                <span className="text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md"
+                  style={{ background: 'rgba(0,230,118,0.1)', color: 'rgba(0,230,118,0.7)', letterSpacing: '0.15em' }}
+                >
+                  PRO
+                </span>
               </button>
             );
           })()}
@@ -541,6 +606,24 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
               </div>
             </button>
           )}
+
+          {/* About This App */}
+          <button
+            onClick={() => {
+              localStorage.setItem('sh_notif_last_seen', new Date().toISOString());
+              setNotifCount(0);
+              navigate('/welcome');
+              onClose();
+            }}
+            className="flex items-center gap-3.5 w-full px-6 py-3.5 group hover:bg-white/3 transition-all duration-200"
+          >
+            <div className="text-white/30 group-hover:text-white/60 transition-colors duration-200">
+              <Info size={18} strokeWidth={1.5} />
+            </div>
+            <span className="text-white/40 group-hover:text-white/70 text-sm font-medium flex-1 text-left transition-colors duration-200">
+              Why Stay Hardy
+            </span>
+          </button>
 
           {!isProUser && (
             <div className="px-4 mt-4 mb-2">

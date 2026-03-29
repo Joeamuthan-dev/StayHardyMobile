@@ -1,5 +1,6 @@
 // src/pages/Goals.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { isWeb } from '../utils/platform';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
 import { supabase } from '../supabase';
@@ -848,14 +849,14 @@ const Goals: React.FC = () => {
 
       {/* Pinned Header */}
       <div style={{
-        padding: 'calc(env(safe-area-inset-top, 0px) + 24px) 16px 16px 72px',
+        padding: isWeb ? '16px 16px 16px 16px' : 'calc(env(safe-area-inset-top, 0px) + 24px) 16px 16px 72px',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-end', 
-        position: 'sticky', 
+        alignItems: isWeb ? 'center' : 'flex-end',
+        position: 'sticky',
         top: 0,
         zIndex: 100,
-        background: 'rgba(0, 0, 0, 0.65)', 
+        background: 'rgba(0, 0, 0, 0.65)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
@@ -883,12 +884,21 @@ const Goals: React.FC = () => {
           </h2>
         </div>
 
-        {/* Stats Row */}
+        {/* Stats Row / New Goal Button */}
         <div style={{
           display: 'flex',
           gap: '8px',
-          marginBottom: '2px' // Align better with "Goals" baseline
+          alignItems: 'center',
+          marginBottom: '2px'
         }}>
+          {isWeb && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('open-create-goal'))}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#00E87A', border: 'none', borderRadius: '12px', padding: '8px 16px', fontSize: '13px', fontWeight: '800', color: '#000', cursor: 'pointer', marginRight: '4px' }}
+            >
+              <span style={{ fontSize: '18px', lineHeight: 1 }}>+</span> New Goal
+            </button>
+          )}
           <div style={{
             background: 'rgba(124, 77, 255, 0.1)',
             border: '1px solid rgba(124, 77, 255, 0.4)',

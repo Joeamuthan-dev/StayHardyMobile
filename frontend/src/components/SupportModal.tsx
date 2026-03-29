@@ -41,26 +41,40 @@ const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) => {
     setTimeout(() => setToast(''), 3500);
   };
 
-  // Fetch the Tips offering packages when modal opens
+  // Fetch the Tips offering packages when modal opens, with retries for RC init delay
   useEffect(() => {
     if (!isOpen) return;
     if (!Capacitor.isNativePlatform()) return;
 
-    (async () => {
-      setIsLoadingPkgs(true);
+    let cancelled = false;
+
+    const load = async (attempt: number) => {
+      if (attempt === 1) setIsLoadingPkgs(true);
       try {
         const offering = await RevenueCatService.getTipsOffering();
+        if (cancelled) return;
         if (offering?.availablePackages?.length) {
           setPackages(offering.availablePackages);
+          setIsLoadingPkgs(false);
+        } else if (attempt < 4) {
+          setTimeout(() => { if (!cancelled) load(attempt + 1); }, 800);
         } else {
           showToast('Could not load tip options. Try again.');
+          setIsLoadingPkgs(false);
         }
       } catch {
-        showToast('Could not load tip options. Try again.');
-      } finally {
-        setIsLoadingPkgs(false);
+        if (cancelled) return;
+        if (attempt < 4) {
+          setTimeout(() => { if (!cancelled) load(attempt + 1); }, 800);
+        } else {
+          showToast('Could not load tip options. Try again.');
+          setIsLoadingPkgs(false);
+        }
       }
-    })();
+    };
+
+    load(1);
+    return () => { cancelled = true; };
   }, [isOpen]);
 
   const handleWebPurchase = async () => {

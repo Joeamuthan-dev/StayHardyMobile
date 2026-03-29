@@ -119,6 +119,8 @@ const StayHardyUpdatesPage: React.FC = () => {
   useEffect(() => {
     void loadUpdates();
     void markAsRead();
+    // Mark announcements as seen for sidebar notification count
+    localStorage.setItem('sh_notif_last_seen', new Date().toISOString());
   }, [loadUpdates, markAsRead]);
 
   return (

@@ -81,7 +81,7 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
   // Hidden on onboarding or login pages
   const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-pin', '/reset-pin', '/auth/reset', '/auth/verify', '/paywall', '/loading', '/onboarding']
     .some(p => location.pathname.toLowerCase().replace(/\/$/, '') === p);
-  const showHamburger = user && !isAuthPage && !sidebarOpen;
+  const showHamburger = user && !isAuthPage && !sidebarOpen && !isWeb;
 
   return (
     <>

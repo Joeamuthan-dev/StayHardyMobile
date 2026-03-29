@@ -75,6 +75,8 @@ const Feedback: React.FC = () => {
 
   useEffect(() => {
     fetchMyTickets();
+    // Mark ticket updates as seen for sidebar notification count
+    localStorage.setItem('sh_notif_last_seen', new Date().toISOString());
 
     if (!user?.id) return;
 

@@ -86,7 +86,21 @@ export class RevenueCatService {
     if (!Capacitor.isNativePlatform() || !this.isConfigured) return null;
     try {
       const offerings = await Purchases.getOfferings();
-      return offerings.all?.['Tips'] ?? null;
+      const allKeys = Object.keys(offerings.all ?? {});
+
+      // Case-insensitive match for any 'tips'-named offering
+      const tipsKey = allKeys.find((k) => k.toLowerCase().includes('tip'));
+      if (tipsKey) return offerings.all![tipsKey];
+
+      // Fallback: find an offering that contains at least one consumable package
+      const consumableOffering = allKeys
+        .map((k) => offerings.all![k])
+        .find((o) =>
+          o.availablePackages.some((p) => p.product.productCategory === 'NON_SUBSCRIPTION')
+        );
+      if (consumableOffering) return consumableOffering;
+
+      return offerings.current ?? null;
     } catch (e) {
       console.error(`${LOGTAG} Failed to fetch tips offering:`, e);
       return null;
