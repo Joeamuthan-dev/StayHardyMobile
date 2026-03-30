@@ -460,7 +460,7 @@ const HomeDashboard: React.FC = () => {
 
   const completedRoutinesToday = scoreData?.routines_completed ?? routineLogs.filter(l => l.completed_at === localTodayStr).length;
 
-  let currentStreak = 0;
+  let clientStreak = 0;
   const uniqueLogDaysSet = new Set(routineLogs.map(l => l.completed_at));
   for (let i = 0; i < 365; i++) {
     const checkDate = new Date();
@@ -469,13 +469,14 @@ const HomeDashboard: React.FC = () => {
     const checkDayName = daysOfWeek[checkDate.getDay()];
     const scheduledThatDay = routines.filter(r => r.days?.includes(checkDayName)).length;
     if (uniqueLogDaysSet.has(checkStr)) {
-      currentStreak++;
+      clientStreak++;
     } else {
       if (i === 0) continue;
       if (scheduledThatDay === 0) continue;
       break;
     }
   }
+  const currentStreak = (user?.currentStreak != null && user.currentStreak > 0) ? user.currentStreak : clientStreak;
 
   // Productivity Chart Data
   // Use DB calculated scores with client-side fallback
@@ -634,43 +635,25 @@ const HomeDashboard: React.FC = () => {
     return () => window.clearTimeout(t);
   }, [user?.id, supportGateReady, tasks, goals.length, currentStreak]);
 
-  const [activeSection, setActiveSection] = useState(0);
+  const [habitRange, setHabitRange] = useState<7 | 30>(7);
 
-  const calcBestStreak = useCallback((logs: RoutineLog[]) => {
-    if (!logs?.length) return 0;
-    const dates = [...new Set(logs.map(l => l.completed_at))].sort();
-    let best = 1, current = 1;
-    for (let i = 1; i < dates.length; i++) {
-      const prev = new Date(dates[i - 1]);
-      const curr = new Date(dates[i]);
-      const diff = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
-      if (diff === 1) { current++; best = Math.max(best, current); } else { current = 1; }
-    }
-    return best;
-  }, []);
-
-  const bestStreakDays = useMemo(() => calcBestStreak(routineLogs), [routineLogs, calcBestStreak]);
-
-  const getLast7DaysHabits = useCallback(() => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const result: { day: string; date: string; count: number }[] = [];
+  const getHabitsData = useCallback((range: number) => {
+    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const result: { label: string; date: string; count: number }[] = [];
     const now = new Date();
-
-    for (let i = 6; i >= 0; i--) {
+    for (let i = range - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      const dayName = days[(d.getDay() + 6) % 7];
+      const label = range === 7 ? dayNames[(d.getDay() + 6) % 7] : String(d.getDate());
       const count = routineLogs?.filter(log => log.completed_at === dateStr).length || 0;
-
-      result.push({ day: dayName, date: dateStr, count });
+      result.push({ label, date: dateStr, count });
     }
     return result;
   }, [routineLogs]);
 
 
   const completedTasksTotal = useMemo(() => tasks.filter(t => t.status === 'completed' && isCompletedTaskToday(t.updatedAt)).length, [tasks]);
-
   const activeGoalsCount = useMemo(() => goals.filter(g => g.status === 'pending').length, [goals]);
   const completedGoalsCount = useMemo(() => goals.filter(g => g.status === 'completed').length, [goals]);
 
@@ -696,8 +679,6 @@ const HomeDashboard: React.FC = () => {
   );
 
   const pendingHabitsToday = pendingHabitsCount;
-  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
-  const isProUser = !!isPro || isAdmin;
 
   return (
     <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 72px)', paddingBottom: '140px', overflowY: 'auto' }}>
@@ -713,9 +694,9 @@ const HomeDashboard: React.FC = () => {
 
       {/* SECTION 1 — HERO GREETING CARD */}
       <section className="light-card" style={{
-        margin: '0 16px 12px 16px',
+        margin: '0 16px 8px 16px',
         borderRadius: '28px',
-        padding: '20px 20px 32px 20px',
+        padding: '16px 20px',
         background: 'linear-gradient(135deg, #0C1812 0%, #111F18 60%, #0A1510 100%)',
         border: '1px solid rgba(0,232,122,0.12)',
         boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
@@ -777,413 +758,434 @@ const HomeDashboard: React.FC = () => {
           </span>
         </div>
 
-        <div style={{ fontSize: '22px', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.3, marginBottom: '20px', letterSpacing: '-0.5px' }}>
-          {/* Role-based greeting subtitle */}
-          {isProUser ? (
-            // PRO + ADMIN: show habits pending
-            <span>
-              {pendingHabitsToday > 0 ? (
-                <>
-                  You have{' '}
-                  <span
-                    onClick={() => navigate('/routine')}
-                    style={{
-                      fontWeight: '900',
-                      color: '#00E87A',
-                      textDecoration: 'underline',
-                      textDecorationStyle: 'dotted',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {pendingHabitsToday}{' '}
-                    {pendingHabitsToday === 1
-                      ? 'habit'
-                      : 'habits'
-                    }
-                  </span>
-                  {' '}due today
-                </>
-              ) : (
-                "You're all caught up today 🎉"
-              )}
-            </span>
-          ) : (
-            // BASIC USER: show tasks pending instead
-            <span>
-              {pendingTasks.length > 0 ? (
-                <>
-                  You have{' '}
-                  <span
-                    onClick={() => navigate('/dashboard')}
-                    style={{
-                      fontWeight: '900',
-                      color: '#00E87A',
-                      textDecoration: 'underline',
-                      textDecorationStyle: 'dotted',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {pendingTasks.length}{' '}
-                    {pendingTasks.length === 1
-                      ? 'task'
-                      : 'tasks'
-                    }
-                  </span>
-                  {' '}pending today
-                </>
-              ) : (
-                "You're all caught up today 🎉"
-              )}
-            </span>
-          )}
+        <div style={{ fontSize: '22px', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.3, marginBottom: '10px', letterSpacing: '-0.5px' }}>
+          <span>
+            {pendingHabitsToday > 0 ? (
+              <>
+                You have{' '}
+                <span
+                  onClick={() => navigate('/routine')}
+                  style={{
+                    fontWeight: '900',
+                    color: '#00E87A',
+                    textDecoration: 'underline',
+                    textDecorationStyle: 'dotted',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {pendingHabitsToday}{' '}
+                  {pendingHabitsToday === 1 ? 'habit' : 'habits'}
+                </span>
+                {' '}due today
+              </>
+            ) : (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                You're all caught up today
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0, marginBottom: '-2px' }}>
+                  <circle cx="10" cy="10" r="9" stroke="#00E87A" strokeWidth="1.5" fill="rgba(0,232,122,0.1)" />
+                  <path d="M6 10.5l2.5 2.5 5.5-5.5" stroke="#00E87A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            )}
+          </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: '#EF4444', fontSize: '14px' }}>🎯</span>
-            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>Goals:</span>
-            <span style={{ fontSize: '13px', color: '#FFFFFF', fontWeight: 700 }}>{goals.filter(g => g.status === 'completed').length}/{goals.length}</span>
-          </div>
-          <div style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(255,255,255,0.25)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <HeroFire />
-            <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>Streak</span>
-            <span style={{ fontSize: '13px', color: '#FFFFFF', fontWeight: 700 }}>{currentStreak} Days</span>
-          </div>
-        </div>
       </section>
 
-      {/* SECTION 2 — DAILY PROGRESS CARD (Productivity Score) */}
+      {/* SECTION 2 — PRODUCTIVITY SCORE CARD */}
       <section style={{
-        margin: '0 16px 12px 16px',
+        margin: '0 16px 8px 16px',
         background: 'linear-gradient(135deg, #0D0D0D 0%, #141414 100%)',
         borderRadius: '24px',
-        padding: '20px',
+        padding: '14px 16px',
         position: 'relative',
         overflow: 'hidden',
         boxShadow: '0 8px 32px rgba(0,232,122,0.12), 0 2px 8px rgba(0,0,0,0.6)',
         border: '1px solid rgba(0,232,122,0.18)'
       }}>
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          {/* Top HUD Row */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            marginBottom: '16px',
+        {/* Top row: label + stats icon */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <span style={{
+            fontSize: '13px',
+            fontWeight: '600',
+            color: 'rgba(255,255,255,0.45)',
+            fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
           }}>
-            {/* Left: Score + delta + label */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-              {/* Score row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '2px' }}>
+            Productivity Score
+          </span>
+          <div
+            onClick={() => navigate('/stats')}
+            style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '50%',
+              background: 'rgba(0,232,122,0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid rgba(0,232,122,0.35)',
+              color: '#00E87A',
+              boxShadow: '0 2px 12px rgba(0,232,122,0.15)',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <BarChart2 size={20} strokeWidth={2.5} />
+          </div>
+        </div>
+
+        {/* Circular progress ring — dashed track + gradient arc */}
+        {(() => {
+          const cx = 100, cy = 100, r = 76;
+          const circ = 2 * Math.PI * r; // 477.52
+          const filledAngle = (animatedScore / 100) * 360;
+          const totalTicks = 80;
+          return (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '10px', position: 'relative' }}>
+              <svg width="170" height="170" viewBox="0 0 200 200">
+                <defs>
+                  <linearGradient id="arcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#007A3D" />
+                    <stop offset="40%" stopColor="#00E87A" />
+                    <stop offset="100%" stopColor="#AAFF44" />
+                  </linearGradient>
+                  <filter id="arcGlow" x="-25%" y="-25%" width="150%" height="150%">
+                    <feGaussianBlur stdDeviation="5" result="blur" />
+                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                </defs>
+
+                {/* Dashed tick marks — shown on unfilled portion */}
+                {Array.from({ length: totalTicks }, (_, i) => {
+                  const normalizedDeg = (i / totalTicks) * 360;
+                  const angleDeg = normalizedDeg - 90;
+                  const angleRad = (angleDeg * Math.PI) / 180;
+                  const innerR = r - 10;
+                  const outerR = r + 1;
+                  const x1 = cx + innerR * Math.cos(angleRad);
+                  const y1 = cy + innerR * Math.sin(angleRad);
+                  const x2 = cx + outerR * Math.cos(angleRad);
+                  const y2 = cy + outerR * Math.sin(angleRad);
+                  const inFilled = normalizedDeg <= filledAngle;
+                  return (
+                    <line
+                      key={i}
+                      x1={x1} y1={y1} x2={x2} y2={y2}
+                      stroke={inFilled ? 'transparent' : 'rgba(255,255,255,0.18)'}
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
+
+                {/* Progress arc — thick gradient with glow */}
+                <circle
+                  cx={cx} cy={cy} r={r}
+                  fill="none"
+                  stroke="url(#arcGrad)"
+                  strokeWidth="14"
+                  strokeLinecap="round"
+                  strokeDasharray={circ}
+                  strokeDashoffset={circ * (1 - animatedScore / 100)}
+                  transform={`rotate(-90 ${cx} ${cy})`}
+                  filter="url(#arcGlow)"
+                />
+                {/* Gloss sheen on filled arc */}
+                <circle
+                  cx={cx} cy={cy} r={r}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.15)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray={circ}
+                  strokeDashoffset={circ * (1 - animatedScore / 100)}
+                  transform={`rotate(-90 ${cx} ${cy})`}
+                />
+              </svg>
+
+              {/* Score overlay */}
+              <div style={{
+                position: 'absolute',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}>
+                {/* Lightning bolt icon */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#00E87A">
+                  <path d="M13 2L4.09 12.97H11L10 22L20.91 11H14L13 2Z" />
+                </svg>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1px' }}>
                   <span style={{
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Arial Black", sans-serif',
                     fontWeight: '900',
-                    fontSize: '72px',
-                    color: '#00E87A',
-                    letterSpacing: '-3px',
+                    fontSize: '52px',
+                    color: '#FFFFFF',
+                    letterSpacing: '-2px',
                     lineHeight: '1',
-                    display: 'inline-block',
                   }}>
                     {animatedScore}
                   </span>
                   <span style={{
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Arial Black", sans-serif',
                     fontWeight: '900',
-                    fontSize: '28px',
-                    color: '#00E87A',
+                    fontSize: '20px',
+                    color: 'rgba(255,255,255,0.55)',
                     lineHeight: '1',
-                    marginTop: '10px',
-                    display: 'inline-block',
+                    marginTop: '8px',
                   }}>
                     %
                   </span>
                 </div>
-
-                {/* Delta pill */}
                 {animatedScore > 0 && scoreDelta !== null && (
                   <span style={{
                     background: scoreDelta > 0 ? 'rgba(0,232,122,0.15)' : scoreDelta < 0 ? 'rgba(255,59,48,0.15)' : 'rgba(255,255,255,0.1)',
-                    color: scoreDelta > 0 ? '#00E87A' : scoreDelta < 0 ? '#FF3B30' : 'rgba(255,255,255,0.6)',
-                    padding: '5px 10px',
+                    color: scoreDelta > 0 ? '#00E87A' : scoreDelta < 0 ? '#FF3B30' : 'rgba(255,255,255,0.55)',
+                    padding: '4px 10px',
                     borderRadius: '10px',
-                    fontSize: '12px',
+                    fontSize: '11px',
                     fontWeight: '700',
                     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                    letterSpacing: '0.02em',
                     border: '1px solid rgba(255,255,255,0.08)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
                   }}>
-                    {scoreDelta > 0 ? `+${scoreDelta}%` : `${scoreDelta}%`}
+                    {scoreDelta > 0 ? `+${scoreDelta}%` : `${scoreDelta}%`} today
                   </span>
                 )}
               </div>
-
-              {/* Label */}
-              <span style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: 'rgba(255,255,255,0.45)',
-                fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                marginTop: '4px',
-              }}>
-                Productivity Score
-              </span>
             </div>
+          );
+        })()}
 
-            {/* Right: Chart icon */}
-            <div
-              onClick={() => navigate('/stats')}
-              style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: 'rgba(0,232,122,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid rgba(0,232,122,0.35)',
-                color: '#00E87A',
-                boxShadow: '0 2px 12px rgba(0,232,122,0.15)',
-                flexShrink: 0,
-                cursor: 'pointer'
-              }}
-            >
-              <BarChart2 size={22} strokeWidth={2.5} />
-            </div>
-          </div>
+        {/* Stat cards row — Option A style */}
+        {(() => {
+          const goalsTotal = goals.length;
+          const goalsPct = goalsTotal > 0 ? Math.round((completedGoalsCount / goalsTotal) * 100) : 0;
+          const tasksTotal = completedTasksTotal + pendingTasks.length;
+          const tasksPct = tasksTotal > 0 ? Math.round((completedTasksTotal / tasksTotal) * 100) : 0;
 
-          {/* Navigation controls (arrows + dots) */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            marginBottom: '12px'
-          }}>
-            {/* Left Arrow */}
-            <button
-              onClick={() => setActiveSection(prev => (prev === 0 ? 2 : prev - 1))}
-              style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                color: 'rgba(255,255,255,0.7)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-            </button>
+          const MiniRing = ({ pct, color }: { pct: number; color: string }) => {
+            const r = 16, c = 20, circ = 2 * Math.PI * r;
+            return (
+              <svg width="40" height="40" viewBox="0 0 40 40" style={{ flexShrink: 0 }}>
+                <circle cx={c} cy={c} r={r} fill="none" stroke="rgba(0,0,0,0.15)" strokeWidth="4" />
+                <circle
+                  cx={c} cy={c} r={r}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={circ}
+                  strokeDashoffset={circ * (1 - pct / 100)}
+                  transform={`rotate(-90 ${c} ${c})`}
+                />
+                <text x={c} y={c + 3.5} textAnchor="middle" fontSize="7" fontWeight="800" fill={color} fontFamily="-apple-system, sans-serif">
+                  {pct}%
+                </text>
+              </svg>
+            );
+          };
 
-            {/* Dots */}
-            {[0, 1, 2].map(idx => (
+          return (
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {/* Goals card */}
               <div
-                key={idx}
+                onClick={() => navigate('/goals')}
                 style={{
-                  width: activeSection === idx ? '6px' : '5px',
-                  height: activeSection === idx ? '6px' : '5px',
-                  borderRadius: '50%',
-                  background: activeSection === idx ? '#00E87A' : 'rgba(255,255,255,0.2)',
-                  transition: 'all 0.2s'
+                  flex: 1,
+                  background: 'linear-gradient(135deg, rgba(0,232,122,0.18) 0%, rgba(0,180,80,0.12) 100%)',
+                  borderRadius: '16px',
+                  padding: '14px',
+                  border: '1px solid rgba(0,232,122,0.25)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  position: 'relative',
+                  overflow: 'hidden',
                 }}
-              />
-            ))}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: '800', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', lineHeight: 1.2 }}>
+                      {activeGoalsCount === 0 ? 'Add Goal' : 'Goals'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', marginTop: '4px', fontWeight: 500 }}>
+                      {activeGoalsCount === 0 ? 'No goals yet' : `${activeGoalsCount} active`}
+                    </div>
+                  </div>
+                  <MiniRing pct={goalsPct} color="#00E87A" />
+                </div>
+              </div>
 
-            {/* Right Arrow */}
-            <button
-              onClick={() => setActiveSection(prev => (prev === 2 ? 0 : prev + 1))}
-              style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: '50%',
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                color: 'rgba(255,255,255,0.7)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
-            </button>
-          </div>
-
-          {/* Sub-cards Row */}
-          <div style={{ display: 'flex', gap: '10px' }}>
-            {activeSection === 0 && (
-              <>
-                {/* TO DO (Tasks) */}
-                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>To Do</div>
-                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{pendingTasks.length}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>tasks pending</div>
+              {/* Tasks card */}
+              <div
+                onClick={() => navigate('/dashboard')}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, rgba(196,255,60,0.18) 0%, rgba(150,220,0,0.10) 100%)',
+                  borderRadius: '16px',
+                  padding: '14px',
+                  border: '1px solid rgba(196,255,60,0.25)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: '800', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', lineHeight: 1.2 }}>
+                      {pendingTasks.length === 0 ? 'Add Task' : 'Tasks'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', marginTop: '4px', fontWeight: 500 }}>
+                      {pendingTasks.length === 0 ? 'All clear!' : `${pendingTasks.length} tasks`}
+                    </div>
+                  </div>
+                  <MiniRing pct={tasksPct} color="#C4FF3C" />
                 </div>
-                {/* DONE (Tasks) */}
-                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Done</div>
-                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{completedTasksTotal}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>completed today</div>
-                </div>
-              </>
-            )}
-
-            {activeSection === 1 && (
-              <>
-                {/* ACTIVE (Goals) */}
-                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Active</div>
-                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{activeGoalsCount}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>goals in progress</div>
-                </div>
-                {/* DONE (Goals) */}
-                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Done</div>
-                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{completedGoalsCount}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>achieved 🏆</div>
-                </div>
-              </>
-            )}
-
-            {activeSection === 2 && (
-              <>
-                {/* TODAY (Habits) */}
-                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Today</div>
-                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{completedHabitsTodayFresh}/{totalHabitsTodayFresh}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>habits done</div>
-                </div>
-                {/* BEST STREAK (Habits) */}
-                <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '16px', padding: '14px', flex: 1, border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div style={{ fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>Best Streak</div>
-                  <div style={{ fontSize: '32px', fontWeight: '900', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif', lineHeight: 1 }}>{bestStreakDays}</div>
-                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)', marginTop: '4px' }}>days record</div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+              </div>
+            </div>
+          );
+        })()}
       </section>
 
-      {/* SECTION 3 — SMOOTH LINE CHART activity-card */}
+      {/* SECTION 3 — HABIT ACTIVITY BAR CHART */}
       {(() => {
-        const habitsData = getLast7DaysHabits();
-        const width = 300;
-        const height = 80;
-        const padding = 10;
+        const habitsData = getHabitsData(habitRange);
         const maxVal = Math.max(1, ...habitsData.map(d => d.count));
-
-        const points = habitsData.map((d, i) => ({
-          x: padding + (i / (habitsData.length - 1)) * (width - padding * 2),
-          y: height - padding - (d.count / maxVal) * (height - padding * 2),
-          day: d.day,
-          count: d.count,
-          isToday: i === habitsData.length - 1
-        }));
-
-        const pathD = points.reduce((acc, point, i) => {
-          if (i === 0) return `M ${point.x} ${point.y}`;
-          const prev = points[i - 1];
-          const cpX = (prev.x + point.x) / 2;
-          return acc + ` C ${cpX} ${prev.y} ${cpX} ${point.y} ${point.x} ${point.y}`;
-        }, '');
-
-        const areaPath = pathD + ` L ${points[points.length - 1]?.x} ${height} L ${points[0]?.x} ${height} Z`;
+        const svgW = 300, svgH = 120;
+        const maxBarH = 82, topPad = 12, labelH = 14;
+        const barW = habitRange === 7 ? 28 : 6;
+        const gap = habitRange === 7 ? 10 : 3;
+        const totalBarsW = habitsData.length * barW + (habitsData.length - 1) * gap;
+        const startX = (svgW - totalBarsW) / 2;
 
         return (
           <div style={{ position: 'relative' }}>
-            {/* Card Content */}
-            <div style={{
-              filter: !isProUser ? 'blur(6px)' : 'none',
-              pointerEvents: !isProUser ? 'none' : 'auto',
-              userSelect: !isProUser ? 'none' : 'auto',
-              transition: 'filter 0.3s ease'
-            }}>
+            <div>
               <section style={{
                 margin: '0 16px 10px 16px',
                 borderRadius: '24px',
-                padding: '20px',
-                background: 'linear-gradient(135deg, #1a3ae0 0%, #2563eb 100%)',
+                padding: '16px 16px 14px 16px',
+                background: 'linear-gradient(135deg, #0f1f3d 0%, #1a3ae0 60%, #2563eb 100%)',
                 position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
-                  <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>Habit Activity</span>
-                </div>
-
-                <div style={{ position: 'relative', marginTop: '8px' }}>
-                  <p style={{ fontSize: '20px', fontWeight: '900', color: '#FFFFFF', marginBottom: '12px', letterSpacing: '-0.5px' }}>
-                    {habitsData.reduce((s, d) => s + d.count, 0)} Done
-                  </p>
-
-                  <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '70px' }} preserveAspectRatio="none">
-                    {points.map((p, i) => (
-                      <line key={i} x1={p.x} y1={0} x2={p.x} y2={height} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-                    ))}
-                    <path d={areaPath} fill="rgba(255,255,255,0.08)" />
-                    <path d={pathD} fill="none" stroke="#86EFAC" strokeWidth="2.5" strokeLinecap="round" />
-                    {points[points.length - 1] && (
-                      <rect x={points[points.length - 1].x - 14} y={0} width={28} height={height} rx={8} fill="rgba(134,239,172,0.2)" />
-                    )}
-                    {points.map((p, i) => (
-                      <circle key={i} cx={p.x} cy={p.y} r={p.isToday ? 5 : 3} fill={p.isToday ? '#FFFFFF' : 'rgba(255,255,255,0.4)'} />
-                    ))}
-                    {points[points.length - 1] && (
-                      <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={2.5} fill="#1a3ae0" />
-                    )}
-                  </svg>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
-                    {habitsData.map((d, i) => (
-                      <span key={i} style={{ fontSize: '10px', color: i === habitsData.length - 1 ? '#FFFFFF' : 'rgba(255,255,255,0.4)', fontWeight: i === habitsData.length - 1 ? '700' : '500', flex: 1, textAlign: 'center' }}>
-                        {d.day}
+                overflow: 'hidden',
+                cursor: 'pointer',
+              }}
+                onClick={() => navigate('/routine')}
+              >
+                {/* Header row: title left, toggle right */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  {/* Left: title + streak below */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'rgba(255,255,255,0.6)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>Habit Activity</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '13px' }}>
+                      <HeroFire />
+                      <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', fontWeight: 700 }}>
+                        {currentStreak} {currentStreak === 1 ? 'Day' : 'Days'} Streak
                       </span>
+                    </div>
+                  </div>
+                  {/* Right: 7D / 30D toggle */}
+                  <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexShrink: 0 }}>
+                    {([7, 30] as const).map(r => (
+                      <button
+                        key={r}
+                        onClick={e => { e.stopPropagation(); setHabitRange(r); }}
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: r === 7 ? '10px 0 0 10px' : '0 10px 10px 0',
+                          fontSize: '9px',
+                          fontWeight: '700',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: habitRange === r ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.1)',
+                          color: habitRange === r ? '#1a3ae0' : 'rgba(255,255,255,0.5)',
+                          transition: 'all 0.2s',
+                          letterSpacing: '0.03em',
+                        }}
+                      >
+                        {r}D
+                      </button>
                     ))}
                   </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
-                    {/* Weekly date range removed for cleaner look */}
-                  </div>
                 </div>
+
+                {/* Bar chart */}
+                <svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width: '100%', height: '120px' }} preserveAspectRatio="xMidYMid meet">
+                  <defs>
+                    <linearGradient id="barGrad" x1="0" y1="1" x2="0" y2="0">
+                      <stop offset="0%" stopColor="#007A3D" />
+                      <stop offset="100%" stopColor="#00E87A" />
+                    </linearGradient>
+                    <linearGradient id="barGradToday" x1="0" y1="1" x2="0" y2="0">
+                      <stop offset="0%" stopColor="#00C86A" />
+                      <stop offset="100%" stopColor="#AAFF44" />
+                    </linearGradient>
+                    <filter id="todayGlow" x="-40%" y="-20%" width="180%" height="160%">
+                      <feGaussianBlur stdDeviation="4" result="blur" />
+                      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                    </filter>
+                  </defs>
+
+                  {habitsData.map((d, i) => {
+                    const isToday = i === habitsData.length - 1;
+                    const barH = d.count > 0 ? Math.max(4, (d.count / maxVal) * maxBarH) : 3;
+                    const x = startX + i * (barW + gap);
+                    const y = topPad + (maxBarH - barH);
+                    const rx = barW < 8 ? 2 : Math.min(barW / 2, 7);
+                    const showLabel = habitRange === 7 || i === 0 || (i + 1) % 5 === 0 || isToday;
+
+                    return (
+                      <g key={i}>
+                        {/* Today background glow */}
+                        {isToday && d.count > 0 && (
+                          <rect x={x - 2} y={y - 2} width={barW + 4} height={barH + 4} rx={rx + 2}
+                            fill="rgba(170,255,68,0.25)" filter="url(#todayGlow)" />
+                        )}
+                        {/* Bar */}
+                        <rect
+                          x={x} y={y} width={barW} height={barH} rx={rx}
+                          fill={isToday ? 'url(#barGradToday)' : d.count > 0 ? 'url(#barGrad)' : 'rgba(255,255,255,0.1)'}
+                        />
+                        {/* Count above bar (7D only, non-zero) */}
+                        {habitRange === 7 && d.count > 0 && (
+                          <text x={x + barW / 2} y={y - 3} textAnchor="middle"
+                            fontSize="8" fontWeight="700"
+                            fill={isToday ? '#AAFF44' : 'rgba(255,255,255,0.7)'}
+                            fontFamily="-apple-system, sans-serif">
+                            {d.count}
+                          </text>
+                        )}
+                        {/* Day label below */}
+                        {showLabel && (
+                          <text
+                            x={x + barW / 2}
+                            y={topPad + maxBarH + labelH}
+                            textAnchor="middle"
+                            fontSize={habitRange === 7 ? '9' : '7'}
+                            fontWeight={isToday ? '700' : '500'}
+                            fill={isToday ? '#FFFFFF' : 'rgba(255,255,255,0.4)'}
+                            fontFamily="-apple-system, sans-serif"
+                          >
+                            {d.label}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
               </section>
             </div>
 
-            {/* Premium Overlay for non-pro */}
-            {!isProUser && (
-              <div style={{
-                position: 'absolute',
-                inset: '0 16px 10px 16px',
-                borderRadius: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '10px',
-                background: 'rgba(8,12,10,0.5)',
-                backdropFilter: 'blur(2px)'
-              }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                </div>
-                <p style={{ fontSize: '13px', fontWeight: '700', color: '#FFFFFF', margin: 0, textAlign: 'center' }}>💀 Blind spots kill progress</p>
-                <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', margin: 0, textAlign: 'center', padding: '0 20px' }}>Go Pro. See everything.</p>
-                <div onClick={() => navigate('/paywall')} style={{ background: '#00E87A', color: '#000', fontSize: '11px', fontWeight: '800', padding: '7px 18px', borderRadius: '20px', cursor: 'pointer', letterSpacing: '0.06em' }}>
-                  UPGRADE →
-                </div>
-              </div>
-            )}
           </div>
         );
       })()}

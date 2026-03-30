@@ -13,7 +13,7 @@ const ENTITLEMENT_ID = 'StayHardy Pro';
 interface SubscriptionContextType {
   isPro: boolean;
   customerInfo: CustomerInfo | null;
-  offerings: { monthly: PurchasesPackage | null, yearly: PurchasesPackage | null } | null;
+  offerings: { monthly: PurchasesPackage | null, yearly: PurchasesPackage | null, lifetime: PurchasesPackage | null } | null;
   loading: boolean;
   refreshSubscription: () => Promise<void>;
   purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
@@ -36,7 +36,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
   });
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
-  const [offerings, setOfferings] = useState<{ monthly: PurchasesPackage | null, yearly: PurchasesPackage | null } | null>(null);
+  const [offerings, setOfferings] = useState<{ monthly: PurchasesPackage | null, yearly: PurchasesPackage | null, lifetime: PurchasesPackage | null } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Sync all role cache keys immediately
@@ -87,17 +87,33 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
     const active = !!info.entitlements.active[ENTITLEMENT_ID];
 
     if (active) {
+      const entitlement = info.entitlements.active[ENTITLEMENT_ID];
+      const productId = entitlement?.productIdentifier ?? '';
+      const expiresAt = entitlement?.expirationDate ?? null;
+
+      // Detect plan from product identifier
+      const plan = productId.toLowerCase().includes('lifetime')
+        ? 'lifetime'
+        : productId.toLowerCase().includes('year') || productId.toLowerCase().includes('annual')
+        ? 'yearly'
+        : 'monthly';
+
+      const status = plan === 'lifetime' ? 'lifetime' : 'active';
+
       const { error } = await supabase
         .from('users')
         .update({
           is_pro: true,
           pro_purchase_date: new Date().toISOString(),
+          subscription_plan: plan,
+          pro_expires_at: expiresAt,
+          subscription_status: status,
         })
         .eq('id', user.id);
       if (error) {
         console.error('[SubscriptionContext] Failed to sync is_pro=true to Supabase:', error);
       } else {
-        console.log('[SubscriptionContext] is_pro=true + pro_purchase_date written to Supabase successfully');
+        console.log(`[SubscriptionContext] is_pro=true plan=${plan} expires=${expiresAt} written to Supabase`);
       }
       void syncRoleCache(true);
     } else {
@@ -105,6 +121,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
         .from('users')
         .update({
           is_pro: false,
+          subscription_status: 'expired',
         })
         .eq('id', user.id);
       if (error) {
@@ -125,17 +142,20 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       return;
     }
 
-    // FIX: Check RC entitlement status
     const rcActive = !!info.entitlements.active[ENTITLEMENT_ID];
-    // FIX: Pro if EITHER RC entitlement is active OR DB is_pro is true
-    const isProFinal = rcActive || dbIsPro;
+    // Check if this user ever had an RC subscription (active or expired)
+    const rcEverSubscribed = !!info.entitlements.all[ENTITLEMENT_ID];
+
+    // If RC has a subscription record: RC is authoritative (handles expiry correctly)
+    // If RC has NO record at all: user may be manually admin-granted — respect DB value
+    const isProFinal = rcActive || (!rcEverSubscribed && dbIsPro);
 
     setIsPro(isProFinal);
     void syncRoleCache(isProFinal);
     setCustomerInfo(info);
 
-    // FIX: Only sync to Supabase when RC says active (don't overwrite manual DB grants)
-    if (rcActive) {
+    // Only sync DB when RC has a subscription record — don't overwrite manual admin grants
+    if (rcEverSubscribed) {
       syncToSupabase(info).catch(() => { });
     }
   }, [syncToSupabase, user?.isPro]);
@@ -154,7 +174,8 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       if (offering) {
         setOfferings({
           monthly: offering.monthly || null,
-          yearly: offering.annual || null
+          yearly: offering.annual || null,
+          lifetime: offering.lifetime || null,
         });
       }
     } catch (e) {
@@ -252,9 +273,14 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const saveRcPaymentToSupabase = useCallback(async (productIdentifier: string, priceInr: number) => {
     if (!user?.id || priceInr <= 0) return;
+    const pid = productIdentifier.toLowerCase();
+    const plan = pid.includes('lifetime') ? 'lifetime'
+      : pid.includes('year') || pid.includes('annual') ? 'yearly'
+      : 'monthly';
     const { error } = await supabase.from('users').update({
       payment_amount: Math.round(priceInr),
       payment_id: `rc_${productIdentifier}`,
+      subscription_plan: plan,
     }).eq('id', user.id);
     if (error) console.error('[SubscriptionContext] Failed to save RC payment amount:', error);
   }, [user?.id]);
@@ -289,9 +315,11 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
         const activeSubs = (info.activeSubscriptions ?? []) as string[];
         const monthlyPkg = offerings?.monthly;
         const yearlyPkg = offerings?.yearly;
+        const lifetimePkg = offerings?.lifetime;
         const matchedPkg =
           (monthlyPkg && activeSubs.includes(monthlyPkg.product.identifier) ? monthlyPkg : null) ??
-          (yearlyPkg && activeSubs.includes(yearlyPkg.product.identifier) ? yearlyPkg : null);
+          (yearlyPkg && activeSubs.includes(yearlyPkg.product.identifier) ? yearlyPkg : null) ??
+          (lifetimePkg && activeSubs.includes(lifetimePkg.product.identifier) ? lifetimePkg : null);
         if (matchedPkg && matchedPkg.product.price > 0) {
           void saveRcPaymentToSupabase(matchedPkg.product.identifier, matchedPkg.product.price);
         }

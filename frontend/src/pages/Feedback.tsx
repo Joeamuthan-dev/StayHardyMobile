@@ -335,9 +335,7 @@ const Feedback: React.FC = () => {
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        background: 'rgba(0,0,0,0.85)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        background: 'transparent',
         borderBottom: '1px solid rgba(255,255,255,0.05)',
       }}>
         <button
@@ -823,7 +821,7 @@ const Feedback: React.FC = () => {
       <style>{`
         .fb-page {
           min-height: 100dvh;
-          background: #080c0a;
+          background: #0D1410;
           color: #fff;
           font-family: 'DM Sans', system-ui, sans-serif;
           padding: 20px 24px calc(120px + env(safe-area-inset-bottom, 0));

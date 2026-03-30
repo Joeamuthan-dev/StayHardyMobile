@@ -20,6 +20,8 @@ export interface AuthUser {
   proPurchaseDate?: string | null;
   paymentId?: string | null;
   paymentAmount?: number | null;
+  currentStreak?: number;
+  bestStreak?: number;
 }
 
 interface AuthContextType {
@@ -98,10 +100,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const { data: dbData, error } = await supabase
       .from('users')
-      .select('name, role, avatar_url, is_pro, pro_purchase_date, payment_id, payment_amount')
+      .select('name, role, avatar_url, is_pro, pro_purchase_date, payment_id, payment_amount, current_streak, best_streak')
       .eq('id', targetId)
       .single();
-      
+
     if (error || !dbData) return false;
     const isPro = Boolean((dbData as any).is_pro);
     setUser((prev) => {
@@ -116,6 +118,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         proPurchaseDate: (dbData as any).pro_purchase_date ?? null,
         paymentId: (dbData as any).payment_id ?? null,
         paymentAmount: (dbData as any).payment_amount ?? null,
+        currentStreak: (dbData as any).current_streak ?? 0,
+        bestStreak: (dbData as any).best_streak ?? 0,
       };
       void saveUserProfileCache(merged);
       return merged;
@@ -152,7 +156,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const { data: dbData } = await supabase
         .from('users')
-        .select('name, role, avatar_url, is_pro, pro_purchase_date, payment_id, payment_amount')
+        .select('name, role, avatar_url, is_pro, pro_purchase_date, payment_id, payment_amount, current_streak, best_streak')
         .eq('id', session.user.id)
         .single();
 
@@ -168,6 +172,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           proPurchaseDate: (dbData as any).pro_purchase_date ?? null,
           paymentId: (dbData as any).payment_id ?? null,
           paymentAmount: (dbData as any).payment_amount ?? null,
+          currentStreak: (dbData as any).current_streak ?? 0,
+          bestStreak: (dbData as any).best_streak ?? 0,
         };
         persistUser(merged);
         void saveUserProfileCache(merged);

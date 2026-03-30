@@ -8,11 +8,9 @@ import { isCacheExpired } from '../lib/cacheManager';
 import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
 import { loadStatsPageStale, persistStatsPageCache } from '../lib/statsPageCache';
 import { ProductivityService, type ProductivityScoreData } from '../lib/ProductivityService';
-import { calculateProductivityScore, getScoreLabels } from '../utils/productivity';
+import { getScoreLabels } from '../utils/productivity';
 
 import { useLoading } from '../context/LoadingContext';
-import { useSubscription } from '../context/SubscriptionContext';
-import ProBlurGate from '../components/ProBlurGate';
 
 interface Task {
   id: string;
@@ -60,12 +58,10 @@ const HabitHeatmap = ({
   heatmapData,
   activeRange,
   setActiveRange,
-  statsData
 }: {
   heatmapData: number[];
   activeRange: string;
   setActiveRange: (r: '30D' | '90D' | '1Y') => void;
-  statsData: { activeDays: number; bestStreak: number; completionRate: number };
 }) => {
   const getCellColor = (val: number) => {
     if (val >= 4) return '#00E87A';
@@ -114,20 +110,6 @@ const HabitHeatmap = ({
           ))}
           <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}>More</span>
         </div>
-      </div>
-      {/* Data pill scoreboard */}
-      <div style={{ background: 'rgba(255,255,255,0.03)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,232,122,0.15)', borderRadius: '16px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', animation: 'pillGlow 3s ease-in-out infinite' }}>
-        {[
-          { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>, label: 'ACTIVE DAYS', value: statsData.activeDays },
-          { icon: <span style={{ fontSize: '12px', display: 'inline-block', animation: 'flamePulse 1.2s ease-in-out infinite' }}>🔥</span>, label: 'BEST STREAK', value: statsData.bestStreak },
-          { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>, label: 'COMPLETION', value: `${statsData.completionRate}%` }
-        ].map((stat, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1, borderRight: i < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none', padding: '0 8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>{stat.icon}</div>
-            <span style={{ fontSize: '18px', fontWeight: 900, color: '#FFFFFF', fontFamily: 'monospace', letterSpacing: '-0.5px', animation: 'statCountUp 0.5s ease' }}>{stat.value}</span>
-            <span style={{ fontSize: '8px', fontWeight: 700, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.1em' }}>{stat.label}</span>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -286,95 +268,30 @@ const InsightCard = ({ type, data }: {
 
 
 
-// --- AEROSPACE TELEMETRY COMPONENTS ---
-
-const ScoreGauge = ({ score }: { score: number }) => {
-  const [displayed, setDisplayed] = useState(0);
-
-  useEffect(() => {
-    let start = 0;
-    const end = score;
-    const duration = 1500;
-    const step = duration / (end - start || 1);
-    const timer = setInterval(() => {
-      start += 1;
-      setDisplayed(start);
-      if (start >= end) {
-        clearInterval(timer);
-      }
-    }, step);
-    return () => clearInterval(timer);
-  }, [score]);
-
-  const radius = 80;
-  const circumference = Math.PI * radius;
-  const progress = score / 100;
-  const dashOffset = circumference * (1 - progress);
-  // Arc goes from left (angle=π) to right (angle=0) as score increases
-  const angle = Math.PI * (1 - progress);
-  const laserX = 100 + radius * Math.cos(Math.PI - angle);
-  const laserY = 90 - radius * Math.sin(angle);
-
-  const getBadgeTooltip = (s: number) => {
-    if (s >= 90) return { label: 'PERFECT', color: '#FFD700' };
-    if (s >= 75) return { label: 'ELITE', color: '#00E87A' };
-    if (s >= 60) return { label: 'RISING', color: '#06B6D4' };
-    if (s >= 40) return { label: 'BUILDING', color: '#F59E0B' };
-    if (s >= 20) return { label: 'STARTING', color: '#F97316' };
-    return { label: 'GHOST MODE', color: '#6B7280' };
+const VerdictCard = ({ score, totalItems }: { score: number; totalItems: number }) => {
+  const getVerdict = (s: number) => {
+    if (s >= 90) return { icon: '🏆', color: '#FFD700', glow: 'rgba(255,215,0,0.3)' };
+    if (s >= 75) return { icon: '⚡', color: '#00E87A', glow: 'rgba(0,232,122,0.3)' };
+    if (s >= 60) return { icon: '🚀', color: '#06B6D4', glow: 'rgba(6,182,212,0.3)' };
+    if (s >= 40) return { icon: '💪', color: '#F59E0B', glow: 'rgba(245,158,11,0.3)' };
+    if (s >= 20) return { icon: '🔥', color: '#F97316', glow: 'rgba(249,115,22,0.3)' };
+    return { icon: '👻', color: '#6B7280', glow: 'rgba(107,114,128,0.2)' };
   };
-
-  const badge = getBadgeTooltip(score);
-
+  const v = getVerdict(score);
+  const labels = useMemo(() => getScoreLabels(score, totalItems), [score, totalItems]);
   return (
-    <div style={{ ...cardStyle, padding: '24px 20px', border: '0.5px solid rgba(0,232,122,0.3)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <div>
-          <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>
-            PRODUCTIVITY SCORE
-          </p>
+    <div style={{ ...cardStyle, padding: '20px', border: `0.5px solid ${v.color}40`, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: '-40px', left: '50%', transform: 'translateX(-50%)', width: '200px', height: '200px', background: `radial-gradient(circle, ${v.glow} 0%, transparent 70%)`, pointerEvents: 'none' }} />
+      <div style={{ padding: '20px', position: 'relative', zIndex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+          <div style={{ fontSize: '28px', filter: `drop-shadow(0 0 12px ${v.glow})` }}>{v.icon}</div>
+          <div>
+            <p style={{ fontSize: '9px', fontWeight: 800, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: '0 0 2px 0' }}>THE VERDICT</p>
+            <p style={{ fontSize: '14px', fontWeight: 900, color: v.color, margin: 0, letterSpacing: '0.04em', fontFamily: 'monospace' }}>{labels.label}</p>
+          </div>
         </div>
-        <div style={{
-          background: `rgba(${badge.color.match(/.{2}/g)?.map(h => parseInt(h, 16)).join(',')},0.12)`,
-          border: `1px solid ${badge.color}40`,
-          borderRadius: '10px',
-          padding: '4px 10px',
-          fontSize: '9px',
-          fontWeight: '900',
-          color: badge.color,
-          letterSpacing: '0.1em'
-        }}>
-          {badge.label}
-        </div>
-      </div>
-      <div style={{
-        background: 'linear-gradient(145deg, #050a07, #0a1408)',
-        borderRadius: '16px',
-        padding: '20px 16px 8px 16px',
-        boxShadow: 'inset 4px 4px 16px rgba(0,0,0,0.8), inset -2px -2px 8px rgba(255,255,255,0.02)'
-      }}>
-        <svg viewBox="0 0 200 110" style={{ width: '100%', overflow: 'visible' }}>
-          <defs>
-            <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#00E87A" />
-              <stop offset="100%" stopColor="#00BCD4" />
-            </linearGradient>
-            <filter id="gaugeGlow">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-          </defs>
-          <path d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" strokeLinecap="round" strokeDasharray="4 6" />
-          <path d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="rgba(0,232,122,0.04)" strokeWidth="12" strokeLinecap="round" />
-          <path d="M 20 90 A 80 80 0 0 1 180 90" fill="none" stroke="url(#gaugeGrad)" strokeWidth="8" strokeLinecap="round" strokeDasharray={String(circumference)} strokeDashoffset={dashOffset} filter="url(#gaugeGlow)" style={{ transition: 'stroke-dashoffset 1.5s cubic-bezier(0.34, 0, 0.64, 1)' }} />
-          <circle cx={laserX} cy={laserY} r="5" fill="#00E87A" style={{ animation: 'laserPulse 1.5s ease-in-out infinite', filter: 'drop-shadow(0 0 8px rgba(0,232,122,1))' }} />
-          <circle cx={laserX} cy={laserY} r="2" fill="#FFFFFF" />
-          <text x="100" y="75" textAnchor="middle" style={{ fontSize: '36px', fontWeight: '900', fill: '#FFFFFF', fontFamily: 'monospace', animation: 'countUp 0.5s ease' }}>{displayed}</text>
-
-          <text x="16" y="106" style={{ fontSize: '9px', fill: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>0</text>
-          <text x="172" y="106" style={{ fontSize: '9px', fill: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>100</text>
-        </svg>
-        <p style={{ textAlign: 'center', fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: '0 0 4px 0', letterSpacing: '0.02em', fontWeight: '500' }}>Focus on the next 1%</p>
+        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', marginBottom: '14px' }} />
+        <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', margin: 0, lineHeight: 1.7, fontWeight: 400 }}>{labels.verdict}</p>
       </div>
     </div>
   );
@@ -453,46 +370,89 @@ const InsightsTrend = ({ data, activeRange, setActiveRange }: { data: { tasks: n
   );
 };
 
-const VerdictCard = ({ score, totalItems }: { score: number, totalItems: number }) => {
-  const getVerdict = (s: number) => {
-    if (s >= 90) return { icon: '🏆', title: 'PERFECT EXECUTION', color: '#FFD700', glow: 'rgba(255,215,0,0.3)' };
-    if (s >= 75) return { icon: '⚡', title: 'ELITE PERFORMER', color: '#00E87A', glow: 'rgba(0,232,122,0.3)' };
-    if (s >= 60) return { icon: '🚀', title: 'RISING FAST', color: '#06B6D4', glow: 'rgba(6,182,212,0.3)' };
-    if (s >= 40) return { icon: '💪', title: 'BUILDING MOMENTUM', color: '#F59E0B', glow: 'rgba(245,158,11,0.3)' };
-    if (s >= 20) return { icon: '🔥', title: 'GETTING STARTED', color: '#F97316', glow: 'rgba(249,115,22,0.3)' };
-    return { icon: '👻', title: 'GHOST MODE', color: '#6B7280', glow: 'rgba(107,114,128,0.2)' };
-  };
-  const v = getVerdict(score);
-  const labels = useMemo(() => getScoreLabels(score, totalItems), [score, totalItems]);
-  return (
-    <div style={{ 
-      ...cardStyle, 
-      padding: '20px', 
-      border: `0.5px solid ${v.color}40`,
-      animation: 'verdictGlow 3s ease-in-out infinite', 
-      position: 'relative',
-      overflow: 'hidden'
-    }}>
-      <div style={{ position: 'absolute', top: '-40px', left: '50%', transform: 'translateX(-50%)', width: '200px', height: '200px', background: `radial-gradient(circle, ${v.glow} 0%, transparent 70%)`, pointerEvents: 'none', animation: 'godRay 3s ease-in-out infinite' }} />
-      <div style={{ padding: '20px', position: 'relative', zIndex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-          <div style={{ position: 'relative', fontSize: '28px', filter: `drop-shadow(0 0 12px ${v.glow})` }}>{v.icon}</div>
-          <div>
-            <p style={{ fontSize: '9px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: '0 0 2px 0' }}>THE VERDICT</p>
-            <p style={{ fontSize: '14px', fontWeight: '900', color: v.color, margin: 0, letterSpacing: '0.04em', fontFamily: 'monospace' }}>{labels.label}</p>
-          </div>
-        </div>
-        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', marginBottom: '14px' }} />
-        <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', margin: 0, lineHeight: 1.7, fontWeight: '400' }}>{labels.verdict}</p>
 
+
+// ─── STREAK MILESTONE CARD ───────────────────────────────────────────────────
+const StreakMilestoneCard = ({ currentStreak, bestStreak }: { currentStreak: number; bestStreak: number }) => {
+  const getStreakLabel = (s: number) => {
+    if (s >= 100) return { label: 'LEGENDARY', color: '#FFD700' };
+    if (s >= 60)  return { label: 'UNSTOPPABLE', color: '#00E87A' };
+    if (s >= 30)  return { label: 'ON FIRE', color: '#F97316' };
+    if (s >= 14)  return { label: 'MOMENTUM', color: '#06B6D4' };
+    if (s >= 7)   return { label: 'BUILDING', color: '#A855F7' };
+    if (s >= 1)   return { label: 'STARTED', color: '#6B7280' };
+    return { label: 'START TODAY', color: '#6B7280' };
+  };
+  const badge = getStreakLabel(currentStreak);
+  const isPB = currentStreak > 0 && currentStreak >= bestStreak;
+  return (
+    <div style={{ margin: '0 16px 12px 16px', background: '#0A0F0D', border: '1px solid rgba(0,232,122,0.18)', borderRadius: '20px', padding: '18px', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+        <p style={{ fontSize: '10px', fontWeight: 800, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>STREAK</p>
+        <div style={{ background: `${badge.color}18`, border: `1px solid ${badge.color}40`, borderRadius: '10px', padding: '3px 10px', fontSize: '9px', fontWeight: 900, color: badge.color, letterSpacing: '0.1em' }}>
+          {badge.label}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ flex: 1, background: 'linear-gradient(145deg,#050a07,#080f0a)', borderRadius: '16px', padding: '16px', boxShadow: 'inset 2px 2px 8px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', border: '1px solid rgba(0,232,122,0.1)' }}>
+          <span style={{ fontSize: '13px', animation: 'flamePulse 1.2s ease-in-out infinite' }}>🔥</span>
+          <span style={{ fontSize: '36px', fontWeight: 900, color: '#FFFFFF', fontFamily: 'monospace', lineHeight: 1 }}>{currentStreak}</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em' }}>CURRENT</span>
+          {isPB && <span style={{ fontSize: '8px', fontWeight: 800, color: '#00E87A', letterSpacing: '0.08em', background: 'rgba(0,232,122,0.1)', borderRadius: '6px', padding: '2px 6px' }}>PERSONAL BEST</span>}
+        </div>
+        <div style={{ flex: 1, background: 'linear-gradient(145deg,#050a07,#080f0a)', borderRadius: '16px', padding: '16px', boxShadow: 'inset 2px 2px 8px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <span style={{ fontSize: '13px' }}>🏆</span>
+          <span style={{ fontSize: '36px', fontWeight: 900, color: 'rgba(255,255,255,0.55)', fontFamily: 'monospace', lineHeight: 1 }}>{bestStreak}</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em' }}>BEST EVER</span>
+        </div>
       </div>
     </div>
   );
 };
 
-
-
-
+// ─── DAY OF WEEK PATTERN CHART ───────────────────────────────────────────────
+const DayOfWeekChart = ({ data }: { data: { day: string; count: number }[] }) => {
+  const max = Math.max(...data.map(d => d.count), 1);
+  const bestDayIdx = data.reduce((bi, d, i) => d.count > data[bi].count ? i : bi, 0);
+  return (
+    <div style={{ margin: '0 16px 12px 16px', background: '#0A0F0D', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', padding: '18px', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <p style={{ fontSize: '10px', fontWeight: 800, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>WEEKLY PATTERN</p>
+        {data[bestDayIdx].count > 0 && (
+          <span style={{ fontSize: '9px', fontWeight: 700, color: '#00E87A', letterSpacing: '0.06em' }}>
+            PEAK: {data[bestDayIdx].day.toUpperCase()}
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '80px', padding: '0 4px' }}>
+        {data.map((d, i) => {
+          const heightPct = max > 0 ? (d.count / max) * 100 : 0;
+          const isBest = i === bestDayIdx && d.count > 0;
+          return (
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', height: '100%', justifyContent: 'flex-end' }}>
+              <div style={{
+                width: '100%',
+                height: `${Math.max(heightPct, 4)}%`,
+                background: isBest ? '#00E87A' : heightPct > 60 ? 'rgba(0,232,122,0.5)' : heightPct > 20 ? 'rgba(0,232,122,0.25)' : 'rgba(255,255,255,0.06)',
+                borderRadius: '4px 4px 2px 2px',
+                boxShadow: isBest ? '0 0 8px rgba(0,232,122,0.5)' : 'none',
+                transition: 'height 0.8s cubic-bezier(0.34,1.56,0.64,1)',
+              }} />
+              <span style={{ fontSize: '9px', fontWeight: isBest ? 800 : 600, color: isBest ? '#00E87A' : 'rgba(255,255,255,0.25)', letterSpacing: '0.04em' }}>{d.day}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px 12px' }}>
+        <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
+          {data[bestDayIdx].count > 0
+            ? `You complete the most habits on ${data[bestDayIdx].day}s — keep that momentum.`
+            : 'Complete habits to see your weekly pattern.'}
+        </span>
+      </div>
+    </div>
+  );
+};
 
 const CategoryRadarChart = ({ categories }: { categories: { name: string; rate: number }[] }) => {
   const navigate = useNavigate();
@@ -591,7 +551,6 @@ const Stats: React.FC = () => {
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [trendDays, setTrendDays] = useState(7);
   const { user } = useAuth();
-  const { isPro } = useSubscription();
   const { setLoading } = useLoading();
   const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
   const isMountedRef = useRef(true);
@@ -751,27 +710,18 @@ const Stats: React.FC = () => {
   const totalGoals = goals.length;
   const activeGoalsCount = goals.filter((g) => g.status === 'pending').length;
   const completedGoalsCount = goals.filter((g) => (g.status as string) === 'completed' || (g.status as string) === 'done' || (g.status as string) === 'achieved').length;
-  const avgGoalProgress = scoreData?.goals_progress ?? (totalGoals > 0 ? Math.round((completedGoalsCount / totalGoals) * 100) : 0);
 
   const totalUserTasks = scoreData?.tasks_total ?? tasks.length;
   const completedUserTasks = scoreData?.tasks_completed ?? tasks.filter((t: Task) => t.status === 'completed').length;
   const pendingCount = tasks.filter((t) => t.status === 'pending').length;
-  const taskCompletionRate =
-    scoreData?.tasks_progress ?? (totalUserTasks > 0 ? Math.round((completedUserTasks / totalUserTasks) * 100) : 0);
 
   const totalRoutines = routines.length;
+  const dynamicTodayScore = scoreData?.overall_score ?? 0;
+
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const todayDate = new Date();
-  const currentDayName = daysOfWeek[todayDate.getDay()];
-  const activeRoutinesTodayCount = scoreData?.routines_total ?? routines.filter((r) => r.days?.includes(currentDayName)).length;
 
-  const localTodayStr = new Date(todayDate.getTime() - todayDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-  const routinesCompletedToday = scoreData?.routines_completed ?? routineLogs.filter((l) => l.completed_at === localTodayStr).length;
-  const todayRoutineRate =
-    scoreData?.routines_progress ??
-    (activeRoutinesTodayCount > 0 ? Math.round((routinesCompletedToday / activeRoutinesTodayCount) * 100) : 0);
-
-  let currentStreak = 0;
+  // Client-side streak calc (fallback if DB columns not yet populated)
+  let clientStreak = 0;
   const uniqueLogDaysSet = new Set(routineLogs.map((l) => l.completed_at));
   for (let i = 0; i < 365; i++) {
     const checkDate = new Date();
@@ -781,37 +731,17 @@ const Stats: React.FC = () => {
     const scheduledThatDay = routines.filter((r) => r.days?.includes(checkDayName)).length;
 
     if (uniqueLogDaysSet.has(checkStr)) {
-      currentStreak++;
+      clientStreak++;
     } else {
       if (i === 0) continue;
       if (scheduledThatDay === 0) continue;
       break;
     }
   }
+  // Use DB streak if available, otherwise fall back to client calc
+  const currentStreak = (user?.currentStreak != null && user.currentStreak > 0) ? user.currentStreak : clientStreak;
 
-  const startDateForConsistency = new Date();
-  startDateForConsistency.setHours(0, 0, 0, 0);
-  let expectedRoutinesLast7Days = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(startDateForConsistency);
-    d.setDate(d.getDate() - i);
-    const dayName = daysOfWeek[d.getDay()];
-    expectedRoutinesLast7Days += routines.filter((r) => r.days?.includes(dayName)).length;
-  }
 
-  const last7DaysLogs = routineLogs.filter((l) => {
-    const d = new Date(l.completed_at);
-    return startDateForConsistency.getTime() - d.getTime() <= 7 * 24 * 60 * 60 * 1000;
-  });
-  const weeklyConsistency =
-    expectedRoutinesLast7Days > 0 ? Math.min(100, Math.round((last7DaysLogs.length / expectedRoutinesLast7Days) * 100)) : 0;
-
-  const dynamicTodayScore = scoreData?.overall_score ?? calculateProductivityScore({
-    tasksProgress: taskCompletionRate,
-    routinesProgress: todayRoutineRate,
-    goalsProgress: avgGoalProgress,
-    isPro
-  });
 
   const historicalData = useMemo(() => {
     const data: { name: string; tasks: number; goals: number; habits: number }[] = [];
@@ -900,8 +830,19 @@ const Stats: React.FC = () => {
     return map;
   }, [routineLogs]);
 
-  const activeDays = useMemo(() => Object.keys(heatMap).length, [heatMap]);
-  const bestStreak = useMemo(() => currentStreak, [currentStreak]);
+  const bestStreak = (user?.bestStreak != null && user.bestStreak > 0) ? user.bestStreak : currentStreak;
+
+  const dayOfWeekData = useMemo(() => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const counts = [0, 0, 0, 0, 0, 0, 0];
+    routineLogs.forEach(log => {
+      if (!log.completed_at) return;
+      const d = new Date(log.completed_at);
+      const idx = (d.getDay() + 6) % 7; // 0=Mon … 6=Sun
+      counts[idx]++;
+    });
+    return days.map((day, i) => ({ day, count: counts[i] }));
+  }, [routineLogs]);
 
   const getDaysArray = (range: '30D' | '90D' | '1Y') => {
     const arr: string[] = [];
@@ -915,8 +856,7 @@ const Stats: React.FC = () => {
   };
 
   return (
-    <ProBlurGate featureName="Stats">
-      <div 
+      <div
         className={`page-shell stats-premium-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} 
         style={{ 
           minHeight: '100vh',
@@ -938,13 +878,23 @@ const Stats: React.FC = () => {
             padding: '112px 0 120px 0'
           }}
         >
-          <ScoreGauge score={dynamicTodayScore} />
+          {/* 1. Streak — personal milestone, unique opener */}
+          <StreakMilestoneCard currentStreak={currentStreak} bestStreak={bestStreak} />
 
-          <VerdictCard
-            score={dynamicTodayScore}
-            totalItems={totalUserTasks + totalGoals + totalRoutines}
+          {/* 2. Habit Heatmap — most visual, most unique */}
+          <HabitHeatmap
+            heatmapData={getDaysArray(heatmapRange).map(d => {
+              const c = heatMap[d] || 0;
+              return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
+            })}
+            activeRange={heatmapRange}
+            setActiveRange={setHeatmapRange}
           />
 
+          {/* 3. Weekly Pattern — deeply personal, not on home */}
+          <DayOfWeekChart data={dayOfWeekData} />
+
+          {/* 4. Historical Trend */}
           <InsightsTrend
             data={{
               tasks: historicalData.map(d => d.tasks),
@@ -955,22 +905,10 @@ const Stats: React.FC = () => {
             setActiveRange={(r) => setTrendDays(r === '7D' ? 7 : r === '30D' ? 30 : 90)}
           />
 
-          <HabitHeatmap
-            heatmapData={getDaysArray(heatmapRange).map(d => {
-              const c = heatMap[d] || 0;
-              return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
-            })}
-            activeRange={heatmapRange}
-            setActiveRange={setHeatmapRange}
-            statsData={{
-              activeDays: activeDays,
-              bestStreak: bestStreak,
-              completionRate: activeDays > 0 ? Math.round((activeDays / getDaysArray(heatmapRange).length) * 100) : 0
-            }}
-          />
-
+          {/* 5. Category Radar */}
           <CategoryRadarChart categories={categoryStats} />
 
+          {/* 6. Breakdown cards */}
           <InsightCard
             type="tasks"
             data={{
@@ -989,15 +927,11 @@ const Stats: React.FC = () => {
             }}
           />
 
-          <InsightCard
-            type="habits"
-            data={{
-              total: totalRoutines,
-              today: routinesCompletedToday,
-              streak: currentStreak,
-              consistency: weeklyConsistency
-            }}
+          <VerdictCard
+            score={dynamicTodayScore}
+            totalItems={totalUserTasks + totalGoals + totalRoutines}
           />
+
         </main>
 
 
@@ -1022,7 +956,6 @@ const Stats: React.FC = () => {
           /* Add other specific stats styles if needed, though most are likely global or inline already */
         `}</style>
       </div>
-    </ProBlurGate>
   );
 };
 

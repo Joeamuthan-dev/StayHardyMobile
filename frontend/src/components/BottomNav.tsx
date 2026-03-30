@@ -177,7 +177,7 @@ const BottomNav: React.FC<{
   };
 
   const pathNorm = location.pathname.replace(/\/+$/, '') || '/';
-  const hideFloatingShelfByRoute = pathNorm === '/settings' || pathNorm === '/lifetime-access';
+  const hideFloatingShelfByRoute = pathNorm === '/settings' || pathNorm === '/lifetime-access' || pathNorm === '/updates' || pathNorm === '/feedback' || pathNorm === '/welcome';
 
   const premium = isPro || canAccessStatsAndRoutine(user);
   const upsell = shouldShowLifetimeUpsell(user);
@@ -233,12 +233,8 @@ const BottomNav: React.FC<{
         <>
           <style>{`
             @keyframes fabHalo {
-              0%,100% {
-                box-shadow: 0 0 20px rgba(0,232,122,0.3), 0 0 40px rgba(0,232,122,0.1), 0 8px 24px rgba(0,0,0,0.5);
-              }
-              50% {
-                box-shadow: 0 0 32px rgba(0,232,122,0.5), 0 0 64px rgba(0,232,122,0.2), 0 8px 24px rgba(0,0,0,0.5);
-              }
+              0%,100% { opacity: 1; }
+              50%      { opacity: 0.82; }
             }
             @keyframes fabMorphHome {
               0%   { transform: scale(1)    rotate(0deg)  }
@@ -266,7 +262,7 @@ const BottomNav: React.FC<{
 
           <div className="bottom-nav-container fixed bottom-0 left-0 right-0 w-full z-[1000] flex justify-center px-4 pb-[max(20px,env(safe-area-inset-bottom,20px))] pointer-events-none">
             {/* Floating dock */}
-            <div className="flex items-center justify-around bg-[rgba(14,14,14,0.94)] backdrop-blur-2xl rounded-[30px] py-2.5 px-4 w-full max-w-[440px] pointer-events-auto relative shadow-[0_8px_32px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.05)] border-t border-[rgba(0,232,122,0.12)]">
+            <div className="flex items-center justify-around bg-[rgba(14,14,14,0.94)] backdrop-blur-2xl rounded-[30px] py-2.5 px-4 w-full max-w-[440px] pointer-events-auto relative shadow-[0_8px_32px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.05)] border-t border-[rgba(0,232,122,0.12)]" style={{ willChange: 'transform', transform: 'translateZ(0)' }}>
 
               {/* Liquid indicator dot */}
               {activeNavIdx >= 0 && (
@@ -290,17 +286,12 @@ const BottomNav: React.FC<{
                 onClick={() => navigate('/routine')}
                 className="flex flex-col items-center gap-1 flex-1 cursor-pointer py-1 relative"
               >
-                {!isPro && (
-                  <div className="absolute top-0 right-2 w-2.5 h-2.5 rounded-full bg-red-500 flex items-center justify-center z-10">
-                    <svg width="5" height="5" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  </div>
-                )}
                 <div style={{ animation: isActive('/routine') ? 'iconPop 0.3s ease' : 'none' }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={!isPro ? 'rgba(239,68,68,0.6)' : isActive('/routine') ? '#00E87A' : '#666666'} strokeWidth="2" strokeLinecap="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isActive('/routine') ? '#00E87A' : '#666666'} strokeWidth="2" strokeLinecap="round">
                     <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
                   </svg>
                 </div>
-                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${!isPro ? 'text-red-500/50' : isActive('/routine') ? 'text-white' : 'text-white/30'}`}>HABITS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${isActive('/routine') ? 'text-white' : 'text-white/30'}`}>HABITS</span>
               </div>
 
               {/* TASKS */}
@@ -332,6 +323,7 @@ const BottomNav: React.FC<{
                 {/* FAB */}
                 <div
                   {...longPressHandlers}
+                  style={{ willChange: 'transform, opacity', boxShadow: '0 0 24px rgba(0,232,122,0.35), 0 8px 24px rgba(0,0,0,0.5)' }}
                   className={`w-14 h-14 rounded-full flex items-center justify-center cursor-pointer select-none transition-all duration-200 ${fabState === 'longpress' ? 'bg-white scale-115 shadow-[0_0_40px_rgba(255,255,255,0.6)]' : 'bg-[#00E87A]'} ${fabState === 'pressing' ? 'scale-108' : 'scale-100'} ${fabState === 'idle' ? 'animate-[fabHalo_3s_ease-in-out_infinite]' : fabState === 'longpress' ? 'animate-[fabMorphHome_0.4s_ease]' : ''}`}
                 >
                   {fabState === 'longpress' ? (
@@ -376,17 +368,12 @@ const BottomNav: React.FC<{
                 onClick={() => navigate('/stats')}
                 className="flex flex-col items-center gap-1 flex-1 cursor-pointer py-1 relative"
               >
-                {!isPro && (
-                  <div className="absolute top-0 right-2 w-2.5 h-2.5 rounded-full bg-red-500 flex items-center justify-center z-10">
-                    <svg width="5" height="5" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  </div>
-                )}
                 <div style={{ animation: isActive('/stats') ? 'iconPop 0.3s ease' : 'none' }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={!isPro ? 'rgba(239,68,68,0.6)' : isActive('/stats') ? '#00E87A' : '#666666'} strokeWidth="2" strokeLinecap="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isActive('/stats') ? '#00E87A' : '#666666'} strokeWidth="2" strokeLinecap="round">
                     <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
                   </svg>
                 </div>
-                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${!isPro ? 'text-red-500/50' : isActive('/stats') ? 'text-white' : 'text-white/30'}`}>STATS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${isActive('/stats') ? 'text-white' : 'text-white/30'}`}>STATS</span>
               </div>
 
             </div>

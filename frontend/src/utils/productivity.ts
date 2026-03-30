@@ -10,16 +10,9 @@ export const calculateProductivityScore = ({
   tasksProgress,
   routinesProgress,
   goalsProgress,
-  isPro = true,
 }: ProductivityScoreInput): number => {
-  let weightedScore: number;
-  if (isPro) {
-    // Pro: Routines 50%, Goals 30%, Tasks 20%
-    weightedScore = (routinesProgress * 0.5) + (goalsProgress * 0.3) + (tasksProgress * 0.2);
-  } else {
-    // Basic: Goals 50%, Tasks 50% (no habits weight)
-    weightedScore = (goalsProgress * 0.5) + (tasksProgress * 0.5);
-  }
+  // Routines 50%, Goals 30%, Tasks 20%
+  const weightedScore = (routinesProgress * 0.5) + (goalsProgress * 0.3) + (tasksProgress * 0.2);
   return Math.round(weightedScore);
 };
 

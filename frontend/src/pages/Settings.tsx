@@ -932,25 +932,6 @@ const Settings: React.FC = () => {
             upgrade={true}
           />
         )}
-        {isNative && userRole !== 'admin' && (
-          <SettingsRow
-            icon={<RotateCcw size={16} />}
-            title="Restore Purchases"
-            subtitle="Recover your Pro access"
-            onClick={async () => { 
-              setIsRestoring(true); 
-              try { 
-                const info = await RevenueCatService.restorePurchases(); 
-                if (!!info?.entitlements.active['StayHardy Pro']) { 
-                  await refreshUserProfile(); 
-                  setNotificationToast('Purchases restored ✅'); 
-                } else setNotificationToast('No active purchases.'); 
-              } catch { setNotificationToast('Restore failed.'); } 
-              finally { setIsRestoring(false); } 
-            }}
-            right={isRestoring ? <RotateCcw size={16} className="rotating text-[#00E676]" /> : undefined}
-          />
-        )}
       </div>
 
       {/* Support Section */}
@@ -1122,6 +1103,26 @@ const Settings: React.FC = () => {
             />
           ) : null;
         })()}
+
+        {isNative && userRole !== 'admin' && (
+          <SettingsRow
+            icon={<RotateCcw size={16} />}
+            title="Restore Purchases"
+            subtitle="Recover your Pro access"
+            onClick={async () => {
+              setIsRestoring(true);
+              try {
+                const info = await RevenueCatService.restorePurchases();
+                if (!!info?.entitlements.active['StayHardy Pro']) {
+                  await refreshUserProfile();
+                  setNotificationToast('Purchases restored ✅');
+                } else setNotificationToast('No active purchases.');
+              } catch { setNotificationToast('Restore failed.'); }
+              finally { setIsRestoring(false); }
+            }}
+            right={isRestoring ? <RotateCcw size={16} className="rotating text-[#00E676]" /> : undefined}
+          />
+        )}
 
         <SettingsRow
           icon={<Trash2 size={16} />}

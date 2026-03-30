@@ -13,8 +13,9 @@ import { isOnline } from '../lib/networkStatus';
 import { enqueueSync, AFTER_SYNC_FLUSH_EVENT } from '../lib/syncQueue';
 import { ProductivityService } from '../lib/ProductivityService';
 import CategorySelector from '../components/CategorySelector';
-import ProBlurGate from '../components/ProBlurGate';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useProGate } from '../hooks/useProGate';
+import ProGateModal from '../components/ProGateModal';
 
 
 interface RoutineData {
@@ -834,6 +835,7 @@ const Routine: React.FC = () => {
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const [routines, setRoutines] = useState<RoutineData[]>([]);
   const [logs, setLogs] = useState<RoutineLog[]>([]);
+  const { gateOpen, gateResource, closeGate, checkAndGate } = useProGate();
   const [showModal, setShowModal] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
   const isTogglingRef = useRef(false);
@@ -841,7 +843,7 @@ const Routine: React.FC = () => {
 
 
   useEffect(() => {
-    const handleOpenCreateRoutine = () => setShowModal(true);
+    const handleOpenCreateRoutine = () => checkAndGate('habits', () => setShowModal(true));
     window.addEventListener('open-create-routine', handleOpenCreateRoutine);
     return () => window.removeEventListener('open-create-routine', handleOpenCreateRoutine);
   }, []);
@@ -956,13 +958,15 @@ const Routine: React.FC = () => {
 
           const routinesExp = await isCacheExpired(CACHE_KEYS.routines_list, CACHE_EXPIRY_MINUTES.routines_list);
           const logsExp = await isCacheExpired(CACHE_KEYS.routine_logs_list, CACHE_EXPIRY_MINUTES.routines_list);
+          // Force network fetch if cached routines all have missing category (stale cache before category was added)
+          const cacheMissingCategory = rawR !== null && rawR.length > 0 && rawR.every(r => !r.category);
           const needNetwork =
             options?.force ||
             rawR === null ||
             rawL === null ||
             routinesExp ||
             logsExp ||
-            false;
+            cacheMissingCategory;
 
           if (!needNetwork) {
             return;
@@ -1043,7 +1047,7 @@ const Routine: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('action') === 'new-routine') {
-      setShowModal(true);
+      checkAndGate('habits', () => setShowModal(true));
       window.history.replaceState({}, '', location.pathname);
     }
   }, [location.search]);
@@ -1351,7 +1355,6 @@ const Routine: React.FC = () => {
 
 
   return (
-    <ProBlurGate featureName="Habits">
       <div className={`page-shell routine-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{
         minHeight: '100vh',
         background: '#080C0A',
@@ -1436,7 +1439,7 @@ const Routine: React.FC = () => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }} className="bouncing-scroll">
           {routines.length === 0 ? (
-            <button type="button" className="routine-empty-tile" onClick={() => setShowModal(true)}>Add your first habit.</button>
+            <button type="button" className="routine-empty-tile" onClick={() => checkAndGate('habits', () => setShowModal(true))}>Add your first habit.</button>
           ) : orderedForToday.length === 0 ? (
             <p className="routine-filter-empty">No habits scheduled today.</p>
           ) : (
@@ -1817,8 +1820,8 @@ const Routine: React.FC = () => {
             .routine-empty-tile { width: 100%; padding: 30px; border: 1px dashed rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.4); border-radius: 16px; cursor: pointer; }
             .routine-filter-empty { text-align: center; padding: 40px; color: rgba(255,255,255,0.3); font-size: 13px; }
           `}</style>
+      <ProGateModal open={gateOpen} resource={gateResource} onClose={closeGate} />
       </div>
-    </ProBlurGate>
   );
 };
 

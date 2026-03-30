@@ -738,7 +738,7 @@ const AdminDashboard: React.FC = () => {
         let query = supabase
           .from('users')
           .select(
-            'id, name, email, role, is_pro, status, email_confirmed, created_at, avatar_url, pro_purchase_date'
+            'id, name, email, role, is_pro, status, email_confirmed, created_at, avatar_url, pro_purchase_date, subscription_plan, pro_expires_at, subscription_status'
           )
           .order('created_at', { ascending: userSortOrder === 'oldest' })
           .range(pageNum * ADMIN_USERS_PAGE_SIZE, (pageNum + 1) * ADMIN_USERS_PAGE_SIZE - 1);
@@ -784,7 +784,7 @@ const AdminDashboard: React.FC = () => {
       const { data, error } = await supabase
         .from('users')
         .select(
-          'id, name, email, role, is_pro, status, email_confirmed, created_at, avatar_url, pro_purchase_date'
+          'id, name, email, role, is_pro, status, email_confirmed, created_at, avatar_url, pro_purchase_date, subscription_plan, pro_expires_at, subscription_status'
         )
         .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
         .order('created_at', { ascending: userSortOrder === 'oldest' })
@@ -1024,34 +1024,65 @@ const AdminDashboard: React.FC = () => {
     }
   }, []);
 
-  const handleMakePro = useCallback(async (targetUser: any) => {
+  const [grantProModal, setGrantProModal] = useState<{
+    show: boolean; user: any; plan: 'monthly' | 'yearly' | 'lifetime';
+  }>({ show: false, user: null, plan: 'lifetime' });
+
+  const handleMakePro = useCallback((targetUser: any) => {
+    setGrantProModal({ show: true, user: targetUser, plan: 'lifetime' });
+  }, []);
+
+  const handleConfirmGrantPro = useCallback(async () => {
+    const { user: targetUser, plan } = grantProModal;
+    if (!targetUser) return;
+    const now = new Date();
+    const expiresAt = plan === 'lifetime' ? null
+      : plan === 'yearly' ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString()
+      : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const status = plan === 'lifetime' ? 'lifetime' : 'admin_grant';
     try {
       const { error } = await supabase
         .from('users')
         .update({
           is_pro: true,
-          pro_purchase_date: new Date().toISOString(),
+          pro_purchase_date: now.toISOString(),
+          subscription_plan: plan,
+          pro_expires_at: expiresAt,
+          subscription_status: status,
         })
         .eq('id', targetUser.id);
       if (error) throw error;
-      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, is_pro: true } : u)));
-      alert(`${targetUser.name || 'User'} is now Pro ⚡`);
+      setUsers((prev) => prev.map((u) => u.id === targetUser.id
+        ? { ...u, is_pro: true, subscription_plan: plan, pro_expires_at: expiresAt, subscription_status: status }
+        : u
+      ));
+      setGrantProModal({ show: false, user: null, plan: 'lifetime' });
+      alert(`${targetUser.name || 'User'} is now Pro — ${plan.toUpperCase()} ⚡`);
       await fetchUserCounts();
     } catch (err) {
       console.error('Failed to make pro:', err);
       alert('Failed to update ❌');
     }
-  }, [fetchUserCounts]);
+  }, [grantProModal, fetchUserCounts]);
 
   const handleRevokePro = useCallback(async (targetUser: any) => {
     if (!window.confirm(`Revoke Pro from ${targetUser.name || targetUser.email}?`)) return;
     try {
       const { error } = await supabase
         .from('users')
-        .update({ is_pro: false, pro_purchase_date: null })
+        .update({
+          is_pro: false,
+          pro_purchase_date: null,
+          subscription_plan: null,
+          pro_expires_at: null,
+          subscription_status: 'revoked',
+        })
         .eq('id', targetUser.id);
       if (error) throw error;
-      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, is_pro: false } : u)));
+      setUsers((prev) => prev.map((u) => u.id === targetUser.id
+        ? { ...u, is_pro: false, subscription_plan: null, pro_expires_at: null, subscription_status: 'revoked' }
+        : u
+      ));
       await fetchUserCounts();
     } catch (err) {
       console.error('Failed to revoke pro:', err);
@@ -2094,17 +2125,25 @@ const AdminDashboard: React.FC = () => {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                                   <span className="admin-v2-name">{u.name || '—'}</span>
                                   {isPro && (
-                                    <span
-                                      style={{
-                                        background: '#FFD700',
-                                        color: '#000',
-                                        fontSize: '10px',
-                                        fontWeight: 800,
-                                        padding: '2px 8px',
-                                        borderRadius: '10px',
-                                      }}
-                                    >
-                                      ⚡ PRO
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                      <span style={{ background: '#FFD700', color: '#000', fontSize: '10px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px' }}>
+                                        ⚡ PRO
+                                      </span>
+                                      {u.subscription_plan && (
+                                        <span style={{
+                                          background: u.subscription_plan === 'lifetime' ? 'rgba(147,51,234,0.2)' : u.subscription_plan === 'yearly' ? 'rgba(0,232,122,0.15)' : 'rgba(59,130,246,0.15)',
+                                          color: u.subscription_plan === 'lifetime' ? '#C084FC' : u.subscription_plan === 'yearly' ? '#00E87A' : '#60A5FA',
+                                          border: `1px solid ${u.subscription_plan === 'lifetime' ? 'rgba(192,132,252,0.4)' : u.subscription_plan === 'yearly' ? 'rgba(0,232,122,0.3)' : 'rgba(96,165,250,0.3)'}`,
+                                          fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '8px', textTransform: 'uppercase' as const,
+                                        }}>
+                                          {u.subscription_plan === 'lifetime' ? '∞ LIFETIME' : u.subscription_plan === 'yearly' ? '12M YEARLY' : '1M MONTHLY'}
+                                        </span>
+                                      )}
+                                      {u.subscription_status === 'admin_grant' && (
+                                        <span style={{ background: 'rgba(232,197,71,0.15)', color: '#E8C547', border: '1px solid rgba(232,197,71,0.3)', fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '8px' }}>
+                                          ADMIN
+                                        </span>
+                                      )}
                                     </span>
                                   )}
                                   <span className={`admin-role-pill ${u.role === 'admin' ? 'admin-role-pill--admin' : ''}`}>
@@ -2134,6 +2173,17 @@ const AdminDashboard: React.FC = () => {
                                 {score}%
                               </div>
                             </div>
+                            {isPro && (
+                              <div>
+                                <div className="admin-v2-stat-lbl">EXPIRES</div>
+                                <div style={{ fontWeight: 700, fontSize: '12px', color: u.subscription_plan === 'lifetime' ? '#C084FC' : u.pro_expires_at ? (new Date(u.pro_expires_at) < new Date() ? '#EF4444' : '#FFD700') : '#888' }}>
+                                  {u.subscription_plan === 'lifetime' ? '∞ Never'
+                                    : u.pro_expires_at
+                                    ? new Date(u.pro_expires_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' })
+                                    : '—'}
+                                </div>
+                              </div>
+                            )}
                           </div>
                           <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                             <button
@@ -4864,6 +4914,64 @@ const AdminDashboard: React.FC = () => {
       )}
 
       {/* Delete Confirmation Modal */}
+      {/* ── Grant Pro Modal ── */}
+      {grantProModal.show && (
+        <div className="premium-modal-overlay centered" onClick={() => setGrantProModal({ show: false, user: null, plan: 'lifetime' })}>
+          <div className="glass-card" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '380px', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', border: '1px solid rgba(255,215,0,0.25)' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255,215,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+                <span style={{ fontSize: '1.8rem' }}>⚡</span>
+              </div>
+              <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.3rem', fontWeight: 900, color: 'white' }}>Grant Pro Access</h2>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>{grantProModal.user?.name || grantProModal.user?.email}</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {(['lifetime', 'yearly', 'monthly'] as const).map((plan) => (
+                <button
+                  key={plan}
+                  type="button"
+                  onClick={() => setGrantProModal(m => ({ ...m, plan }))}
+                  style={{
+                    padding: '12px 16px', borderRadius: '12px', cursor: 'pointer',
+                    border: grantProModal.plan === plan
+                      ? `2px solid ${plan === 'lifetime' ? '#C084FC' : plan === 'yearly' ? '#00E87A' : '#60A5FA'}`
+                      : '1px solid rgba(255,255,255,0.08)',
+                    background: grantProModal.plan === plan
+                      ? plan === 'lifetime' ? 'rgba(192,132,252,0.1)' : plan === 'yearly' ? 'rgba(0,232,122,0.08)' : 'rgba(96,165,250,0.08)'
+                      : 'rgba(255,255,255,0.03)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <span style={{ fontWeight: 700, fontSize: '13px', color: grantProModal.plan === plan ? 'white' : 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>
+                    {plan === 'lifetime' ? '∞ Lifetime' : plan === 'yearly' ? '12 Months — Yearly' : '1 Month — Monthly'}
+                  </span>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>
+                    {plan === 'lifetime' ? 'No expiry' : plan === 'yearly' ? 'Expires in 365 days' : 'Expires in 30 days'}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setGrantProModal({ show: false, user: null, plan: 'lifetime' })}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'white', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmGrantPro()}
+                style={{ flex: 2, padding: '12px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #FFD700, #FF9500)', color: '#000', fontWeight: 900, cursor: 'pointer', fontSize: '13px' }}
+              >
+                ⚡ Grant {grantProModal.plan.charAt(0).toUpperCase() + grantProModal.plan.slice(1)} Pro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteUserModal.show && (
         <div className="premium-modal-overlay centered" onClick={() => setDeleteUserModal({ ...deleteUserModal, show: false })}>
           <div className="glass-card" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '400px', padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', position: 'relative', border: '1px solid rgba(239, 68, 68, 0.2)' }}>

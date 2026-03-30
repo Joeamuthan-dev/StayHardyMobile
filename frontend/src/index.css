@@ -142,7 +142,7 @@ html, body, #root {
   border-radius: 1rem;
   cursor: pointer;
   text-align: left;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s;
 }
 .sidebar-nav-item:hover {
   color: var(--text-main);
@@ -179,13 +179,20 @@ html, body, #root {
   cursor: pointer;
   text-align: left;
   opacity: 0.8;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s, opacity 0.2s;
 }
 .sidebar-logout-btn:hover {
   color: #f87171;
   opacity: 1;
   background: rgba(239, 68, 68, 0.1);
 }
+
+/* ── Scroll container GPU acceleration ── */
+.bouncing-scroll {
+  -webkit-overflow-scrolling: touch;
+  transform: translateZ(0);
+}
+
 
 /* ── Web page content width constraints ── */
 @media (min-width: 1024px) {

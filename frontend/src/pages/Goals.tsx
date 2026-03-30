@@ -1,5 +1,7 @@
 // src/pages/Goals.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useProGate } from '../hooks/useProGate';
+import ProGateModal from '../components/ProGateModal';
 import { isWeb } from '../utils/platform';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
@@ -104,8 +106,9 @@ const GoalCard = ({
             '#2E004E 0%,' +
             '#1A002E 100%)',
         backgroundSize: '200% 200%',
-        animation:
-          'meshMove 6s ease infinite'
+        animation: 'meshMove 6s ease infinite',
+        willChange: 'background-position',
+        contain: 'paint',
       }}/>
 
       {/* Mesh overlay */}
@@ -473,13 +476,14 @@ const Goals: React.FC = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const { gateOpen, gateResource, closeGate, checkAndGate } = useProGate();
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    const handleOpenCreateGoal = () => setShowModal(true);
+    const handleOpenCreateGoal = () => checkAndGate('goals', () => setShowModal(true));
     window.addEventListener('open-create-goal', handleOpenCreateGoal);
     return () => window.removeEventListener('open-create-goal', handleOpenCreateGoal);
-  }, []);
+  }, [checkAndGate]);
 
   const fetchGoals = useCallback(
     async (options?: { force?: boolean }) => {
@@ -552,7 +556,7 @@ const Goals: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('action') === 'new-goal') {
-      setShowModal(true);
+      checkAndGate('goals', () => setShowModal(true));
       window.history.replaceState({}, '', location.pathname);
     }
   }, [location.search]);
@@ -1108,7 +1112,7 @@ const Goals: React.FC = () => {
               `}</style>
               <button
                 className="new-target-btn"
-                onClick={() => setShowModal(true)}
+                onClick={() => checkAndGate('goals', () => setShowModal(true))}
               >
                 + NEW TARGET
               </button>
@@ -1463,6 +1467,7 @@ const Goals: React.FC = () => {
           {toast}
         </div>
       )}
+      <ProGateModal open={gateOpen} resource={gateResource} onClose={closeGate} />
     </div>
   );
 };

@@ -51,26 +51,12 @@ export class ProductivityService {
 
     // 4. Role-aware Score Calculation
     // Fetch user role from Supabase users table
-    const { data: userData } = await supabase
-      .from('users')
-      .select('is_pro, email')
-      .eq('id', userId)
-      .maybeSingle();
-
-    const isBasic = !userData?.is_pro;
-
-    let overallScore = 0;
-    if (isBasic) {
-      // Basic Logic: 50% Goals + 50% Tasks
-      overallScore = Math.round((goalsProgress * 0.5) + (tasksProgress * 0.5));
-    } else {
-      // Pro/Admin Logic: 50% Habits + 30% Goals + 20% Tasks
-      overallScore = calculateProductivityScore({
-        tasksProgress,
-        routinesProgress,
-        goalsProgress
-      });
-    }
+    // Unified formula for all users: Routines 50%, Goals 30%, Tasks 20%
+    const overallScore = calculateProductivityScore({
+      tasksProgress,
+      routinesProgress,
+      goalsProgress
+    });
 
     const scoreData: ProductivityScoreData = {
       tasks_progress: tasksProgress,

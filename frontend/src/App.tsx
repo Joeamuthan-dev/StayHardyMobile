@@ -56,6 +56,7 @@ import Calendar from './pages/Calendar';
 import StayHardyUpdatesPage from './pages/StayHardyUpdatesPage';
 import WhyStayHardy from './pages/WhyStayHardy';
 import Paywall from './pages/Paywall';
+import Leaderboard from './pages/Leaderboard';
 
 // Black screen fallback — matches app background
 const BlackScreen = () => (
@@ -316,6 +317,7 @@ const AppCore: React.FC = () => {
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/feedback-list" element={<FeedbackList />} />
             <Route path="/welcome" element={<WhyStayHardy />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/admin" element={<AdminRoute />} />
           </Route>
         </Routes>

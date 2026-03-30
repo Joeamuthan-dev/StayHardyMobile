@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useProGate } from '../hooks/useProGate';
+import ProGateModal from '../components/ProGateModal';
 import { useLocation } from 'react-router-dom';
 import { isWeb } from '../utils/platform';
 import { useAuth } from '../context/AuthContext';
@@ -295,6 +297,7 @@ const triggerGlobalRefresh = () => {
 };
 
 const Dashboard: React.FC = () => {
+  const { gateOpen, gateResource, closeGate, checkAndGate } = useProGate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
@@ -315,10 +318,10 @@ const Dashboard: React.FC = () => {
   const [exitingTaskIds, setExitingTaskIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    const handleOpenCreateTask = () => setShowModal(true);
+    const handleOpenCreateTask = () => checkAndGate('tasks', () => openModal());
     window.addEventListener('open-create-task', handleOpenCreateTask);
     return () => window.removeEventListener('open-create-task', handleOpenCreateTask);
-  }, []);
+  }, [checkAndGate]);
   const [toast, setToast] = useState<string | null>(null);
   const [taskCompleteToast, setTaskCompleteToast] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -461,7 +464,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleAddTaskFabClick = () => {
-    openModal();
+    checkAndGate('tasks', () => openModal());
   };
   const uploadImage = async (file: File) => {
     const fileExt = file.name.split('.').pop();
@@ -499,6 +502,7 @@ const Dashboard: React.FC = () => {
   const handleCreateOrUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return;
+    if (isLoading || isCreatingTask.current) return;
     const titleTrim = title.trim();
     if (!titleTrim) return;
 
@@ -686,11 +690,16 @@ const Dashboard: React.FC = () => {
         
         // Swap temp ID with real ID quietly
         const newTask = (data as unknown) as Task;
+        let swappedTasks: Task[] = [];
         setTasks(prev => {
-          const next = prev.map(t => t.id === tempId ? newTask : t);
-          if (user?.id) persistTasksList(user.id, next);
-          return next;
+          swappedTasks = prev.map(t => t.id === tempId ? newTask : t);
+          return swappedTasks;
         });
+        // Await cache write before clearing isCreatingTask — prevents realtime
+        // refetch from loading stale cache (with tempId) and creating a duplicate.
+        if (user?.id && swappedTasks.length > 0) {
+          await persistTasksList(user.id, swappedTasks);
+        }
 
         void invalidateUserStatsCache();
         triggerGlobalRefresh();
@@ -705,9 +714,15 @@ const Dashboard: React.FC = () => {
           }
           return next;
         });
-      } finally {
+        // Re-enable button immediately so user can retry
         setIsLoading(false);
-        isCreatingTask.current = false;
+      } finally {
+        // Delay releasing the guard until after the close animation (400ms)
+        // so the still-visible modal button stays disabled and can't fire again.
+        setTimeout(() => {
+          setIsLoading(false);
+          isCreatingTask.current = false;
+        }, 420);
       }
     };
 
@@ -1962,6 +1977,7 @@ const Dashboard: React.FC = () => {
           to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
       `}</style>
+      <ProGateModal open={gateOpen} resource={gateResource} onClose={closeGate} />
     </div>
   );
 };

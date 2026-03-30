@@ -127,6 +127,17 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
 
 
   const [localProfile, setLocalProfile] = useState(getCachedProfile);
+  const [isOnBoard, setIsOnBoard] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('leaderboard_members')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setIsOnBoard(data !== null));
+  }, [user?.id]);
 
   // Map userProfile for the surgical redesign snippet
   const userProfile = {
@@ -239,6 +250,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
         style={{
           background: 'linear-gradient(180deg, #0D0D0D 0%, #080808 100%)',
           boxShadow: isOpen ? '20px 0 60px rgba(0,0,0,0.8)' : 'none',
+          willChange: 'transform',
         }}
       >
         <div className="px-6 pt-14 pb-5">
@@ -397,6 +409,61 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
           })()}
         </div>
 
+        {/* Hardy Board — shown for all users */}
+        {(
+          <div className="px-4 pb-3">
+            <div
+              onClick={() => { navigate('/leaderboard'); onClose(); }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.12) 0%, rgba(255,165,0,0.06) 60%, rgba(0,0,0,0) 100%)',
+                border: '1px solid rgba(255,215,0,0.25)',
+                borderRadius: '16px',
+                padding: '14px 16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                WebkitTapHighlightColor: 'transparent',
+                transition: 'transform 0.15s ease',
+                boxShadow: '0 4px 20px rgba(255,215,0,0.08)',
+              }}
+              onMouseDown={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(0.97)'; }}
+              onMouseUp={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
+              onTouchStart={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(0.97)'; }}
+              onTouchEnd={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
+            >
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '12px',
+                background: 'rgba(255,215,0,0.14)',
+                border: '1px solid rgba(255,215,0,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, color: '#FFD700',
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path d="M8 21h8M12 17v4M7 3H5C4.4 3 4 3.4 4 4v3c0 3.3 2.7 6 6 6M17 3h2c.6 0 1 .4 1 1v3c0 3.3-2.7 6-6 6M7 3h10v6c0 2.8-2.2 5-5 5s-5-2.2-5-5V3z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ color: '#FFD700', fontWeight: 800, fontSize: '15px', margin: 0, letterSpacing: '0.02em' }}>
+                  Hardy Board
+                </p>
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', margin: '2px 0 0', letterSpacing: '0.01em' }}>
+                  {isOnBoard ? 'Track your rank in leaderboard' : 'Join the habit leaderboard'}
+                </p>
+              </div>
+              <span style={{
+                padding: '3px 8px', borderRadius: '6px',
+                background: 'rgba(255,215,0,0.15)',
+                border: '1px solid rgba(255,215,0,0.35)',
+                color: '#FFD700', fontSize: '9px', fontWeight: 800,
+                letterSpacing: '0.15em', flexShrink: 0,
+              }}>
+                LIVE
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="h-px w-full bg-gradient-to-r from-transparent via-white/8 to-transparent mb-2" />
 
         <p className="px-6 text-[9px] font-bold tracking-[0.25em] uppercase mb-1"
@@ -440,137 +507,137 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
             );
           })}
 
-          {/* Habits — PRO Locked */}
+          {/* Habits */}
           {(() => {
             const active = location.pathname === '/routine';
-            if (active && isProUserFromState) {
-              return (
-                <button
-                  onClick={() => { navigate('/routine'); onClose(); }}
-                  className="flex items-center gap-3.5 w-full px-6 py-3.5 relative transition-all duration-200"
-                  style={{ background: 'linear-gradient(90deg, rgba(0,230,118,0.08) 0%, rgba(0,230,118,0.02) 60%, transparent 100%)' }}
-                >
-                  <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full"
-                    style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
-                  />
-                  <div style={{ color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' }}>
-                    <RefreshCw size={18} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-white font-semibold text-sm tracking-wide flex-1 text-left"
-                    style={{ textShadow: '0 0 20px rgba(0,230,118,0.3)' }}
-                   >
-                    Habits
-                  </span>
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#00E676', boxShadow: '0 0 6px rgba(0,230,118,1)' }} />
-                </button>
-              );
-            }
-            if (isProUserFromState) {
-              return (
-                <button
-                  onClick={() => { navigate('/routine'); onClose(); }}
-                  className="flex items-center gap-3.5 w-full px-6 py-3.5 group transition-all duration-200"
-                  style={{ background: 'rgba(0,230,118,0.04)' }}
-                >
-                  <div style={{ color: 'rgba(0,230,118,0.6)', filter: 'drop-shadow(0 0 4px rgba(0,230,118,0.3))' }}>
-                    <RefreshCw size={18} strokeWidth={1.6} />
-                  </div>
-                  <span className="text-sm font-semibold flex-1 text-left" style={{ color: 'rgba(255,255,255,0.8)' }}>
-                    Habits
-                  </span>
-                  <span className="text-[8px] font-black tracking-widest px-2 py-0.5 rounded-md"
-                    style={{ background: 'rgba(0,230,118,0.12)', color: 'rgba(0,230,118,0.8)', border: '1px solid rgba(0,230,118,0.2)', letterSpacing: '0.12em' }}
-                  >
-                    KEY
-                  </span>
-                </button>
-              );
-            }
             return (
               <button
                 onClick={() => { navigate('/routine'); onClose(); }}
-                className="flex items-center gap-3.5 w-full px-6 py-3.5 group hover:bg-white/3 transition-all duration-200"
+                className="flex items-center gap-3.5 w-full px-6 py-3.5 relative transition-all duration-200"
+                style={active ? { background: 'linear-gradient(90deg, rgba(0,230,118,0.08) 0%, rgba(0,230,118,0.02) 60%, transparent 100%)' } : {}}
               >
-                <div className="text-white/20 group-hover:text-white/40 transition-colors duration-200">
-                  <RefreshCw size={18} strokeWidth={1.5} />
+                {active && (
+                  <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full"
+                    style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
+                  />
+                )}
+                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : { color: 'rgba(255,255,255,0.35)' }}>
+                  <RefreshCw size={18} strokeWidth={active ? 1.8 : 1.5} />
                 </div>
-                <span className="text-white/25 group-hover:text-white/40 text-sm font-medium flex-1 text-left transition-colors duration-200">
+                <span className="text-sm flex-1 text-left"
+                  style={active ? { color: '#FFFFFF', fontWeight: 600, textShadow: '0 0 20px rgba(0,230,118,0.3)' } : { color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}
+                >
                   Habits
                 </span>
-                <span className="text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md"
-                  style={{ background: 'rgba(0,230,118,0.1)', color: 'rgba(0,230,118,0.7)', letterSpacing: '0.15em' }}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#FFD700" stroke="#FFD700" strokeWidth="1"
+                  style={{ filter: 'drop-shadow(0 0 4px rgba(255,215,0,0.6))', flexShrink: 0 }}
                 >
-                  PRO
-                </span>
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
               </button>
             );
           })()}
 
-          {/* Stats — PRO Locked */}
+          {/* Stats */}
           {(() => {
             const active = location.pathname === '/stats';
-            if (active && isProUserFromState) {
-              return (
-                <button
-                  onClick={() => { navigate('/stats'); onClose(); }}
-                  className="flex items-center gap-3.5 w-full px-6 py-3.5 relative transition-all duration-200"
-                  style={{ background: 'linear-gradient(90deg, rgba(0,230,118,0.08) 0%, rgba(0,230,118,0.02) 60%, transparent 100%)' }}
-                >
-                  <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full"
-                    style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
-                  />
-                  <div style={{ color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' }}>
-                    <BarChart2 size={18} strokeWidth={1.8} />
-                  </div>
-                  <span className="text-white font-semibold text-sm tracking-wide flex-1 text-left"
-                    style={{ textShadow: '0 0 20px rgba(0,230,118,0.3)' }}
-                   >
-                    Stats
-                  </span>
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#00E676', boxShadow: '0 0 6px rgba(0,230,118,1)' }} />
-                </button>
-              );
-            }
-            if (isProUserFromState) {
-              return (
-                <button
-                  onClick={() => { navigate('/stats'); onClose(); }}
-                  className="flex items-center gap-3.5 w-full px-6 py-3.5 group transition-all duration-200"
-                  style={{ background: 'rgba(0,230,118,0.04)' }}
-                >
-                  <div style={{ color: 'rgba(0,230,118,0.6)', filter: 'drop-shadow(0 0 4px rgba(0,230,118,0.3))' }}>
-                    <BarChart2 size={18} strokeWidth={1.6} />
-                  </div>
-                  <span className="text-sm font-semibold flex-1 text-left" style={{ color: 'rgba(255,255,255,0.8)' }}>
-                    Stats
-                  </span>
-                  <span className="text-[8px] font-black tracking-widest px-2 py-0.5 rounded-md"
-                    style={{ background: 'rgba(0,230,118,0.12)', color: 'rgba(0,230,118,0.8)', border: '1px solid rgba(0,230,118,0.2)', letterSpacing: '0.12em' }}
-                  >
-                    KEY
-                  </span>
-                </button>
-              );
-            }
             return (
               <button
                 onClick={() => { navigate('/stats'); onClose(); }}
-                className="flex items-center gap-3.5 w-full px-6 py-3.5 group hover:bg-white/3 transition-all duration-200"
+                className="flex items-center gap-3.5 w-full px-6 py-3.5 relative transition-all duration-200"
+                style={active ? { background: 'linear-gradient(90deg, rgba(0,230,118,0.08) 0%, rgba(0,230,118,0.02) 60%, transparent 100%)' } : {}}
               >
-                <div className="text-white/20 group-hover:text-white/40 transition-colors duration-200">
-                  <BarChart2 size={18} strokeWidth={1.5} />
+                {active && (
+                  <div className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full"
+                    style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
+                  />
+                )}
+                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : { color: 'rgba(255,255,255,0.35)' }}>
+                  <BarChart2 size={18} strokeWidth={active ? 1.8 : 1.5} />
                 </div>
-                <span className="text-white/25 group-hover:text-white/40 text-sm font-medium flex-1 text-left transition-colors duration-200">
+                <span className="text-sm flex-1 text-left"
+                  style={active ? { color: '#FFFFFF', fontWeight: 600, textShadow: '0 0 20px rgba(0,230,118,0.3)' } : { color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}
+                >
                   Stats
                 </span>
-                <span className="text-[9px] font-black tracking-widest px-2 py-0.5 rounded-md"
-                  style={{ background: 'rgba(0,230,118,0.1)', color: 'rgba(0,230,118,0.7)', letterSpacing: '0.15em' }}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#FFD700" stroke="#FFD700" strokeWidth="1"
+                  style={{ filter: 'drop-shadow(0 0 4px rgba(255,215,0,0.6))', flexShrink: 0 }}
                 >
-                  PRO
-                </span>
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
               </button>
             );
           })()}
+
+          {/* Hardy Board card moved above nav — removed from here */}
+          {false && (
+            <div className="px-4 mt-3 mb-2">
+              <div
+                onClick={() => { navigate('/leaderboard'); onClose(); }}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,215,0,0.1) 0%, rgba(255,165,0,0.05) 50%, rgba(0,0,0,0) 100%)',
+                  border: '1px solid rgba(255,215,0,0.2)',
+                  borderRadius: '16px',
+                  padding: '12px 14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                }}
+                onMouseDown={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(0.96)'; }}
+                onMouseUp={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
+                onTouchStart={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(0.96)'; }}
+                onTouchEnd={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
+              >
+                {/* Trophy icon */}
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: 'rgba(255,215,0,0.12)',
+                    border: '1px solid rgba(255,215,0,0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    color: '#FFD700',
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M8 21h8M12 17v4M7 3H5C4.4 3 4 3.4 4 4v3c0 3.3 2.7 6 6 6M17 3h2c.6 0 1 .4 1 1v3c0 3.3-2.7 6-6 6M7 3h10v6c0 2.8-2.2 5-5 5s-5-2.2-5-5V3z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                {/* Text */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ color: '#FFD700', fontWeight: 700, fontSize: '14px', margin: 0, letterSpacing: '0.01em' }}>
+                    Hardy Board
+                  </p>
+                  <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', margin: 0, marginTop: '1px' }}>
+                    Monthly leaderboard
+                  </p>
+                </div>
+                {/* LIVE badge */}
+                <span
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    background: 'rgba(255,215,0,0.12)',
+                    border: '1px solid rgba(255,215,0,0.3)',
+                    color: '#FFD700',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    letterSpacing: '0.15em',
+                    flexShrink: 0,
+                  }}
+                >
+                  LIVE
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Admin Hub — only for joeamuthan2@gmail.com */}
           {isAdmin && (

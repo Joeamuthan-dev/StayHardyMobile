@@ -9,12 +9,17 @@ import {
   Shield,
   CheckCircle2,
   ChevronLeft,
+  Trophy,
 } from 'lucide-react';
 
 const BENEFITS = [
   {
     icon: <Flame size={18} color="#00E676" />,
-    text: 'Advanced Habit Tracking & Real-time Streaks',
+    text: 'Unlimited Habit Tracking & Real-time Streaks',
+  },
+  {
+    icon: <Trophy size={18} color="#00E676" />,
+    text: 'Monthly Leaderboard — Compete & Rank',
   },
   {
     icon: <BarChart2 size={18} color="#00E676" />,
@@ -30,7 +35,7 @@ const BENEFITS = [
   },
   {
     icon: <Shield size={18} color="#00E676" />,
-    text: 'Priority Vault Support',
+    text: 'Priority Support',
   },
 ];
 
@@ -52,10 +57,11 @@ const Paywall: React.FC = () => {
 
   const monthlyPkg = offerings?.monthly;
   const yearlyPkg = offerings?.yearly;
-  const rcAvailable = !!(monthlyPkg || yearlyPkg);
+  const lifetimePkg = offerings?.lifetime;
+  const rcAvailable = !!(monthlyPkg || yearlyPkg || lifetimePkg);
   const [selectedPlan, setSelectedPlan] = useState<
-    'monthly' | 'yearly'
-  >('yearly');
+    'monthly' | 'yearly' | 'lifetime'
+  >('lifetime');
 
   const handleBack = () => {
     if (window.history.length > 1) navigate(-1);
@@ -64,6 +70,7 @@ const Paywall: React.FC = () => {
 
   const handlePurchase = async () => {
     const pkg =
+      selectedPlan === 'lifetime' ? lifetimePkg :
       selectedPlan === 'yearly' ? yearlyPkg : monthlyPkg;
     if (!pkg) return;
     setPurchasing(true);
@@ -198,93 +205,90 @@ const Paywall: React.FC = () => {
 
       {/* ── PLAN SELECTOR (only if RC available) ── */}
       {rcAvailable && (
-        <div
-          style={{
-            display: 'flex',
-            gap: '10px',
-            marginTop: '24px',
-            flexShrink: 0,
-          }}
-        >
-          {(
-            [
-              {
-                key: 'yearly' as const,
-                label: 'Yearly',
-                badge: 'BEST VALUE',
-                pkg: yearlyPkg,
-                per: 'per year',
-              },
-              {
-                key: 'monthly' as const,
-                label: 'Monthly',
-                badge: null,
-                pkg: monthlyPkg,
-                per: 'per month',
-              },
-            ] as const
-          ).map((plan) => (
-            <button
-              key={plan.key}
-              onClick={() => setSelectedPlan(plan.key)}
-              style={{
-                flex: 1,
-                padding: '12px 8px',
-                borderRadius: '14px',
-                border:
-                  selectedPlan === plan.key
-                    ? '1px solid rgba(0,230,118,0.5)'
+        <div style={{ display: 'flex', gap: '8px', marginTop: '24px', flexShrink: 0 }}>
+          {([
+            {
+              key: 'lifetime' as const,
+              label: 'Lifetime',
+              badge: 'BEST DEAL',
+              badgeGold: true,
+              pkg: lifetimePkg,
+              per: 'one-time',
+            },
+            {
+              key: 'yearly' as const,
+              label: 'Yearly',
+              badge: 'POPULAR',
+              badgeGold: false,
+              pkg: yearlyPkg,
+              per: 'per year',
+            },
+            {
+              key: 'monthly' as const,
+              label: 'Monthly',
+              badge: 'AFFORDABLE',
+              badgeGold: false,
+              pkg: monthlyPkg,
+              per: 'per month',
+            },
+          ] as const).map((plan) => {
+            const active = selectedPlan === plan.key;
+            const isLifetime = plan.key === 'lifetime';
+            return (
+              <button
+                key={plan.key}
+                onClick={() => setSelectedPlan(plan.key)}
+                style={{
+                  flex: 1,
+                  padding: '10px 6px',
+                  borderRadius: '14px',
+                  border: active
+                    ? isLifetime
+                      ? '1px solid rgba(255,215,0,0.55)'
+                      : '1px solid rgba(0,230,118,0.5)'
                     : '1px solid rgba(255,255,255,0.08)',
-                background:
-                  selectedPlan === plan.key
-                    ? 'rgba(0,230,118,0.08)'
+                  background: active
+                    ? isLifetime
+                      ? 'rgba(255,215,0,0.08)'
+                      : 'rgba(0,230,118,0.08)'
                     : 'rgba(255,255,255,0.03)',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {plan.badge && (
-                <span
-                  style={{
-                    fontSize: '9px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {plan.badge && (
+                  <span style={{
+                    fontSize: '8px',
                     fontWeight: '800',
-                    color: '#00E676',
-                    letterSpacing: '0.1em',
-                    background: 'rgba(0,230,118,0.15)',
-                    padding: '2px 8px',
+                    letterSpacing: '0.08em',
+                    padding: '2px 6px',
                     borderRadius: '20px',
-                  }}
-                >
-                  {plan.badge}
-                </span>
-              )}
-              <span
-                style={{
-                  fontSize: '15px',
+                    color: plan.badgeGold ? '#FFD700' : '#00E676',
+                    background: plan.badgeGold ? 'rgba(255,215,0,0.15)' : 'rgba(0,230,118,0.15)',
+                  }}>
+                    {plan.badge}
+                  </span>
+                )}
+                <span style={{
+                  fontSize: '13px',
                   fontWeight: '800',
-                  color:
-                    selectedPlan === plan.key
-                      ? '#00E676'
-                      : 'rgba(255,255,255,0.5)',
                   fontFamily: 'Syne, sans-serif',
-                }}
-              >
-                {plan.pkg?.product?.priceString ?? plan.label}
-              </span>
-              <span
-                style={{
-                  fontSize: '11px',
-                  color: 'rgba(255,255,255,0.25)',
-                }}
-              >
-                {plan.per}
-              </span>
-            </button>
-          ))}
+                  color: active
+                    ? isLifetime ? '#FFD700' : '#00E676'
+                    : 'rgba(255,255,255,0.5)',
+                }}>
+                  {plan.pkg?.product?.priceString ?? plan.label}
+                </span>
+                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)' }}>
+                  {plan.per}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 
