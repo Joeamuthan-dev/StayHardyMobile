@@ -26,6 +26,9 @@ import {
   setAccountDeletedToastFlag,
 } from '../lib/accountDeletion';
 import { CacheManager } from '../lib/smartCacheManager';
+import { useBadges, BADGE_DEFS } from '../hooks/useBadges';
+import BadgePopup from '../components/BadgePopup';
+import { BadgeIcon } from '../components/BadgeIcons';
 
 const SESS_START_KEY = 'stayhardy_sess_started';
 
@@ -198,6 +201,8 @@ const Settings: React.FC = () => {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const { allEarned, pendingBadges, checkAndAwardBadges, markBadgeSeen } = useBadges();
+
 
   const _handleUpdatePin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -288,7 +293,7 @@ const Settings: React.FC = () => {
     loadProfile();
   }, []);
 
-
+  useEffect(() => { void checkAndAwardBadges(); }, [checkAndAwardBadges]);
 
   useEffect(() => {
     if (!sessionStorage.getItem(SESS_START_KEY)) {
@@ -445,6 +450,18 @@ const Settings: React.FC = () => {
     user_avatar_url: user?.avatarUrl,
     pro_member: userRole === 'pro' || userRole === 'admin'
   };
+
+  // --- ACHIEVEMENTS ---
+  const [showAchievements, setShowAchievements] = useState(false);
+  const earnedMap = isProUser ? new Map(allEarned.map(b => [b.key, b])) : new Map<string, typeof allEarned[0]>();
+  const earnedCount = isProUser ? allEarned.length : 0;
+  const totalCount = BADGE_DEFS.length;
+  const maxEarnedStreak = isProUser && allEarned.length > 0
+    ? Math.max(...allEarned.map(b => b.requiredStreak)) : 0;
+  const nextBadgeDef = BADGE_DEFS.find(b => b.requiredStreak > maxEarnedStreak);
+  const prevBadgeDef = nextBadgeDef
+    ? BADGE_DEFS[BADGE_DEFS.indexOf(nextBadgeDef) - 1]
+    : BADGE_DEFS[BADGE_DEFS.length - 1];
 
   // --- TOGGLE COMPONENTS ---
 
@@ -642,6 +659,253 @@ const Settings: React.FC = () => {
             : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06) 50%, transparent)',
         }} />
       </div>
+
+      {/* ── Achievements row (visible to all, opens sheet) ─────────── */}
+      <SectionHeader label="Achievements" />
+      <div className="section-container">
+        <SettingsRow
+          icon={
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path fill="currentColor" d="M5 3H19V13C19 17.4 15.9 21 12 21C8.1 21 5 17.4 5 13V3Z"/>
+              <path fill="currentColor" d="M5 6H3C1.9 6 1 6.9 1 8V10C1 11.1 1.9 12 3 12H5V6Z"/>
+              <path fill="currentColor" d="M19 6H21C22.1 6 23 6.9 23 8V10C23 11.1 22.1 12 21 12H19V6Z"/>
+              <rect fill="currentColor" x="10" y="21" width="4" height="2" rx="0.5"/>
+              <rect fill="currentColor" x="7" y="22.5" width="10" height="1.5" rx="0.5"/>
+            </svg>
+          }
+          title="Achievements"
+          subtitle={isProUser
+            ? earnedCount > 0
+              ? `${earnedCount} of ${totalCount} badges earned`
+              : nextBadgeDef
+                ? `Next: ${nextBadgeDef.name} at ${nextBadgeDef.requiredStreak}-day streak`
+                : 'Build your habit streak'
+            : 'Pro feature — unlock streak badges'
+          }
+          right={
+            isProUser && earnedCount > 0 ? (
+              <span style={{
+                fontSize: '11px', fontWeight: '800', color: '#00E87A',
+                background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)',
+                padding: '3px 9px', borderRadius: '99px',
+              }}>
+                {earnedCount}
+              </span>
+            ) : undefined
+          }
+          onClick={() => setShowAchievements(true)}
+        />
+      </div>
+
+      {/* Achievements bottom sheet */}
+      {showAchievements && (
+        <>
+          {/* Backdrop */}
+          <div
+            onClick={() => setShowAchievements(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9000,
+              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)',
+            }}
+          />
+          {/* Sheet */}
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9001,
+            background: 'linear-gradient(180deg, #111111 0%, #0D0D0D 100%)',
+            borderRadius: '24px 24px 0 0',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderBottom: 'none',
+            maxHeight: '85vh', overflowY: 'auto',
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
+          }}>
+            {/* Handle */}
+            <div style={{
+              width: '36px', height: '4px', borderRadius: '99px',
+              background: 'rgba(255,255,255,0.15)',
+              margin: '12px auto 0',
+            }} />
+
+            {/* Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '16px 20px 12px',
+            }}>
+              <div>
+                <h2 style={{
+                  margin: 0, fontSize: '20px', fontWeight: '800',
+                  color: '#FFFFFF', fontFamily: 'Syne, sans-serif',
+                }}>
+                  Achievements
+                </h2>
+                {isProUser && (
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
+                    {earnedCount}/{totalCount} badges earned
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setShowAchievements(false)}
+                style={{
+                  width: '32px', height: '32px', borderRadius: '50%',
+                  background: 'rgba(255,255,255,0.08)', border: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="rgba(255,255,255,0.6)"
+                    strokeWidth="2.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Progress bar (Pro only) */}
+            {isProUser && nextBadgeDef && (
+              <div style={{ padding: '0 20px 16px' }}>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  marginBottom: '6px',
+                }}>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>Next milestone</span>
+                  <span style={{ fontSize: '11px', fontWeight: '700', color: nextBadgeDef.color }}>
+                    {nextBadgeDef.name} · {nextBadgeDef.requiredStreak}d streak
+                  </span>
+                </div>
+                <div style={{
+                  height: '4px', borderRadius: '99px',
+                  background: 'rgba(255,255,255,0.07)', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: '99px',
+                    width: `${(earnedCount / totalCount) * 100}%`,
+                    background: `linear-gradient(90deg, ${prevBadgeDef?.color ?? '#00E87A'}, ${nextBadgeDef.color})`,
+                    transition: 'width 0.6s ease',
+                    minWidth: earnedCount > 0 ? '8px' : '0',
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {/* Badge grid */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '1px', background: 'rgba(255,255,255,0.05)',
+              margin: '0 20px', borderRadius: '16px', overflow: 'hidden',
+            }}>
+              {BADGE_DEFS.map((bd) => {
+                const earned = earnedMap.has(bd.key);
+                const earnedBadge = earnedMap.get(bd.key);
+                const earnedDate = earnedBadge
+                  ? new Date(earnedBadge.earned_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                  : null;
+                return (
+                  <div key={bd.key} style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    gap: '7px', padding: '18px 8px 14px',
+                    background: earned
+                      ? `linear-gradient(145deg, ${bd.color}14, ${bd.color}06)`
+                      : '#0D0D0D',
+                    position: 'relative', overflow: 'hidden',
+                  }}>
+                    {earned && (
+                      <div style={{
+                        position: 'absolute', top: 0, left: '20%', right: '20%',
+                        height: '2px',
+                        background: `linear-gradient(90deg, transparent, ${bd.color}, transparent)`,
+                      }} />
+                    )}
+                    <div style={{
+                      width: '56px', height: '56px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderRadius: '50%',
+                      background: earned ? `${bd.color}20` : 'rgba(255,255,255,0.05)',
+                      border: earned ? `1.5px solid ${bd.color}40` : '1.5px solid rgba(255,255,255,0.06)',
+                      boxShadow: earned ? `0 0 24px ${bd.color}35` : 'none',
+                    }}>
+                      {earned ? (
+                        <BadgeIcon badgeKey={bd.key} size={30} />
+                      ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                          <rect x="5" y="11" width="14" height="11" rx="2.5"
+                            fill="rgba(255,255,255,0.12)"/>
+                          <path d="M8 11V7C8 4.8 9.8 3 12 3C14.2 3 16 4.8 16 7V11"
+                            stroke="rgba(255,255,255,0.18)" strokeWidth="2.2"
+                            strokeLinecap="round" fill="none"/>
+                        </svg>
+                      )}
+                    </div>
+                    <span style={{
+                      fontSize: '9.5px', fontWeight: '800', textAlign: 'center', lineHeight: 1.3,
+                      color: earned ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.2)',
+                    }}>
+                      {bd.name}
+                    </span>
+                    {earned && earnedDate ? (
+                      <span style={{ fontSize: '8.5px', fontWeight: '600', color: `${bd.color}CC`, textAlign: 'center' }}>
+                        {earnedDate}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '8.5px', color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
+                        {bd.requiredStreak}d streak
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Non-Pro CTA */}
+            {!isProUser && (
+              <div style={{
+                margin: '16px 20px 0',
+                padding: '14px 16px', borderRadius: '14px',
+                background: 'rgba(0,232,122,0.07)',
+                border: '1px solid rgba(0,232,122,0.18)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+              }}>
+                <div>
+                  <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '800', color: '#FFFFFF' }}>
+                    Upgrade to Pro
+                  </p>
+                  <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
+                    Earn badges for your habit streaks
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setShowAchievements(false); navigate('/paywall'); }}
+                  style={{
+                    padding: '9px 18px', borderRadius: '10px', border: 'none',
+                    background: '#00E87A', color: '#000',
+                    fontSize: '12px', fontWeight: '800', cursor: 'pointer',
+                    whiteSpace: 'nowrap', WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  Go Pro
+                </button>
+              </div>
+            )}
+
+            {/* All earned message */}
+            {isProUser && !nextBadgeDef && earnedCount > 0 && (
+              <p style={{
+                margin: '16px 20px 0', fontSize: '13px', fontWeight: '800',
+                color: '#00E87A', textAlign: 'center',
+              }}>
+                All badges unlocked. You are Stay Hardy.
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Badge popup — Pro only, show one at a time */}
+      {isProUser && pendingBadges.length > 0 && (
+        <BadgePopup
+          badge={pendingBadges[0]}
+          userName={userName}
+          onDismiss={() => markBadgeSeen(pendingBadges[0].key)}
+        />
+      )}
 
       {/* Account Section */}
       <SectionHeader label="Account" />

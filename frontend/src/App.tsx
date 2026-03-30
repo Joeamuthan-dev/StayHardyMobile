@@ -13,9 +13,13 @@ import { supabase } from './supabase';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
-import { SubscriptionProvider } from './context/SubscriptionContext';
+import { SubscriptionProvider, useSubscription } from './context/SubscriptionContext';
 import { PaywallProvider } from './context/PaywallContext';
 import { LoadingProvider } from './context/LoadingContext';
+
+// Badges
+import { useBadges } from './hooks/useBadges';
+import BadgePopup from './components/BadgePopup';
 
 // Components & Hubs
 import { isAdminHubUser } from './config/adminOwner';
@@ -277,6 +281,7 @@ const AppCore: React.FC = () => {
       <InstructionalTooltipManager />
       <NativeBackButton />
       <CelebrationOverlay />
+      <BadgeBootstrap />
       
       <Suspense fallback={<BlackScreen />}>
         <Routes>
@@ -321,6 +326,39 @@ const AppCore: React.FC = () => {
 
 // Placeholder for missing component found in merge context
 const InstructionalTooltipManager = () => null;
+
+const BadgeBootstrap: React.FC = () => {
+  const { user } = useAuth();
+  const { isPro } = useSubscription();
+  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+  const isProUser = isPro || isAdmin;
+
+  const { pendingBadges, checkAndAwardBadges, markBadgeSeen } = useBadges();
+
+  useEffect(() => {
+    if (!user?.id || !isProUser) return;
+    void checkAndAwardBadges();
+  }, [user?.id, isProUser, checkAndAwardBadges]);
+
+  useEffect(() => {
+    if (!user?.id || !isProUser) return;
+    const sub = CapApp.addListener('appStateChange', (state) => {
+      if (state.isActive) void checkAndAwardBadges();
+    });
+    return () => { sub.then(s => s.remove()); };
+  }, [user?.id, isProUser, checkAndAwardBadges]);
+
+  const userName = (user as any)?.user_metadata?.name || (user?.email?.split('@')[0] ?? 'Soldier');
+
+  if (!user || !isProUser || pendingBadges.length === 0) return null;
+  return (
+    <BadgePopup
+      badge={pendingBadges[0]}
+      userName={userName}
+      onDismiss={() => markBadgeSeen(pendingBadges[0].key)}
+    />
+  );
+};
 
 const Root: React.FC = () => (
   <LoadingProvider>
