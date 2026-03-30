@@ -57,6 +57,7 @@ import StayHardyUpdatesPage from './pages/StayHardyUpdatesPage';
 import WhyStayHardy from './pages/WhyStayHardy';
 import Paywall from './pages/Paywall';
 import Leaderboard from './pages/Leaderboard';
+import ComingSoon from './pages/ComingSoon';
 
 // Black screen fallback — matches app background
 const BlackScreen = () => (
@@ -126,6 +127,9 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
 };
 
 const RootRedirect = () => {
+  // Web visitors (stayhardi.com) see the Coming Soon page
+  // Native app (Android/iOS) proceeds normally
+  if (isWeb) return <ComingSoon />;
   return <Navigate to="/loading" replace />;
 };
 
