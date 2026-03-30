@@ -1,9 +1,12 @@
 // src/pages/ComingSoon.tsx
 import React, { useEffect, useState } from 'react';
+import { supabase } from '../supabase';
 
 const ComingSoon: React.FC = () => {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const [dots, setDots] = useState('');
 
   // Animated dots
@@ -14,9 +17,25 @@ const ComingSoon: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleNotify = (e: React.FormEvent) => {
+  const handleNotify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email.trim()) setSubmitted(true);
+    if (!email.trim()) return;
+    setSubmitting(true);
+    setError('');
+    const { error: dbError } = await supabase
+      .from('waitlist')
+      .insert({ email: email.trim().toLowerCase() });
+    setSubmitting(false);
+    if (dbError) {
+      if (dbError.code === '23505') {
+        // Duplicate — already registered
+        setSubmitted(true);
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
+    } else {
+      setSubmitted(true);
+    }
   };
 
   return (
@@ -161,7 +180,7 @@ const ComingSoon: React.FC = () => {
                   fontFamily: 'inherit',
                 }}
               />
-              <button type="submit" style={{
+              <button type="submit" disabled={submitting} style={{
                 background: 'linear-gradient(135deg, #00E87A, #00b85e)',
                 border: 'none',
                 borderRadius: '12px',
@@ -169,13 +188,19 @@ const ComingSoon: React.FC = () => {
                 fontSize: '14px',
                 fontWeight: 700,
                 color: '#000',
-                cursor: 'pointer',
+                cursor: submitting ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
                 fontFamily: 'inherit',
+                opacity: submitting ? 0.7 : 1,
               }}>
-                Notify Me
+                {submitting ? '...' : 'Notify Me'}
               </button>
             </form>
+            {error && (
+              <p style={{ color: '#ff4d4d', fontSize: '13px', textAlign: 'center', marginTop: '8px' }}>
+                {error}
+              </p>
+            )}
           </>
         ) : (
           <div style={{
