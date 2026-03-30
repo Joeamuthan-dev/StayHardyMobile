@@ -92,7 +92,7 @@ const HomeDashboard: React.FC = () => {
   }; void _getWelcomeGreeting;
   const navigate = useNavigate();
   const { user, refreshUserProfile } = useAuth();
-  const { isPro } = useSubscription();
+  const { isPro: _isPro } = useSubscription();
   const { setLoading } = useLoading();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -203,9 +203,10 @@ const HomeDashboard: React.FC = () => {
 
   const fetchPendingHabits = useCallback(async () => {
     if (!user?.id) return;
-    const today = new Date().toISOString().split('T')[0];
+    const todayObj = new Date();
+    const today = new Date(todayObj.getTime() - (todayObj.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const todayName = dayNames[new Date().getDay()];
+    const todayName = dayNames[todayObj.getDay()];
 
     const { data: todayHabits } = await supabase
       .from('routines')
@@ -348,7 +349,7 @@ const HomeDashboard: React.FC = () => {
   useEffect(() => {
     const handleScoreUpdated = (e: any) => {
       const data = e.detail;
-      const tsKey = 'productivity_score_ts_' + user?.id;
+      const tsKey = 'ps_score_ts_' + user?.id;
       const incomingTs = parseInt(localStorage.getItem(tsKey) || '0');
 
       if (incomingTs >= lastScoreUpdateTime.current) {
@@ -405,6 +406,45 @@ const HomeDashboard: React.FC = () => {
     void fetchPendingHabits();
     void fetchHabitActivityFresh();
   }, [user?.id, fetchPendingHabits, fetchHabitActivityFresh]);
+
+  // Recompute productivity score whenever state changes — avoids stale-cache race
+  useEffect(() => {
+    if (!user?.id) return;
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const now = new Date();
+    const currentDayName = daysOfWeek[now.getDay()];
+    const todayStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+    const tasksTotal = tasks.length;
+    const tasksCompleted = tasks.filter(t => t.status === 'completed').length;
+    const tasksProgress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+
+    const goalsTotal = goals.length;
+    const goalsSum = goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : ((g as any).progress || 0)), 0);
+    const goalsProgress = goalsTotal > 0 ? Math.round(goalsSum / goalsTotal) : 0;
+
+    const routinesToday = routines.filter(r => r.days?.includes(currentDayName)).length;
+    const logsToday = routineLogs.filter(l => l.completed_at === todayStr).length;
+    const routinesProgress = routinesToday > 0 ? Math.round((logsToday / routinesToday) * 100) : 0;
+
+    const overallScore = calculateProductivityScore({ tasksProgress, routinesProgress, goalsProgress });
+    if (overallScore === 0 && tasksTotal === 0 && goalsTotal === 0 && routinesToday === 0) return;
+
+    const freshData: ProductivityScoreData = {
+      tasks_progress: tasksProgress,
+      routines_progress: routinesProgress,
+      goals_progress: goalsProgress,
+      overall_score: overallScore,
+      tasks_total: tasksTotal,
+      tasks_completed: tasksCompleted,
+      routines_total: routinesToday,
+      routines_completed: logsToday,
+      goals_total: goalsTotal,
+    };
+    setScoreData(freshData);
+    localStorage.setItem('ps_score_' + user.id, String(overallScore));
+    localStorage.setItem('ps_score_ts_' + user.id, String(Date.now()));
+  }, [tasks, goals, routines, routineLogs, user?.id]);
 
   // Automatic Daily Reset Check at Midnight
   useEffect(() => {
@@ -488,12 +528,13 @@ const HomeDashboard: React.FC = () => {
     ? Math.round(goals.reduce((acc, g) => acc + (g.status === 'completed' ? 100 : (g.progress || 0)), 0) / goals.length)
     : 0);
 
-  const overallProgress = scoreData?.overall_score ?? calculateProductivityScore({
-    tasksProgress,
-    routinesProgress,
-    goalsProgress: avgGoalProgress,
-    isPro
-  });
+  const overallProgress = scoreData?.overall_score !== undefined && scoreData.overall_score !== null
+    ? scoreData.overall_score
+    : calculateProductivityScore({
+        tasksProgress,
+        routinesProgress,
+        goalsProgress: avgGoalProgress,
+      });
 
   const todayKey = `ps_delta_${localTodayStr}_${user?.id}`;
   const yesterdayDate = new Date();

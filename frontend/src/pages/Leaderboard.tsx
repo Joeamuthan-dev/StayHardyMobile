@@ -1077,7 +1077,7 @@ const Leaderboard: React.FC = () => {
       setHasHabits(habitCount >= 5);
     };
     check();
-  }, [user?.id, isProUser]);
+  }, [user?.id, isPro, isAdmin]);
 
   // ── Load + refresh leaderboard ────────────────────────────────────────────
   const loadLeaderboard = useCallback(async () => {

@@ -83,9 +83,8 @@ export class ProductivityService {
       .update({ productivity_score: overallScore })
       .eq('id', userId);
 
-    // 8. Push events downstream instantly
+    // 8. Push score update downstream — other pages (Stats, HomeDashboard) listen for this
     window.dispatchEvent(new CustomEvent('productivity_sync', { detail: scoreData }));
-    window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
 
     return scoreData;
   }

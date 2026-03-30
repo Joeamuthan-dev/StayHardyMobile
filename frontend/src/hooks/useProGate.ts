@@ -18,6 +18,19 @@ const SUPABASE_TABLE: Record<GatedResource, string> = {
   habits: 'routines',
 };
 
+// Column name for user_id differs per table
+const USER_ID_COLUMN: Record<GatedResource, string> = {
+  tasks:  'userId',   // tasks table uses camelCase
+  goals:  'userId',   // goals table uses camelCase
+  habits: 'user_id',  // routines table uses snake_case
+};
+
+// Completed status values per resource — exclude these from the active count
+const COMPLETED_STATUSES: Partial<Record<GatedResource, string[]>> = {
+  tasks: ['completed'],
+  goals: ['completed', 'done', 'achieved'],
+};
+
 export function useProGate() {
   const { isPro } = useSubscription();
   const { user } = useAuth();
@@ -30,7 +43,7 @@ export function useProGate() {
   /**
    * Call before any creation action.
    * - Pro/admin: calls onAllowed immediately (no DB query).
-   * - Basic: counts existing rows with a HEAD request (no data transfer),
+   * - Basic: counts active (non-completed) rows,
    *   calls onAllowed if under limit, opens gate modal if at/over limit.
    */
   const checkAndGate = useCallback(
@@ -40,10 +53,18 @@ export function useProGate() {
         return;
       }
 
-      const { count } = await supabase
+      let query = supabase
         .from(SUPABASE_TABLE[resource])
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', user?.id ?? '');
+        .eq(USER_ID_COLUMN[resource], user?.id ?? '');
+
+      // Exclude completed items so finishing a task/goal frees up a slot
+      const completedStatuses = COMPLETED_STATUSES[resource];
+      if (completedStatuses) {
+        query = query.not('status', 'in', `(${completedStatuses.join(',')})`);
+      }
+
+      const { count } = await query;
 
       if ((count ?? 0) < PRO_LIMITS[resource]) {
         onAllowed();
