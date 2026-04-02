@@ -8,7 +8,7 @@ import { isNative } from '../utils/platform';
 import { storage } from '../utils/storage';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import {
-  Camera, Zap, ChevronRight,
+  Camera, ChevronRight, Zap, Info,
   Lock, Trash2, LogOut,
   MessageSquare, Heart, Megaphone, RotateCcw
 } from 'lucide-react';
@@ -27,7 +27,6 @@ import {
 } from '../lib/accountDeletion';
 import { CacheManager } from '../lib/smartCacheManager';
 import { useBadges, BADGE_DEFS } from '../hooks/useBadges';
-import BadgePopup from '../components/BadgePopup';
 import { BadgeIcon } from '../components/BadgeIcons';
 
 const SESS_START_KEY = 'stayhardy_sess_started';
@@ -201,7 +200,7 @@ const Settings: React.FC = () => {
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const { allEarned, pendingBadges, checkAndAwardBadges, markBadgeSeen } = useBadges();
+  const { allEarned, checkAndAwardBadges } = useBadges();
 
 
   const _handleUpdatePin = async (e?: React.FormEvent) => {
@@ -660,42 +659,71 @@ const Settings: React.FC = () => {
         }} />
       </div>
 
-      {/* ── Achievements row (visible to all, opens sheet) ─────────── */}
-      <SectionHeader label="Achievements" />
-      <div className="section-container">
-        <SettingsRow
-          icon={
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path fill="currentColor" d="M5 3H19V13C19 17.4 15.9 21 12 21C8.1 21 5 17.4 5 13V3Z"/>
-              <path fill="currentColor" d="M5 6H3C1.9 6 1 6.9 1 8V10C1 11.1 1.9 12 3 12H5V6Z"/>
-              <path fill="currentColor" d="M19 6H21C22.1 6 23 6.9 23 8V10C23 11.1 22.1 12 21 12H19V6Z"/>
-              <rect fill="currentColor" x="10" y="21" width="4" height="2" rx="0.5"/>
-              <rect fill="currentColor" x="7" y="22.5" width="10" height="1.5" rx="0.5"/>
-            </svg>
-          }
-          title="Achievements"
-          subtitle={isProUser
-            ? earnedCount > 0
-              ? `${earnedCount} of ${totalCount} badges earned`
-              : nextBadgeDef
-                ? `Next: ${nextBadgeDef.name} at ${nextBadgeDef.requiredStreak}-day streak`
-                : 'Build your habit streak'
-            : 'Pro feature — unlock streak badges'
-          }
-          right={
-            isProUser && earnedCount > 0 ? (
-              <span style={{
-                fontSize: '11px', fontWeight: '800', color: '#00E87A',
-                background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)',
-                padding: '3px 9px', borderRadius: '99px',
+      {/* ── Become Pro Card — basic users only ──────────────────────── */}
+      {!isProUser && (
+        <button
+          onClick={() => navigate('/paywall')}
+          style={{
+            width: '100%',
+            margin: '8px 0 4px',
+            padding: '0',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            borderRadius: '20px',
+            overflow: 'hidden',
+            display: 'block',
+          }}
+        >
+          <div style={{
+            position: 'relative',
+            borderRadius: '20px',
+            overflow: 'hidden',
+            background: 'linear-gradient(135deg, #00411A 0%, #001F0D 60%, #0A0A0A 100%)',
+            border: '1px solid rgba(0,230,118,0.3)',
+            boxShadow: '0 0 40px rgba(0,230,118,0.1), 0 12px 32px rgba(0,0,0,0.5)',
+            padding: '18px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+          }}>
+            <div style={{
+              position: 'absolute', top: '-20px', right: '-20px',
+              width: '120px', height: '120px',
+              background: 'radial-gradient(circle, rgba(0,230,118,0.18) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '14px',
+              background: 'rgba(0,230,118,0.15)',
+              border: '1px solid rgba(0,230,118,0.3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <Zap size={22} color="#00E676" fill="#00E676" />
+            </div>
+            <div style={{ flex: 1, textAlign: 'left' }}>
+              <div style={{
+                fontSize: '10px', fontWeight: '700', letterSpacing: '0.12em',
+                color: '#00E676', textTransform: 'uppercase', marginBottom: '3px',
               }}>
-                {earnedCount}
-              </span>
-            ) : undefined
-          }
-          onClick={() => setShowAchievements(true)}
-        />
-      </div>
+                Upgrade
+              </div>
+              <div style={{
+                fontSize: '16px', fontWeight: '800', color: '#FFFFFF',
+                fontFamily: 'Syne, sans-serif', marginBottom: '2px',
+              }}>
+                Become a Pro
+              </div>
+              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)' }}>
+                Unlock unlimited habits & stats
+              </div>
+            </div>
+            <ChevronRight size={20} color="rgba(0,230,118,0.7)" style={{ flexShrink: 0 }} />
+          </div>
+        </button>
+      )}
 
       {/* Achievements bottom sheet */}
       {showAchievements && (
@@ -898,44 +926,8 @@ const Settings: React.FC = () => {
         </>
       )}
 
-      {/* Badge popup — Pro only, show one at a time */}
-      {isProUser && pendingBadges.length > 0 && (
-        <BadgePopup
-          badge={pendingBadges[0]}
-          userName={userName}
-          onDismiss={() => markBadgeSeen(pendingBadges[0].key)}
-        />
-      )}
-
-      {/* Account Section */}
-      <SectionHeader label="Account" />
-      <div className="section-container">
-        <SettingsRow
-          icon={<Lock size={16} />}
-          title="Change Access PIN"
-          subtitle="Keep your vault secure"
-          onClick={() => { resetPinModalFields(); setShowPinModal(true); }}
-        />
-      </div>
-
-
-
-      {/* Premium Section */}
-      <SectionHeader label="Premium" />
-      <div className="section-container">
-        {!isProUser && (
-          <SettingsRow
-            icon={<Zap size={16} />}
-            title="Upgrade to Pro"
-            subtitle="Just ₹1 per day · Go Pro"
-            onClick={() => navigate('/paywall')}
-            upgrade={true}
-          />
-        )}
-      </div>
 
       {/* Support Section */}
-      <SectionHeader label="Support" />
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {/* News & Updates Highlighted Row */}
         <button
@@ -1082,6 +1074,56 @@ const Settings: React.FC = () => {
           </div>
           <ChevronRight size={16} color="#F59E0B" style={{ flexShrink: 0, marginLeft: 'auto', opacity: 0.4 }} />
         </button>
+
+        {/* Why Stay Hardy */}
+        <SettingsRow
+          icon={<Info size={16} />}
+          title="Why Stay Hardy"
+          subtitle="Our mission & philosophy"
+          onClick={() => navigate('/welcome')}
+        />
+
+        {/* Achievements */}
+        <SettingsRow
+          icon={
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path fill="currentColor" d="M5 3H19V13C19 17.4 15.9 21 12 21C8.1 21 5 17.4 5 13V3Z"/>
+              <path fill="currentColor" d="M5 6H3C1.9 6 1 6.9 1 8V10C1 11.1 1.9 12 3 12H5V6Z"/>
+              <path fill="currentColor" d="M19 6H21C22.1 6 23 6.9 23 8V10C23 11.1 22.1 12 21 12H19V6Z"/>
+              <rect fill="currentColor" x="10" y="21" width="4" height="2" rx="0.5"/>
+              <rect fill="currentColor" x="7" y="22.5" width="10" height="1.5" rx="0.5"/>
+            </svg>
+          }
+          title="Achievements"
+          subtitle={isProUser
+            ? earnedCount > 0
+              ? `${earnedCount} of ${totalCount} badges earned`
+              : nextBadgeDef
+                ? `Next: ${nextBadgeDef.name} at ${nextBadgeDef.requiredStreak}-day streak`
+                : 'Build your habit streak'
+            : 'Pro feature — unlock streak badges'
+          }
+          right={
+            isProUser && earnedCount > 0 ? (
+              <span style={{
+                fontSize: '11px', fontWeight: '800', color: '#00E87A',
+                background: 'rgba(0,232,122,0.12)', border: '1px solid rgba(0,232,122,0.25)',
+                padding: '3px 9px', borderRadius: '99px',
+              }}>
+                {earnedCount}
+              </span>
+            ) : undefined
+          }
+          onClick={() => setShowAchievements(true)}
+        />
+
+        {/* Change Access PIN */}
+        <SettingsRow
+          icon={<Lock size={16} />}
+          title="Change Access PIN"
+          subtitle="Keep your vault secure"
+          onClick={() => { resetPinModalFields(); setShowPinModal(true); }}
+        />
       </div>
 
       {/* Danger Zone Section */}

@@ -411,6 +411,15 @@ const StreakMilestoneCard = ({ currentStreak, bestStreak }: { currentStreak: num
 };
 
 // ─── DAY OF WEEK PATTERN CHART ───────────────────────────────────────────────
+const weekBarColor = (ratio: number): string => {
+  if (ratio <= 0) return 'rgba(255,255,255,0.08)';
+  const r1 = [255, 59, 48], r2 = [255, 204, 0], r3 = [0, 230, 118];
+  const [a, b] = ratio < 0.5 ? [r1, r2, ratio * 2] : [r2, r3, (ratio - 0.5) * 2] as [number[], number[], number];
+  const t = ratio < 0.5 ? ratio * 2 : (ratio - 0.5) * 2;
+  const lerp = (s: number, e: number) => Math.round(s + (e - s) * t);
+  return `rgb(${lerp(a[0], b[0])},${lerp(a[1], b[1])},${lerp(a[2], b[2])})`;
+};
+
 const DayOfWeekChart = ({ data }: { data: { day: string; count: number }[] }) => {
   const max = Math.max(...data.map(d => d.count), 1);
   const bestDayIdx = data.reduce((bi, d, i) => d.count > data[bi].count ? i : bi, 0);
@@ -426,16 +435,18 @@ const DayOfWeekChart = ({ data }: { data: { day: string; count: number }[] }) =>
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px', height: '80px', padding: '0 4px' }}>
         {data.map((d, i) => {
-          const heightPct = max > 0 ? (d.count / max) * 100 : 0;
+          const ratio = max > 0 ? d.count / max : 0;
+          const heightPct = ratio * 100;
           const isBest = i === bestDayIdx && d.count > 0;
+          const color = weekBarColor(ratio);
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', height: '100%', justifyContent: 'flex-end' }}>
               <div style={{
                 width: '100%',
                 height: `${Math.max(heightPct, 4)}%`,
-                background: isBest ? '#00E87A' : heightPct > 60 ? 'rgba(0,232,122,0.5)' : heightPct > 20 ? 'rgba(0,232,122,0.25)' : 'rgba(255,255,255,0.06)',
+                background: color,
                 borderRadius: '4px 4px 2px 2px',
-                boxShadow: isBest ? '0 0 8px rgba(0,232,122,0.5)' : 'none',
+                boxShadow: isBest ? `0 0 8px ${color}80` : 'none',
                 transition: 'height 0.8s cubic-bezier(0.34,1.56,0.64,1)',
               }} />
               <span style={{ fontSize: '9px', fontWeight: isBest ? 800 : 600, color: isBest ? '#00E87A' : 'rgba(255,255,255,0.25)', letterSpacing: '0.04em' }}>{d.day}</span>

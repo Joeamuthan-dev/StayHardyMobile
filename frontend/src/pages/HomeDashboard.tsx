@@ -13,6 +13,7 @@ import { supabase } from '../supabase';
 import { calculateProductivityScore } from '../utils/productivity';
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { ProductivityService, type ProductivityScoreData } from '../lib/ProductivityService';
+import { useBadges } from '../hooks/useBadges';
 import { isCacheExpired } from '../lib/cacheManager';
 import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
 import {
@@ -94,6 +95,56 @@ const HomeDashboard: React.FC = () => {
   const { user, refreshUserProfile } = useAuth();
   const { isPro: _isPro } = useSubscription();
   const { setLoading } = useLoading();
+  const { checkAndAwardBadges } = useBadges();
+
+  useEffect(() => {
+    const isProUser = _isPro || user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+    if (!user?.id || !isProUser) return;
+    void checkAndAwardBadges();
+  }, [user?.id, _isPro, checkAndAwardBadges]);
+
+  // Fetch leaderboard rank for Pro users
+  useEffect(() => {
+    const isProUser = _isPro || user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+    if (!user?.id || !isProUser) return;
+
+    const fetchRank = async () => {
+      try {
+        const monthStr = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+        const { data: scores } = await supabase
+          .from('leaderboard_scores')
+          .select('user_id, points')
+          .eq('month', monthStr);
+
+        if (!scores || scores.length === 0) return;
+
+        scores.sort((a, b) => b.points - a.points);
+        const idx = scores.findIndex(s => s.user_id === user.id);
+        if (idx === -1) return;
+
+        const rank = idx + 1;
+        setMyLeaderboardRank(rank);
+
+        // Compare with yesterday's stored rank
+        const today = new Date().toISOString().split('T')[0];
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        const todayKey = `lboard_rank_${today}_${user.id}`;
+        const yestKey = `lboard_rank_${yesterday}_${user.id}`;
+
+        localStorage.setItem(todayKey, String(rank));
+
+        const yestRankRaw = localStorage.getItem(yestKey);
+        if (yestRankRaw) {
+          const yestRank = Number(yestRankRaw);
+          if (rank < yestRank) setRankDelta('up');   // lower number = better rank
+          else if (rank > yestRank) setRankDelta('down');
+          else setRankDelta('same');
+        }
+      } catch (_) { /* silent */ }
+    };
+
+    void fetchRank();
+  }, [user?.id, _isPro]);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -106,6 +157,8 @@ const HomeDashboard: React.FC = () => {
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportGateReady, setSupportGateReady] = useState(false);
   const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
+  const [myLeaderboardRank, setMyLeaderboardRank] = useState<number | null>(null);
+  const [rankDelta, setRankDelta] = useState<'up' | 'down' | 'same' | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [animatedScore, setAnimatedScore] = useState(0);
   const animationRef = useRef<number | null>(null);
@@ -992,7 +1045,7 @@ const HomeDashboard: React.FC = () => {
                     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
                     border: '1px solid rgba(255,255,255,0.08)',
                   }}>
-                    {scoreDelta > 0 ? `+${scoreDelta}%` : `${scoreDelta}%`} today
+                    {scoreDelta > 0 ? `+${scoreDelta}%` : `${scoreDelta}%`}
                   </span>
                 )}
               </div>
@@ -1106,6 +1159,25 @@ const HomeDashboard: React.FC = () => {
         const totalBarsW = habitsData.length * barW + (habitsData.length - 1) * gap;
         const startX = (svgW - totalBarsW) / 2;
 
+        // Return hex color interpolated from red→yellow→green based on ratio 0→1
+        const barColor = (count: number): string => {
+          if (count === 0) return 'rgba(255,255,255,0.1)';
+          const t = count / maxVal; // 0 to 1
+          if (t < 0.5) {
+            // red (#FF3B30) → yellow (#FFD60A)
+            const u = t / 0.5;
+            const r = 255, g = Math.round(59 + (214 - 59) * u), b = Math.round(48 * (1 - u));
+            return `rgb(${r},${g},${b})`;
+          } else {
+            // yellow (#FFD60A) → green (#00E676)
+            const u = (t - 0.5) / 0.5;
+            const r = Math.round(255 * (1 - u)), g = Math.round(214 + (230 - 214) * u), b = Math.round(10 + (118 - 10) * u);
+            return `rgb(${r},${g},${b})`;
+          }
+        };
+
+        const isProUser = _isPro || user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+
         return (
           <div style={{ position: 'relative' }}>
             <div>
@@ -1127,6 +1199,21 @@ const HomeDashboard: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'rgba(255,255,255,0.6)', flexShrink: 0 }} />
                       <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>Habit Activity</span>
+                      {isProUser && myLeaderboardRank !== null && (
+                        <span
+                          onClick={e => { e.stopPropagation(); navigate('/leaderboard'); }}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '3px',
+                            fontSize: '13px', fontWeight: 800,
+                            color: rankDelta === 'up' ? '#00E676' : rankDelta === 'down' ? '#FF3B30' : 'rgba(255,255,255,0.75)',
+                            background: rankDelta === 'up' ? 'rgba(0,230,118,0.18)' : rankDelta === 'down' ? 'rgba(255,59,48,0.18)' : 'rgba(255,255,255,0.1)',
+                            borderRadius: '10px', padding: '2px 8px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {rankDelta === 'up' ? '↑' : rankDelta === 'down' ? '↓' : ''}#{myLeaderboardRank}
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '13px' }}>
                       <HeroFire />
@@ -1163,14 +1250,6 @@ const HomeDashboard: React.FC = () => {
                 {/* Bar chart */}
                 <svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width: '100%', height: '120px' }} preserveAspectRatio="xMidYMid meet">
                   <defs>
-                    <linearGradient id="barGrad" x1="0" y1="1" x2="0" y2="0">
-                      <stop offset="0%" stopColor="#007A3D" />
-                      <stop offset="100%" stopColor="#00E87A" />
-                    </linearGradient>
-                    <linearGradient id="barGradToday" x1="0" y1="1" x2="0" y2="0">
-                      <stop offset="0%" stopColor="#00C86A" />
-                      <stop offset="100%" stopColor="#AAFF44" />
-                    </linearGradient>
                     <filter id="todayGlow" x="-40%" y="-20%" width="180%" height="160%">
                       <feGaussianBlur stdDeviation="4" result="blur" />
                       <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -1184,24 +1263,26 @@ const HomeDashboard: React.FC = () => {
                     const y = topPad + (maxBarH - barH);
                     const rx = barW < 8 ? 2 : Math.min(barW / 2, 7);
                     const showLabel = habitRange === 7 || i === 0 || (i + 1) % 5 === 0 || isToday;
+                    const fillColor = isToday ? '#00E676' : barColor(d.count);
+                    const glowColor = isToday ? 'rgba(0,230,118,0.3)' : d.count > 0 ? `${barColor(d.count)}44` : 'transparent';
 
                     return (
                       <g key={i}>
                         {/* Today background glow */}
                         {isToday && d.count > 0 && (
                           <rect x={x - 2} y={y - 2} width={barW + 4} height={barH + 4} rx={rx + 2}
-                            fill="rgba(170,255,68,0.25)" filter="url(#todayGlow)" />
+                            fill={glowColor} filter="url(#todayGlow)" />
                         )}
                         {/* Bar */}
                         <rect
                           x={x} y={y} width={barW} height={barH} rx={rx}
-                          fill={isToday ? 'url(#barGradToday)' : d.count > 0 ? 'url(#barGrad)' : 'rgba(255,255,255,0.1)'}
+                          fill={fillColor}
                         />
                         {/* Count above bar (7D only, non-zero) */}
                         {habitRange === 7 && d.count > 0 && (
                           <text x={x + barW / 2} y={y - 3} textAnchor="middle"
                             fontSize="8" fontWeight="700"
-                            fill={isToday ? '#AAFF44' : 'rgba(255,255,255,0.7)'}
+                            fill={isToday ? '#00E676' : fillColor}
                             fontFamily="-apple-system, sans-serif">
                             {d.count}
                           </text>

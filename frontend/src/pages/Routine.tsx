@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+
+// Returns YYYY-MM-DD in the device's LOCAL timezone — not UTC
+const localDateStr = (d: Date = new Date()) =>
+  new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
@@ -50,7 +54,7 @@ function mapFetchedToRoutineState(
   userId: string,
 ): { mappedRoutines: RoutineData[]; logs: RoutineLog[] } {
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = localDateStr(now);
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const todayDayName = dayNames[now.getDay()];
   const completedIdsToday = new Set(logsData.filter((l) => l.completed_at === todayStr).map((l) => l.routine_id));
@@ -346,14 +350,20 @@ function computeStreakDays(routines: RoutineData[], logs: RoutineLog[]): number 
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() - i);
-    const dStr = d.toISOString().split('T')[0];
+    const dStr = localDateStr(d);
     const dayName = dayNames[d.getDay()];
     const scheduled = routines.filter((r) => r.days.includes(dayName));
+    // Rest day — skip without breaking streak
     if (scheduled.length === 0) continue;
     const scheduledIds = new Set(scheduled.map((r) => r.id));
     const anyDone = logs.some((l) => l.completed_at === dStr && scheduledIds.has(l.routine_id));
-    if (anyDone) streak += 1;
-    else break;
+    if (anyDone) {
+      streak += 1;
+    } else {
+      // Today not done yet — day isn't over, don't break streak
+      if (i === 0) continue;
+      break;
+    }
   }
   return streak;
 }
@@ -919,12 +929,12 @@ const Routine: React.FC = () => {
     return days.map((label, i) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
-      const isToday = date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+      const isToday = localDateStr(date) === localDateStr(today);
       const isFuture = date > today;
       const hasCompletion = logs?.some(log =>
-        log.completed_at?.startsWith(date.toISOString().split('T')[0])
+        log.completed_at?.startsWith(localDateStr(date))
       );
-      return { label, dateStr: date.toISOString().split('T')[0], isToday, isFuture, hasCompletion };
+      return { label, dateStr: localDateStr(date), isToday, isFuture, hasCompletion };
     });
   };
 
@@ -978,11 +988,12 @@ const Routine: React.FC = () => {
             .eq('user_id', user.id);
           if (rError) throw rError;
           const now = new Date();
-          let daysToFetch = 7;
+          // Fetch enough history to compute streaks up to 400 days
+          const daysToFetch = 400;
 
           const startDate = new Date();
           startDate.setDate(now.getDate() - daysToFetch);
-          const startDayStr = startDate.toISOString().split('T')[0];
+          const startDayStr = localDateStr(startDate);
           const { data: logsData, error: lError } = await supabase
             .from('routine_logs')
             .select('routine_id, completed_at')
@@ -1221,7 +1232,8 @@ const Routine: React.FC = () => {
       isTogglingRef.current = false;
     }, 8000);
 
-    const today = new Date().toISOString().split('T')[0];
+    const _d = new Date();
+    const today = new Date(_d.getTime() - _d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
     const isNowCompleted = !routine.completed;
 
     // 1. Optimistic Synchronous Updates with functional queuing secure

@@ -14,7 +14,7 @@ import { isOnline } from '../lib/networkStatus';
 import { enqueueSync, AFTER_SYNC_FLUSH_EVENT } from '../lib/syncQueue';
 import { ProductivityService } from '../lib/ProductivityService';
 // CelebrationOverlay import removed — task completions now use inline top toast
-import { isCompletedTaskToday } from '../lib/supportPopup';
+// isCompletedTaskToday removed — no longer used in header
 import { supabase } from '../supabase';
 
 
@@ -851,276 +851,93 @@ const Dashboard: React.FC = () => {
 
 
 
+  const pendingCount = tasks.filter(t => t.status === 'pending').length;
+  const doneCount = tasks.filter(t => t.status === 'completed').length;
+
   return (
-    <div className={`page-shell dashboard-page-layout ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ 
-      paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)',
-      paddingBottom: '120px', 
-      background: '#000000', 
-      minHeight: '100vh', 
+    <div className={`page-shell dashboard-page-layout ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{
+      paddingBottom: '120px',
+      background: '#000000',
+      minHeight: '100vh',
       overflowY: 'auto',
       position: 'relative'
     }}>
-      
 
-      {/* STICKY HEADER WRAPPER */}
+      {/* STICKY HEADER — mirrors Goals page exactly */}
       <div style={{
+        padding: isWeb ? '16px 16px 16px 16px' : 'calc(env(safe-area-inset-top, 0px) + 24px) 16px 16px 72px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: isWeb ? 'center' : 'flex-end',
         position: 'sticky',
         top: 0,
-        zIndex: 50,
-        background: '#000000',
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: '4px'
+        zIndex: 100,
+        background: 'rgba(0,0,0,0.65)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.08)'
       }}>
-        {isWeb && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px 4px 16px' }}>
-            <span style={{ fontSize: '18px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '-0.3px' }}>Tasks</span>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <p style={{
+            fontSize: '10px',
+            fontWeight: '800',
+            color: '#666666',
+            letterSpacing: '0.15em',
+            margin: '0 0 2px 0',
+            textTransform: 'uppercase'
+          }}>
+            PERSONAL TO-DO
+          </p>
+          <h2 style={{
+            fontSize: '28px',
+            fontWeight: '900',
+            color: '#FFFFFF',
+            margin: 0,
+            letterSpacing: '-1px',
+            lineHeight: 1
+          }}>
+            Tasks
+          </h2>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '2px' }}>
+          {isWeb && (
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('open-create-task'))}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#00E87A', border: 'none', borderRadius: '12px', padding: '8px 16px', fontSize: '13px', fontWeight: '800', color: '#000', cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#00E87A', border: 'none', borderRadius: '12px', padding: '8px 16px', fontSize: '13px', fontWeight: '800', color: '#000', cursor: 'pointer', marginRight: '4px' }}
             >
               <span style={{ fontSize: '18px', lineHeight: 1 }}>+</span> New Task
             </button>
+          )}
+          <div style={{
+            background: 'rgba(124,77,255,0.1)',
+            border: '1px solid rgba(124,77,255,0.4)',
+            borderRadius: '10px',
+            padding: '4px 10px',
+            textAlign: 'center',
+            boxShadow: '0 0 10px rgba(124,77,255,0.2)'
+          }}>
+            <p style={{ fontSize: '14px', fontWeight: '900', color: '#7C4DFF', margin: 0, lineHeight: 1 }}>
+              {pendingCount} <span style={{ fontSize: '9px', opacity: 0.6, fontWeight: '700' }}>PENDING</span>
+            </p>
           </div>
-        )}
-        {/* GLASSMORPHIC HEADER */}
-        {(() => {
-          const pendingTasks = tasks.filter(t => t.status === 'pending')
-          const completedToday = tasks.filter(t => 
-            t.status === 'completed' && 
-            isCompletedTaskToday(t.updatedAt)
-          ).length
-          const totalTasks = tasks.length
-
-          return (
-            <>
-              {pendingTasks.length > 0 ? (
-                <div style={{
-                  margin: '16px 16px 12px 16px',
-                  background:
-                    'linear-gradient(135deg,' +
-                    'rgba(239,68,68,0.12) 0%,' +
-                    'rgba(185,28,28,0.08) 100%)',
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                  border: '1px solid ' +
-                    'rgba(239,68,68,0.4)',
-                  borderRadius: '24px',
-                  padding: '20px',
-                  boxShadow:
-                    '0 0 20px rgba(239,68,68,0.1),' +
-                    'inset 0 1px 0 ' +
-                    'rgba(255,255,255,0.05)',
-                  marginTop: '16px'
-                }}>
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '12px'
-                  }}>
-                    <div style={{
-                      animation:
-                        'breathe 2.5s ease-in-out infinite'
-                    }}>
-                      <p style={{
-                        fontSize: '36px',
-                        fontWeight: '900',
-                        color: '#FFFFFF',
-                        margin: 0,
-                        lineHeight: 1,
-                        letterSpacing: '-1px'
-                      }}>
-                        {pendingTasks.length}
-                      </p>
-                      <p style={{
-                        fontSize: '12px',
-                        fontWeight: '700',
-                        color: 'rgba(239,68,68,0.8)',
-                        margin: '4px 0 0 0',
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase'
-                      }}>
-                        {pendingTasks.length === 1
-                          ? 'Task Pending'
-                          : 'Tasks Pending'}
-                      </p>
-                    </div>
-
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '4px',
-                      alignItems: 'flex-end'
-                    }}>
-                      {[
-                        {
-                          label: 'High',
-                          count: pendingTasks
-                            .filter(t =>
-                              t.priority.toLowerCase() === 'high')
-                            .length,
-                          color: '#EF4444'
-                        },
-                        {
-                          label: 'Medium',
-                          count: pendingTasks
-                            .filter(t =>
-                              t.priority.toLowerCase() === 'medium')
-                            .length,
-                          color: '#F59E0B'
-                        },
-                        {
-                          label: 'Low',
-                          count: pendingTasks
-                            .filter(t =>
-                              t.priority.toLowerCase() === 'low')
-                            .length,
-                          color: '#06B6D4'
-                        }
-                      ].filter(p => p.count > 0)
-                      .map((p, i) => (
-                        <div key={i} style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}>
-                          <div style={{
-                            width: '6px',
-                            height: '6px',
-                            borderRadius: '50%',
-                            background: p.color,
-                            boxShadow:
-                              `0 0 6px ${p.color}`
-                          }}/>
-                          <span style={{
-                            fontSize: '11px',
-                            color: 'rgba(255,255,255,0.5)',
-                            fontWeight: '600'
-                          }}>
-                            {p.count} {p.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      marginBottom: '6px'
-                    }}>
-                      <span style={{
-                        fontSize: '10px',
-                        color: 'rgba(255,255,255,0.3)',
-                        fontWeight: '600',
-                        letterSpacing: '0.1em'
-                      }}>
-                        TODAY'S PROGRESS
-                      </span>
-                      <span style={{
-                        fontSize: '10px',
-                        color: 'rgba(255,255,255,0.5)',
-                        fontWeight: '700'
-                      }}>
-                        {completedToday}/
-                        {totalTasks} done
-                      </span>
-                    </div>
-                    <div style={{
-                      height: '4px',
-                      background: 'rgba(255,255,255,0.08)',
-                      borderRadius: '4px',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{
-                        height: '100%',
-                        width: totalTasks > 0
-                          ? (completedToday /
-                             totalTasks * 100) + '%'
-                          : '0%',
-                        background:
-                          'linear-gradient(90deg,' +
-                          '#EF4444,#F59E0B)',
-                        borderRadius: '4px',
-                        transition: 'width 0.5s ease',
-                        boxShadow:
-                          '0 0 8px rgba(239,68,68,0.5)'
-                      }}/>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{
-                  margin: '16px 16px 12px 16px',
-                  background:
-                    'linear-gradient(135deg,' +
-                    'rgba(0,232,122,0.1) 0%,' +
-                    'rgba(0,100,60,0.08) 100%)',
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                  border: '1px solid ' +
-                    'rgba(0,232,122,0.3)',
-                  borderRadius: '24px',
-                  padding: '24px 20px',
-                  textAlign: 'center',
-                  boxShadow:
-                    '0 0 24px rgba(0,232,122,0.1)'
-                }}>
-                  <p style={{
-                    fontSize: '32px',
-                    fontWeight: '900',
-                    color: '#00E87A',
-                    margin: '0 0 4px 0',
-                    letterSpacing: '-0.5px',
-                    animation:
-                      'allClearGlow 2s ease-in-out infinite'
-                  }}>
-                    All Clear ✓
-                  </p>
-                  <p style={{
-                    fontSize: '13px',
-                    color: 'rgba(255,255,255,0.4)',
-                    margin: 0,
-                    fontWeight: '500'
-                  }}>
-                    You crushed everything today 🔥
-                  </p>
-                </div>
-              )}
-
-              {/* SECTION LABEL (Also sticky) */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '8px 16px',
-                background: '#000000'
-              }}>
-                <p style={{
-                  fontSize: '10px',
-                  fontWeight: '900',
-                  color: 'rgba(255,255,255,0.3)',
-                  margin: 0,
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase'
-                }}>
-                  Tasks List
-                </p>
-                <div style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  background: '#EF4444',
-                  opacity: 0.6
-                }}/>
-              </div>
-            </>
-          )
-        })()}
+          <div style={{
+            background: 'rgba(0,230,118,0.08)',
+            border: '1px solid rgba(0,230,118,0.3)',
+            borderRadius: '10px',
+            padding: '4px 10px',
+            textAlign: 'center',
+            boxShadow: '0 0 10px rgba(0,230,118,0.15)'
+          }}>
+            <p style={{ fontSize: '14px', fontWeight: '900', color: '#00E676', margin: 0, lineHeight: 1 }}>
+              {doneCount} <span style={{ fontSize: '9px', opacity: 0.6, fontWeight: '700' }}>DONE</span>
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div 
+
+      <div
         className="bouncing-scroll"
 
         style={{ 

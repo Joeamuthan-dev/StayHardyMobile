@@ -101,10 +101,25 @@ export default function VerifyEmail() {
         </p>
       </div>
 
-      {/* Resend section */}
-      <p className="text-white/30 text-xs text-center mb-3">
-        Didn't receive it? Check spam or resend.
-      </p>
+      {/* Spam warning — prominent */}
+      <div style={{
+        width: '100%', maxWidth: '360px',
+        background: 'rgba(251,191,36,0.08)',
+        border: '1px solid rgba(251,191,36,0.35)',
+        borderRadius: '14px',
+        padding: '12px 16px',
+        marginBottom: '16px',
+        display: 'flex', alignItems: 'flex-start', gap: '10px',
+      }}>
+        <span style={{ fontSize: '18px', lineHeight: 1, flexShrink: 0 }}>⚠️</span>
+        <p style={{ margin: 0, fontSize: '12px', lineHeight: 1.6, color: 'rgba(251,191,36,0.9)', fontWeight: 600 }}>
+          Can't find the email?{' '}
+          <span style={{ color: '#FCD34D', fontWeight: 800, textDecoration: 'underline' }}>
+            Check your Spam / Junk folder.
+          </span>
+          {' '}Gmail and other providers often filter activation emails.
+        </p>
+      </div>
 
       <button
         onClick={handleResend}

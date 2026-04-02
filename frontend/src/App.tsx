@@ -341,6 +341,25 @@ const BadgeBootstrap: React.FC = () => {
 
   const { pendingBadges, checkAndAwardBadges, markBadgeSeen } = useBadges();
 
+  // Silently add Pro user to leaderboard if not already a member
+  useEffect(() => {
+    if (!user?.id || !isProUser) return;
+    const silentJoin = async () => {
+      const { data } = await supabase
+        .from('leaderboard_members')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data !== null) return; // already a member
+      const displayName = user.name || user.email.split('@')[0] || 'Warrior';
+      await supabase.from('leaderboard_members').upsert(
+        { user_id: user.id, display_name: displayName, avatar_url: user.avatarUrl ?? null, is_active: true },
+        { onConflict: 'user_id' }
+      );
+    };
+    void silentJoin();
+  }, [user?.id, isProUser]);
+
   useEffect(() => {
     if (!user?.id || !isProUser) return;
     void checkAndAwardBadges();

@@ -26,6 +26,8 @@ const Login: React.FC = () => {
   const [isResending, setIsResending] = useState(false);
   const [resendSuccess, setResendSuccess] = useState('');
 
+  const [pinFocused, setPinFocused] = useState(false);
+
   // PIN Ref for focus management
   const pinInputRef = useRef<HTMLInputElement>(null);
 
@@ -306,6 +308,7 @@ const Login: React.FC = () => {
 
   return (
     <div className="login-page-root min-h-screen bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black relative overflow-hidden">
+      <style>{`@keyframes pinCursor { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       
       {/* BACK BUTTON (TOP LEFT) */}
       <div 
@@ -361,17 +364,30 @@ const Login: React.FC = () => {
                 style={{ position: 'absolute', opacity: 0, width: 1, height: 1, pointerEvents: 'none' }}
                 value={pin}
                 onChange={handlePinInput}
+                onFocus={() => setPinFocused(true)}
+                onBlur={() => setPinFocused(false)}
               />
               {[0, 1, 2, 3].map((index) => {
                 const isFilled = pin.length > index;
+                const isActive = pinFocused && index === pin.length;
                 return (
-                  <div 
+                  <div
                     key={index}
                     onClick={handlePinDotPress}
-                    className="w-14 h-14 rounded-full flex items-center justify-center transition-all bg-[#0A0A0A] border border-white/10 shadow-[inset_0_4px_10px_rgba(0,0,0,0.8)]"
+                    style={{
+                      width: '56px', height: '56px', borderRadius: '50%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: '#0A0A0A',
+                      border: isActive ? '2px solid rgba(255,255,255,0.85)' : isFilled ? '2px solid rgba(0,230,118,0.5)' : '2px solid rgba(255,255,255,0.1)',
+                      boxShadow: isActive ? '0 0 0 3px rgba(255,255,255,0.12), inset 0 4px 10px rgba(0,0,0,0.8)' : 'inset 0 4px 10px rgba(0,0,0,0.8)',
+                      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                    }}
                   >
                     {isFilled && (
                       <div className="w-4 h-4 rounded-full bg-[#00E676] shadow-[0_0_10px_rgba(0,230,118,0.6)] animate-in zoom-in duration-200" />
+                    )}
+                    {isActive && !isFilled && (
+                      <div style={{ width: '2px', height: '20px', background: 'rgba(255,255,255,0.7)', borderRadius: '1px', animation: 'pinCursor 1s ease-in-out infinite' }} />
                     )}
                   </div>
                 );

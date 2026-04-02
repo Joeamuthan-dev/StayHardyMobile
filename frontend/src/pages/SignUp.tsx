@@ -23,6 +23,9 @@ export default function SignUp() {
   const [resendSuccess, setResendSuccess] = useState('');
   const [showGoToLogin, setShowGoToLogin] = useState(false);
   
+  const [pinFocused, setPinFocused] = useState(false);
+  const [confirmPinFocused, setConfirmPinFocused] = useState(false);
+
   const pinInputRef = useRef<HTMLInputElement>(null);
   const confirmPinInputRef = useRef<HTMLInputElement>(null);
 
@@ -231,13 +234,22 @@ export default function SignUp() {
     pin === confirmPin && 
     !isLoading;
 
-  const pinDotStyle = {
-    background: '#0A0A0A',
-    boxShadow: 'inset 4px 4px 8px rgba(0,0,0,0.8), inset -2px -2px 4px rgba(255,255,255,0.04), 0 1px 0 rgba(255,255,255,0.06)'
+  const pinDotStyle = (focused: boolean, filledLen: number, idx: number) => {
+    const isFilled = filledLen > idx;
+    const isActive = focused && idx === filledLen;
+    return {
+      width: '56px', height: '56px', borderRadius: '50%',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#0A0A0A',
+      border: isActive ? '2px solid rgba(255,255,255,0.85)' : isFilled ? '2px solid rgba(0,230,118,0.5)' : '2px solid rgba(255,255,255,0.1)',
+      boxShadow: isActive ? '0 0 0 3px rgba(255,255,255,0.12), inset 0 4px 10px rgba(0,0,0,0.8)' : 'inset 0 4px 10px rgba(0,0,0,0.8)',
+      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+    };
   };
 
   return (
     <div className="signup-page-root min-h-screen bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black relative overflow-y-auto pb-12">
+      <style>{`@keyframes pinCursor { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       
       {/* 1. BACK BUTTON */}
       <button
@@ -282,10 +294,11 @@ export default function SignUp() {
         <div className="space-y-1">
           <label className="text-white/60 text-sm font-medium ml-1">Create Your PIN</label>
           <div className="relative flex gap-5 justify-center items-center py-2" onClick={() => pinInputRef.current?.focus()}>
-            <input ref={pinInputRef} type="tel" inputMode="numeric" value={pin} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} onChange={handlePinInput} />
+            <input ref={pinInputRef} type="tel" inputMode="numeric" value={pin} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} onChange={handlePinInput} onFocus={() => setPinFocused(true)} onBlur={() => setPinFocused(false)} />
             {[0, 1, 2, 3].map((idx) => (
-              <div key={idx} className="w-14 h-14 rounded-full flex items-center justify-center transition-all" style={pinDotStyle}>
+              <div key={idx} style={pinDotStyle(pinFocused, pin.length, idx)}>
                 {pin.length > idx && <div className="w-5 h-5 rounded-full bg-[#00E676] shadow-[0_0_12px_rgba(0,230,118,0.6)] animate-in zoom-in duration-200" />}
+                {pinFocused && idx === pin.length && <div style={{ width: '2px', height: '20px', background: 'rgba(255,255,255,0.7)', borderRadius: '1px', animation: 'pinCursor 1s ease-in-out infinite' }} />}
               </div>
             ))}
           </div>
@@ -294,10 +307,11 @@ export default function SignUp() {
         <div className="space-y-1">
           <label className="text-white/60 text-sm font-medium ml-1">Confirm Your PIN</label>
           <div className="relative flex gap-5 justify-center items-center py-2" onClick={() => confirmPinInputRef.current?.focus()}>
-            <input ref={confirmPinInputRef} type="tel" inputMode="numeric" value={confirmPin} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} onChange={handleConfirmPinInput} />
+            <input ref={confirmPinInputRef} type="tel" inputMode="numeric" value={confirmPin} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} onChange={handleConfirmPinInput} onFocus={() => setConfirmPinFocused(true)} onBlur={() => setConfirmPinFocused(false)} />
             {[0, 1, 2, 3].map((idx) => (
-              <div key={idx} className="w-14 h-14 rounded-full flex items-center justify-center transition-all" style={pinDotStyle}>
+              <div key={idx} style={pinDotStyle(confirmPinFocused, confirmPin.length, idx)}>
                 {confirmPin.length > idx && <div className="w-5 h-5 rounded-full bg-[#00E676] shadow-[0_0_12px_rgba(0,230,118,0.6)] animate-in zoom-in duration-200" />}
+                {confirmPinFocused && idx === confirmPin.length && <div style={{ width: '2px', height: '20px', background: 'rgba(255,255,255,0.7)', borderRadius: '1px', animation: 'pinCursor 1s ease-in-out infinite' }} />}
               </div>
             ))}
           </div>

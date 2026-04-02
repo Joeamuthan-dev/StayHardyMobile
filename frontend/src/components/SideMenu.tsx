@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Home, CheckSquare, Target, Calendar,
   RefreshCw, BarChart2, X, LogOut,
-  ChevronRight, Shield, Bell, Info
+  ChevronRight, Shield, Bell
 } from 'lucide-react';
 import UserAvatar from './UserAvatar';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -409,8 +409,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
           })()}
         </div>
 
-        {/* Hardy Board — shown for all users */}
-        {(
+        {/* Hardy Board — Pro members only */}
+        {isProUser && (
           <div className="px-4 pb-3">
             <div
               onClick={() => { navigate('/leaderboard'); onClose(); }}
@@ -448,7 +448,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                   Hardy Board
                 </p>
                 <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', margin: '2px 0 0', letterSpacing: '0.01em' }}>
-                  {isOnBoard ? 'Track your rank in leaderboard' : 'Join the habit leaderboard'}
+                  {isOnBoard || isProUserFromState ? 'Track your rank in leaderboard' : 'Join the habit leaderboard'}
                 </p>
               </div>
               <span style={{
@@ -673,24 +673,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
               </div>
             </button>
           )}
-
-          {/* About This App */}
-          <button
-            onClick={() => {
-              localStorage.setItem('sh_notif_last_seen', new Date().toISOString());
-              setNotifCount(0);
-              navigate('/welcome');
-              onClose();
-            }}
-            className="flex items-center gap-3.5 w-full px-6 py-3.5 group hover:bg-white/3 transition-all duration-200"
-          >
-            <div className="text-white/30 group-hover:text-white/60 transition-colors duration-200">
-              <Info size={18} strokeWidth={1.5} />
-            </div>
-            <span className="text-white/40 group-hover:text-white/70 text-sm font-medium flex-1 text-left transition-colors duration-200">
-              Why Stay Hardy
-            </span>
-          </button>
 
           {!isProUser && (
             <div className="px-4 mt-4 mb-2">
