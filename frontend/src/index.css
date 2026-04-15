@@ -44,8 +44,43 @@ html, body, #root {
   min-height: 100vh;
   overflow-x: hidden;
 }
+
+/* Native-feel performance optimizations */
 * {
   -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent text selection on interactive elements (native feel) */
+button, a, [role="button"], [onclick] {
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* Faster touch response — remove 300ms tap delay */
+html {
+  touch-action: manipulation;
+}
+
+/* GPU-accelerate elements that animate (not globally — breaks z-index stacking) */
+.transition-transform, [class*="translate"] {
+  will-change: transform;
+}
+
+/* iOS: prevent auto-zoom on input focus (requires font-size >= 16px) */
+input, textarea, select {
+  font-size: 16px !important;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* iOS: reset viewport scroll position when keyboard closes */
+@supports (-webkit-touch-callout: none) {
+  body {
+    /* Prevent iOS rubber-band bounce that shifts the viewport */
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .material-symbols-outlined {

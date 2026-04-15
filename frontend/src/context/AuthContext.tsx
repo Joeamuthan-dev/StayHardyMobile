@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { User as SupabaseAuthUser } from '@supabase/supabase-js';
 import { isNative } from '../utils/platform';
@@ -82,12 +82,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     [persistUser]
   );
 
-  const updateUserMetadata = (metadata: Record<string, unknown>) => {
+  const updateUserMetadata = useCallback((metadata: Record<string, unknown>) => {
     setUser((prev) => {
       if (!prev) return null;
       return { ...prev, ...metadata } as AuthUser;
     });
-  };
+  }, []);
 
   const refreshUserProfile = useCallback(async (): Promise<boolean> => {
     let targetId = user?.id;
@@ -188,75 +188,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [persistUser]);
 
-  const logout = async () => {
-    try {
-      console.log('Logging out...');
-      // 1. Supabase signout
-      if (isNative) {
-        await RevenueCatService.logOut().catch(() => {});
-        await supabase.auth.signOut({ scope: 'local' });
-      } else {
-        await supabase.auth.signOut({ scope: 'global' });
-      }
+  const logout = useCallback(async () => {
+    // 1. Instant UI response — clear user state and navigate immediately
+    loginJustHappened.current = false;
+    persistUser(null);
+    window.location.hash = '/login';
 
-      const clearRoleCache = async () => {
-        try {
-          const userId = localStorage.getItem('cached_user_id') || '';
+    // 2. Clean up everything in the background — user already sees login screen
+    const userId = localStorage.getItem('cached_user_id') || '';
 
-          // Clear localStorage keys
-          localStorage.removeItem('cached_is_pro');
-          localStorage.removeItem('cached_user_id');
-          if (userId) {
-            localStorage.removeItem('cached_profile_fast_' + userId);
-            localStorage.removeItem('ps_score_' + userId);
-            localStorage.removeItem('ps_score_ts_' + userId);
-          }
-
-          // Clear Preferences keys
-          if (userId) {
-            await storage.remove('cached_user_profile_' + userId);
-            await storage.remove('cached_user_role_' + userId);
-          }
-        } catch (err) {
-          console.warn('[Auth] Cache clear failed:', err);
-        }
-      };
-
-      void clearRoleCache();
-
-      // 2. Clear Preferences
-      await storage.remove('user_session');
-      await storage.remove('pending_verification_email');
-      await storage.remove('save_login_enabled').catch(() => {});
-      await storage.remove('saved_email').catch(() => {});
-      await storage.remove('saved_pin').catch(() => {});
-
-      try {
-        const { Preferences } =
-          await import('@capacitor/preferences');
-        // Clear all app preferences
-        await Preferences.clear();
-      } catch (e) {
-        console.warn('[Auth] Preferences clear failed:', e);
-      }
-
-      // 3. Reset user state
-      await flushPendingListCacheWrites();
-      await clearAllCache();
-      loginJustHappened.current = false;
-      persistUser(null);
-
-      // 4. Navigate to login
-      // This may already be handled by the caller
-      // but add as safety:
-      window.location.hash = '/login';
-
-    } catch (err: any) {
-      console.error('[Auth] Logout error:', err?.message);
-      // Force redirect regardless
-      window.location.hash = '/login';
+    // Sync localStorage clears (instant, no await needed)
+    localStorage.removeItem('cached_is_pro');
+    localStorage.removeItem('cached_user_id');
+    if (userId) {
+      localStorage.removeItem('cached_profile_fast_' + userId);
+      localStorage.removeItem('ps_score_' + userId);
+      localStorage.removeItem('ps_score_ts_' + userId);
     }
-  };
+
+    // Fire all async cleanup in parallel — don't block anything
+    void Promise.allSettled([
+      isNative
+        ? RevenueCatService.logOut().catch(() => {})
+        : Promise.resolve(),
+      isNative
+        ? supabase.auth.signOut({ scope: 'local' })
+        : supabase.auth.signOut({ scope: 'global' }),
+      storage.remove('user_session'),
+      storage.remove('pending_verification_email'),
+      storage.remove('save_login_enabled'),
+      storage.remove('saved_email'),
+      storage.remove('saved_pin'),
+      userId ? storage.remove('cached_user_profile_' + userId) : Promise.resolve(),
+      userId ? storage.remove('cached_user_role_' + userId) : Promise.resolve(),
+      import('@capacitor/preferences').then(({ Preferences }) => Preferences.clear()).catch(() => {}),
+      flushPendingListCacheWrites(),
+      clearAllCache(),
+    ]);
+  }, [persistUser]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -287,19 +256,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, [persistUser]);
 
+  const contextValue = useMemo(() => ({
+    user,
+    loading,
+    logout,
+    setCurrentUser,
+    markLoginComplete,
+    updateUserMetadata,
+    refreshUserProfile,
+    initAuth,
+  }), [user, loading, logout, setCurrentUser, markLoginComplete, updateUserMetadata, refreshUserProfile, initAuth]);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        logout,
-        setCurrentUser,
-        markLoginComplete,
-        updateUserMetadata,
-        refreshUserProfile,
-        initAuth,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

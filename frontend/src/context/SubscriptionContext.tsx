@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { Purchases, type CustomerInfo, type PurchasesPackage } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
@@ -328,18 +328,20 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
     updateStateFromInfo(info);
   };
 
+  const contextValue = useMemo(() => ({
+    isPro,
+    customerInfo,
+    offerings,
+    loading,
+    refreshSubscription,
+    purchasePackage,
+    restorePurchases,
+    presentCustomerCenter,
+    presentPaywall,
+  }), [isPro, customerInfo, offerings, loading, refreshSubscription]);
+
   return (
-    <SubscriptionContext.Provider value={{
-      isPro,
-      customerInfo,
-      offerings,
-      loading,
-      refreshSubscription,
-      purchasePackage,
-      restorePurchases,
-      presentCustomerCenter,
-      presentPaywall
-    }}>
+    <SubscriptionContext.Provider value={contextValue}>
       {children}
     </SubscriptionContext.Provider>
   );

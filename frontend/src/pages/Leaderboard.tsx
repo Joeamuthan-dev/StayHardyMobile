@@ -3,7 +3,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Zap, Info } from 'lucide-react';
 import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
-import { useSubscription } from '../context/SubscriptionContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -706,92 +705,76 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
   );
 };
 
+// ─── Supabase query with timeout (prevents indefinite hang) ──────────────────
+
+function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out')), ms)
+    ),
+  ]);
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const Leaderboard: React.FC = () => {
   const { user } = useAuth();
-  const { isPro } = useSubscription();
 
-  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
-  const isProUser = isPro || isAdmin;
-
-  const [joined, setJoined] = useState<boolean | null>(isProUser ? true : null); // Pro users start as joined (BadgeBootstrap pre-joins them)
-
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>(() => {
+    // Hydrate from cache immediately on mount — zero wait time
+    if (!user?.id) return [];
+    try {
+      const monthStr = getMonthStr(new Date());
+      const raw = sessionStorage.getItem(`lb_${monthStr}_${user.id}`);
+      if (raw) {
+        const { entries: cached } = JSON.parse(raw) as { entries: LeaderboardEntry[]; ts: number };
+        if (cached?.length > 0) return cached;
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
   const [loadingBoard, setLoadingBoard] = useState(false);
   const [boardError, setBoardError] = useState<string | null>(null);
+  const retryCountRef = React.useRef(0);
 
-  // ── Check membership on mount; auto-join Pro users; auto-kick if ineligible ──
+  // ── Ensure membership (fire-and-forget, non-blocking) ──
   useEffect(() => {
     if (!user?.id) return;
-    const check = async () => {
-      const memberRes = await supabase
-        .from('leaderboard_members')
-        .select('user_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+    const displayName = user.name || user.email.split('@')[0] || 'Warrior';
+    void supabase.from('leaderboard_members').upsert(
+      { user_id: user.id, display_name: displayName, avatar_url: user.avatarUrl ?? null, is_active: true },
+      { onConflict: 'user_id' }
+    );
+  }, [user?.id]);
 
-      const isMember = memberRes.data !== null;
-      const meetsRequirements = isProUser;
-
-      // Auto-kick: if they're a member but no longer eligible, remove them silently
-      if (isMember && !meetsRequirements) {
-        await supabase
-          .from('leaderboard_members')
-          .update({ is_active: false })
-          .eq('user_id', user.id);
-        setJoined(false);
-      } else if (!isMember && meetsRequirements) {
-        // Auto-join: Pro user visits for the first time
-        const displayName = user.name || user.email.split('@')[0] || 'Warrior';
-        await supabase.from('leaderboard_members').upsert(
-          { user_id: user.id, display_name: displayName, avatar_url: user.avatarUrl ?? null, is_active: true },
-          { onConflict: 'user_id' }
-        );
-        setJoined(true);
-      } else {
-        setJoined(isMember && meetsRequirements);
-      }
-    };
-    check();
-  }, [user?.id, isPro, isAdmin]);
-
-  // ── Load + refresh leaderboard ────────────────────────────────────────────
+  // ── Load + refresh leaderboard (with auto-retry) ────────────────────────
   const loadLeaderboard = useCallback(async () => {
     if (!user?.id) return;
 
     const monthStr = getMonthStr(new Date());
     const cacheKey = `lb_${monthStr}_${user.id}`;
 
-    // 1. Show cache immediately — no spinner if we have fresh data
-    let hasCachedData = false;
-    try {
-      const raw = sessionStorage.getItem(cacheKey);
-      if (raw) {
-        const { entries: cached, ts } = JSON.parse(raw) as { entries: LeaderboardEntry[]; ts: number };
-        if (Date.now() - ts < 5 * 60 * 1000) {
-          setEntries(cached);
-          hasCachedData = true;
-        }
-      }
-    } catch { /* ignore bad cache */ }
-
-    // Only block with spinner when there is nothing cached to show
+    // Show cache immediately — no spinner if we have any cached data
+    const hasCachedData = entries.length > 0;
     if (!hasCachedData) setLoadingBoard(true);
     setBoardError(null);
 
     try {
-      // 2. Fetch members + stored scores only — 2 queries, fast
-      const [membersRes, scoresRes] = await Promise.all([
-        supabase
-          .from('leaderboard_members')
-          .select('user_id, display_name, avatar_url')
-          .eq('is_active', true),
-        supabase
-          .from('leaderboard_scores')
-          .select('user_id, points')
-          .eq('month', monthStr),
-      ]);
+      // Fetch members + stored scores in parallel — 8s timeout
+      const [membersRes, scoresRes] = await withTimeout(
+        Promise.all([
+          supabase
+            .from('leaderboard_members')
+            .select('user_id, display_name, avatar_url')
+            .eq('is_active', true),
+          supabase
+            .from('leaderboard_scores')
+            .select('user_id, points')
+            .eq('month', monthStr),
+        ]),
+        8000,
+      );
 
       if (membersRes.error) throw membersRes.error;
       if (scoresRes.error) throw scoresRes.error;
@@ -812,19 +795,19 @@ const Leaderboard: React.FC = () => {
       const ranked: LeaderboardEntry[] = merged.map((e, i) => ({ ...e, rank: i + 1 }));
       setEntries(ranked);
       setLoadingBoard(false);
+      retryCountRef.current = 0;
 
       // Cache for instant next open
       try {
         sessionStorage.setItem(cacheKey, JSON.stringify({ entries: ranked, ts: Date.now() }));
-      } catch { /* storage full — ignore */ }
+      } catch { /* storage full */ }
 
-      // 3. Compute own score in background — does NOT block the board display
+      // Compute own score in background — does NOT block the board
       computeMonthScore(user.id).then((myScore) => {
         supabase.from('leaderboard_scores').upsert(
           { user_id: user.id, month: monthStr, points: myScore, updated_at: new Date().toISOString() },
           { onConflict: 'user_id,month' },
         ).then(() => {
-          // Silently update own score in the visible list
           setEntries((prev) => {
             const updated = prev.map((e) =>
               e.user_id === user.id ? { ...e, points: myScore } : e
@@ -832,51 +815,33 @@ const Leaderboard: React.FC = () => {
             updated.sort((a, b) => b.points - a.points);
             return updated.map((e, i) => ({ ...e, rank: i + 1 }));
           });
+          // Update cache with fresh score
+          try {
+            setEntries((latest) => {
+              sessionStorage.setItem(cacheKey, JSON.stringify({ entries: latest, ts: Date.now() }));
+              return latest;
+            });
+          } catch { /* ignore */ }
         });
       });
 
     } catch (err: unknown) {
+      // Auto-retry once on transient failure
+      if (retryCountRef.current < 1) {
+        retryCountRef.current += 1;
+        setTimeout(() => loadLeaderboard(), 1500);
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Failed to load leaderboard';
       setBoardError(msg);
       setLoadingBoard(false);
     }
-  }, [user?.id]);
+  }, [user?.id, entries.length]);
 
+  // Load immediately — no membership gate needed, route is Pro-only
   useEffect(() => {
-    if (joined === true) {
-      loadLeaderboard();
-    }
-  }, [joined, loadLeaderboard]);
-
-
-
-  // ── Loading state ─────────────────────────────────────────────────────────
-  if (joined === null) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: '#000',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <div
-          style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '50%',
-            border: '3px solid rgba(255,215,0,0.2)',
-            borderTop: '3px solid #FFD700',
-            animation: 'spin 0.8s linear infinite',
-          }}
-        />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
+    loadLeaderboard();
+  }, [loadLeaderboard]);
 
   return (
     <JoinedView
@@ -884,7 +849,7 @@ const Leaderboard: React.FC = () => {
       entries={entries}
       loading={loadingBoard}
       error={boardError}
-      onRetry={loadLeaderboard}
+      onRetry={() => { retryCountRef.current = 0; loadLeaderboard(); }}
     />
   );
 };

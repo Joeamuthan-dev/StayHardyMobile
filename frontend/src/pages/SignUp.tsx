@@ -248,7 +248,7 @@ export default function SignUp() {
   };
 
   return (
-    <div className="signup-page-root min-h-screen bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black relative overflow-y-auto pb-12">
+    <div className="signup-page-root fixed inset-0 bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black overflow-hidden" style={{ touchAction: 'none' }}>
       <style>{`@keyframes pinCursor { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       
       {/* 1. BACK BUTTON */}
@@ -260,13 +260,13 @@ export default function SignUp() {
       </button>
 
       {/* 2. BRANDING BLOCK */}
-      <div className="flex flex-col items-center justify-center mt-24 mb-8">
-        <h1 className="text-white font-extrabold text-5xl tracking-tight text-center leading-none mb-3">STAY HARDY</h1>
-        <p className="text-[#00E676] text-sm font-medium tracking-[0.2em] uppercase text-center">The 1% starts here.</p>
+      <div className="flex flex-col items-center justify-center mt-16 mb-4">
+        <h1 className="text-white font-extrabold text-4xl tracking-tight text-center leading-none mb-2">STAY HARDY</h1>
+        <p className="text-[#00E676] text-xs font-medium tracking-[0.2em] uppercase text-center">The 1% starts here.</p>
       </div>
 
       {/* 3. FORM CARD */}
-      <div className="w-full max-w-sm bg-[#0A0A0A] border border-white/5 rounded-3xl px-6 py-8 mx-auto space-y-6">
+      <div className="w-full max-w-sm bg-[#0A0A0A] border border-white/5 rounded-3xl px-6 py-5 mx-auto space-y-4">
         
         <div className="space-y-2">
           <label className="text-white/60 text-sm font-medium ml-1">Full Name</label>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { mergeAppSettings, getAppSettings } from '../lib/cacheManager';
 
 export type Language = 'English' | 'Tamil';
@@ -147,18 +147,20 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     })();
   }, []);
 
-  const setLanguage = (lang: Language) => {
+  const setLanguage = useCallback((lang: Language) => {
     localStorage.setItem('language', lang);
     void mergeAppSettings({ language: lang });
     setLanguageState(lang);
-  };
+  }, []);
 
-  const t = (key: string) => {
+  const t = useCallback((key: string) => {
     return translations[language][key] || key;
-  };
+  }, [language]);
+
+  const contextValue = useMemo(() => ({ language, setLanguage, t }), [language, setLanguage, t]);
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={contextValue}>
       {children}
     </LanguageContext.Provider>
   );

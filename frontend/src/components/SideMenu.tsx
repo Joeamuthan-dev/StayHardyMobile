@@ -127,17 +127,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
 
 
   const [localProfile, setLocalProfile] = useState(getCachedProfile);
-  const [isOnBoard, setIsOnBoard] = useState(false);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    supabase
-      .from('leaderboard_members')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => setIsOnBoard(data !== null));
-  }, [user?.id]);
 
   // Map userProfile for the surgical redesign snippet
   const userProfile = {
@@ -448,7 +437,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                   Hardy Board
                 </p>
                 <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', margin: '2px 0 0', letterSpacing: '0.01em' }}>
-                  {isOnBoard || isProUserFromState ? 'Track your rank in leaderboard' : 'Join the habit leaderboard'}
+                  Track your rank in leaderboard
                 </p>
               </div>
               <span style={{

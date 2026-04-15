@@ -307,7 +307,7 @@ const Login: React.FC = () => {
   const isFormValid = email.length > 0 && pin.length === 4;
 
   return (
-    <div className="login-page-root min-h-screen bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black relative overflow-hidden">
+    <div className="login-page-root fixed inset-0 bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black overflow-hidden" style={{ touchAction: 'none' }}>
       <style>{`@keyframes pinCursor { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       
       {/* BACK BUTTON (TOP LEFT) */}

@@ -62,7 +62,7 @@ const OnboardingScreen2: React.FC<OnboardingScreen2Props> = ({ onNext, onSkip })
   };
 
   return (
-    <div className="fixed inset-0 bg-[#000000] flex flex-col pt-12 p-6 z-[999] selection:bg-[#00E676] selection:text-black">
+    <div className="fixed inset-0 bg-[#000000] flex flex-col pt-12 p-6 z-[999] overflow-hidden selection:bg-[#00E676] selection:text-black">
       {/* 
         FIX 1 — "STAY HARDY" BRAND LABEL CONSISTENCY
         Pinned top-bar layout shared across the entire protocol sequence.

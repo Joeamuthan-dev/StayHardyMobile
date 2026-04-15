@@ -8,6 +8,12 @@ export default defineConfig({
     outDir: 'dist',
     // Works for both Capacitor and Vercel
     emptyOutDir: true,
+    // Target modern browsers/WebViews for smaller output
+    target: 'es2020',
+    // Remove console.log in production for cleaner performance
+    rollupOptions: {
+      treeshake: true,
+    },
   },
   // Base URL for web deployment
   base: '/',

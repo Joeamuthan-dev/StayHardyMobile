@@ -32,32 +32,34 @@ import { SideMenu } from './components/SideMenu';
 import BottomNav from './components/BottomNav';
 import OfflineSyncBootstrap from './components/OfflineSyncBootstrap';
 
-// Pages
+// Pages — lazy loaded for code splitting (reduces initial bundle from 1.7MB)
+// Only LoadingScreen and Login are eager since they're shown immediately on startup
 import LoadingScreen from './pages/LoadingScreen';
-import OnboardingScreen from './pages/OnboardingScreen';
 import Login from './pages/Login';
-import SignUp from './pages/SignUp';
-import VerifyEmail from './pages/VerifyEmail';
-import Dashboard from './pages/Dashboard';
-import Stats from './pages/Stats';
-import Settings from './pages/Settings';
-import Planner from './pages/Planner';
-import Goals from './pages/Goals';
-import ForgotPIN from './pages/ForgotPin';
-import ResetPassword from './pages/ResetPassword';
-import AuthVerify from './pages/AuthVerify';
-import Tips from './pages/Tips';
-import Feedback from './pages/Feedback';
-import FeedbackList from './pages/FeedbackList';
-import AdminDashboard from './pages/AdminDashboard';
-import Routine from './pages/Routine';
-import HomeDashboard from './pages/HomeDashboard';
-import Calendar from './pages/Calendar';
-import StayHardyUpdatesPage from './pages/StayHardyUpdatesPage';
-import WhyStayHardy from './pages/WhyStayHardy';
-import Paywall from './pages/Paywall';
-import Leaderboard from './pages/Leaderboard';
 import ComingSoon from './pages/ComingSoon';
+
+const OnboardingScreen = React.lazy(() => import('./pages/OnboardingScreen'));
+const SignUp = React.lazy(() => import('./pages/SignUp'));
+const VerifyEmail = React.lazy(() => import('./pages/VerifyEmail'));
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Stats = React.lazy(() => import('./pages/Stats'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+const Planner = React.lazy(() => import('./pages/Planner'));
+const Goals = React.lazy(() => import('./pages/Goals'));
+const ForgotPIN = React.lazy(() => import('./pages/ForgotPin'));
+const ResetPassword = React.lazy(() => import('./pages/ResetPassword'));
+const AuthVerify = React.lazy(() => import('./pages/AuthVerify'));
+const Tips = React.lazy(() => import('./pages/Tips'));
+const Feedback = React.lazy(() => import('./pages/Feedback'));
+const FeedbackList = React.lazy(() => import('./pages/FeedbackList'));
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
+const Routine = React.lazy(() => import('./pages/Routine'));
+const HomeDashboard = React.lazy(() => import('./pages/HomeDashboard'));
+const Calendar = React.lazy(() => import('./pages/Calendar'));
+const StayHardyUpdatesPage = React.lazy(() => import('./pages/StayHardyUpdatesPage'));
+const WhyStayHardy = React.lazy(() => import('./pages/WhyStayHardy'));
+const Paywall = React.lazy(() => import('./pages/Paywall'));
+const Leaderboard = React.lazy(() => import('./pages/Leaderboard'));
 
 // Black screen fallback — matches app background
 const BlackScreen = () => (
@@ -171,6 +173,14 @@ const ProtectedRoute: React.FC = () => {
   }
 
   return <Outlet />;
+};
+
+const ProRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const { isPro } = useSubscription();
+  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+  if (!isPro && !isAdmin) return <Navigate to="/home" replace />;
+  return <>{children}</>;
 };
 
 const AdminRoute = () => {
@@ -321,7 +331,7 @@ const AppCore: React.FC = () => {
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/feedback-list" element={<FeedbackList />} />
             <Route path="/welcome" element={<WhyStayHardy />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/leaderboard" element={<ProRoute><Leaderboard /></ProRoute>} />
             <Route path="/admin" element={<AdminRoute />} />
           </Route>
         </Routes>

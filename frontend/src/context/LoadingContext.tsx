@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 
 interface LoadingContextType {
   loading: boolean;
@@ -10,11 +10,18 @@ interface LoadingContextType {
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
 
 export const LoadingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [loading, setLoading] = useState<boolean>(true); // Default to true for app startup
-  const [loadingText, setLoadingText] = useState<string>("Stay Hardy Protocol Initializing...");
+  const [loading, setLoadingState] = useState<boolean>(true); // Default to true for app startup
+  const [loadingText, setLoadingTextState] = useState<string>("Stay Hardy Protocol Initializing...");
+
+  const setLoading = useCallback((v: boolean) => setLoadingState(v), []);
+  const setLoadingText = useCallback((t: string) => setLoadingTextState(t), []);
+
+  const contextValue = useMemo(() => ({
+    loading, setLoading, loadingText, setLoadingText,
+  }), [loading, setLoading, loadingText, setLoadingText]);
 
   return (
-    <LoadingContext.Provider value={{ loading, setLoading, loadingText, setLoadingText }}>
+    <LoadingContext.Provider value={contextValue}>
       {children}
     </LoadingContext.Provider>
   );

@@ -7,9 +7,15 @@ const config: CapacitorConfig = {
   android: {
     // Match modern WebView expectations; avoids mixed-content quirks for https APIs.
     allowMixedContent: false,
+    // Enable hardware acceleration for smoother rendering
+    overrideUserAgent: 'StayHardy Android',
+    backgroundColor: '#000000',
   },
   ios: {
     contentInset: 'automatic',
+    backgroundColor: '#000000',
+    // Prefer WKWebView with faster JS engine
+    preferredContentMode: 'mobile',
   },
   plugins: {
     App: {
