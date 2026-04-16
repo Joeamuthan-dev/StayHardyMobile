@@ -225,8 +225,7 @@ const BottomNav: React.FC<{
   return (
     <>
       {/* ── MOBILE NAVBAR (FLOATING DOCK) ── */}
-      {!isWeb &&
-        !hideFloatingShelfByRoute &&
+      {!hideFloatingShelfByRoute &&
         !isMobileMenuOpen &&
         !hideFloatingShelf &&
         !hideMobileNavChrome && (
@@ -250,12 +249,12 @@ const BottomNav: React.FC<{
               50%  { transform: scale(1.2) }
               100% { transform: scale(1) }
             }
-            /* Hide the bar in some UI states but also force it stay hidden on desktop media as we have a sidebar */
+            /* Hide the bar in some UI states but also force it stay hidden on tablet/desktop where sidebar shows */
             body.mobile-drawer-open .bottom-nav-container,
             body.sheet-open .bottom-nav-container {
               display: none !important;
             }
-            @media (min-width: 1024px) {
+            @media (min-width: 768px) {
               .bottom-nav-container { display: none !important; }
             }
           `}</style>
@@ -383,7 +382,7 @@ const BottomNav: React.FC<{
 
       {/* ── DESKTOP SIDEBAR (HIDDEN ON MOBILE) ── */}
       {!isHidden && (
-        <aside className="desktop-sidebar hidden lg:flex">
+        <aside className="desktop-sidebar hidden md:flex">
           <style>{`
             @keyframes pulseGlow {
               0% { box-shadow: 0 0 0 0px rgba(16, 185, 129, 0.4); }

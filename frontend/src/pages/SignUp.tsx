@@ -5,9 +5,13 @@ import { ChevronLeft } from 'lucide-react';
 import { storage } from '../utils/storage';
 import { supabase } from '../supabase';
 import { hashPin, padPinForAuth } from '../utils/pinUtils';
+import { useDeviceType } from '../hooks/useDeviceType';
 
 export default function SignUp() {
   const navigate = useNavigate();
+  const deviceType = useDeviceType();
+  const isTablet = deviceType !== 'phone';
+  const isTablet10 = deviceType === 'tablet10';
   
   // STATE VARIABLES
   const [fullName, setFullName] = useState('');
@@ -237,8 +241,9 @@ export default function SignUp() {
   const pinDotStyle = (focused: boolean, filledLen: number, idx: number) => {
     const isFilled = filledLen > idx;
     const isActive = focused && idx === filledLen;
+    const dotSize = isTablet10 ? '72px' : isTablet ? '64px' : '56px';
     return {
-      width: '56px', height: '56px', borderRadius: '50%',
+      width: dotSize, height: dotSize, borderRadius: '50%',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: '#0A0A0A',
       border: isActive ? '2px solid rgba(255,255,255,0.85)' : isFilled ? '2px solid rgba(0,230,118,0.5)' : '2px solid rgba(255,255,255,0.1)',
@@ -248,7 +253,7 @@ export default function SignUp() {
   };
 
   return (
-    <div className="signup-page-root fixed inset-0 bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black overflow-hidden" style={{ touchAction: 'none' }}>
+    <div className={`signup-page-root fixed inset-0 bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black ${isTablet ? 'justify-center overflow-auto' : 'overflow-hidden'}`}>
       <style>{`@keyframes pinCursor { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       
       {/* 1. BACK BUTTON */}
@@ -260,13 +265,13 @@ export default function SignUp() {
       </button>
 
       {/* 2. BRANDING BLOCK */}
-      <div className="flex flex-col items-center justify-center mt-16 mb-4">
-        <h1 className="text-white font-extrabold text-4xl tracking-tight text-center leading-none mb-2">STAY HARDY</h1>
+      <div className={`flex flex-col items-center justify-center ${isTablet ? 'mb-4' : 'mt-16 mb-4'}`}>
+        <h1 className={`text-white font-extrabold tracking-tight text-center leading-none mb-2 ${isTablet10 ? 'text-6xl' : isTablet ? 'text-5xl' : 'text-4xl'}`}>STAY HARDY</h1>
         <p className="text-[#00E676] text-xs font-medium tracking-[0.2em] uppercase text-center">The 1% starts here.</p>
       </div>
 
       {/* 3. FORM CARD */}
-      <div className="w-full max-w-sm bg-[#0A0A0A] border border-white/5 rounded-3xl px-6 py-5 mx-auto space-y-4">
+      <div className={`w-full bg-[#0A0A0A] border border-white/5 rounded-3xl px-6 py-5 mx-auto space-y-4 ${isTablet10 ? 'max-w-lg' : isTablet ? 'max-w-md' : 'max-w-sm'}`}>
         
         <div className="space-y-2">
           <label className="text-white/60 text-sm font-medium ml-1">Full Name</label>
@@ -293,7 +298,7 @@ export default function SignUp() {
         {/* PIN INPUTS */}
         <div className="space-y-1">
           <label className="text-white/60 text-sm font-medium ml-1">Create Your PIN</label>
-          <div className="relative flex gap-5 justify-center items-center py-2" onClick={() => pinInputRef.current?.focus()}>
+          <div className="relative flex gap-5 justify-center items-center py-2" style={{ touchAction: 'none' }} onClick={() => pinInputRef.current?.focus()}>
             <input ref={pinInputRef} type="tel" inputMode="numeric" value={pin} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} onChange={handlePinInput} onFocus={() => setPinFocused(true)} onBlur={() => setPinFocused(false)} />
             {[0, 1, 2, 3].map((idx) => (
               <div key={idx} style={pinDotStyle(pinFocused, pin.length, idx)}>
@@ -306,7 +311,7 @@ export default function SignUp() {
 
         <div className="space-y-1">
           <label className="text-white/60 text-sm font-medium ml-1">Confirm Your PIN</label>
-          <div className="relative flex gap-5 justify-center items-center py-2" onClick={() => confirmPinInputRef.current?.focus()}>
+          <div className="relative flex gap-5 justify-center items-center py-2" style={{ touchAction: 'none' }} onClick={() => confirmPinInputRef.current?.focus()}>
             <input ref={confirmPinInputRef} type="tel" inputMode="numeric" value={confirmPin} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }} onChange={handleConfirmPinInput} onFocus={() => setConfirmPinFocused(true)} onBlur={() => setConfirmPinFocused(false)} />
             {[0, 1, 2, 3].map((idx) => (
               <div key={idx} style={pinDotStyle(confirmPinFocused, confirmPin.length, idx)}>

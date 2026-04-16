@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase'; // Based on research, src/supabase.ts is the canonical export
+import { useDeviceType } from '../hooks/useDeviceType';
 
 const ForgotPIN: React.FC = () => {
   const navigate = useNavigate();
+  const deviceType = useDeviceType();
+  const isTablet = deviceType !== 'phone';
+  const isTablet10 = deviceType === 'tablet10';
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -30,16 +34,27 @@ const ForgotPIN: React.FC = () => {
     }
   };
 
+  const maxW = isTablet10 ? '520px' : isTablet ? '440px' : '100%';
+
   return (
     <div style={{
       minHeight: '100vh',
       background: '#000000',
       display: 'flex',
       flexDirection: 'column',
+      alignItems: isTablet ? 'center' : 'stretch',
+      justifyContent: isTablet ? 'center' : 'flex-start',
       padding: '0 24px',
-      paddingTop: 'calc(env(safe-area-inset-top, 0px) + 24px)',
+      paddingTop: isTablet ? '24px' : 'calc(env(safe-area-inset-top, 0px) + 24px)',
       paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
       boxSizing: 'border-box',
+    }}>
+    {/* Tablet: constrained inner container */}
+    <div style={{
+      width: '100%',
+      maxWidth: maxW,
+      display: 'flex',
+      flexDirection: 'column',
     }}>
 
       {/* Back button */}
@@ -288,6 +303,7 @@ const ForgotPIN: React.FC = () => {
           to { transform: rotate(360deg); }
         }
       `}</style>
+    </div>{/* end inner constrained container */}
     </div>
   );
 };

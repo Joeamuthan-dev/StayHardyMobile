@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StayHardy — Payment</title>
+  <style>
+    body { background: #000; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #00E87A; box-shadow: 0 0 12px #00E87A; }
+  </style>
+</head>
+<body>
+  <div class="dot"></div>
+  <script>
+    // Instamojo redirects here with:
+    //   ?payment_id=xxx&payment_request_id=xxx&payment_status=Credit
+    // Forward all params into the SPA hash router
+    var search = window.location.search;
+    window.location.replace('/#/payment-success' + search);
+  </script>
+</body>
+</html>

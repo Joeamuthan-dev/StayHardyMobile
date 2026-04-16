@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.stayhardy.app",
+    "sha256_cert_fingerprints": [
+      "81:D4:3B:AB:4B:64:AB:F5:34:64:5F:9B:76:7C:97:A6:F8:BC:21:5A:86:AC:9A:A7:88:AD:E4:B7:AB:89:A5:3F"
+    ]
+  }
+}]

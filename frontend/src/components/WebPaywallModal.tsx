@@ -1,17 +1,17 @@
 /**
- * WebPaywallModal — Razorpay paywall for web browser users ONLY.
+ * WebPaywallModal — Instamojo paywall for web browser users ONLY.
  * Android / iOS use PaywallModal (RevenueCat). This file is NOT imported on native.
  * Platform gate is in PaywallContext.tsx via Capacitor.isNativePlatform().
+ *
+ * Flow: Create payment request → redirect to Instamojo payment page →
+ *       Instamojo redirects back to /payment-success?payment_id=xxx&payment_request_id=xxx
+ *       → PaymentSuccess page calls instamojo-verify → Pro granted.
  */
 import React, { useState } from 'react';
 import { X, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../supabase';
 import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
-
-declare global {
-  interface Window { Razorpay: any; }
-}
 
 interface Props { onClose: () => void; }
 
@@ -30,25 +30,14 @@ const benefitSections = [
   },
 ];
 
-const loadRazorpayScript = (): Promise<boolean> =>
-  new Promise((resolve) => {
-    if (window.Razorpay) { resolve(true); return; }
-    const s = document.createElement('script');
-    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    s.onload = () => resolve(true);
-    s.onerror = () => resolve(false);
-    document.body.appendChild(s);
-  });
-
 export const WebPaywallModal: React.FC<Props> = ({ onClose }) => {
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 4500);
+    setTimeout(() => setToast(null), 5000);
   };
 
   const handlePurchase = async () => {
@@ -56,76 +45,21 @@ export const WebPaywallModal: React.FC<Props> = ({ onClose }) => {
     setBusy(true);
 
     try {
-      // 1. Create Razorpay order via edge function
-      const { data: order, error: orderErr } = await supabase.functions.invoke('razorpay-create-order', {
-        body: { purpose: 'lifetime' },
-      });
+      // 1. Create Instamojo payment request via edge function
+      const { data: order, error: orderErr } = await supabase.functions.invoke('instamojo-create-order', {});
 
-      if (orderErr || !order?.orderId) {
+      if (orderErr || !order?.paymentUrl) {
         showToast(orderErr?.message ?? 'Could not initiate payment. Try again.');
         setBusy(false);
         return;
       }
 
-      // 2. Load Razorpay SDK
-      const loaded = await loadRazorpayScript();
-      if (!loaded) {
-        showToast('Could not load payment gateway. Check your connection.');
-        setBusy(false);
-        return;
-      }
+      // 2. Redirect to Instamojo payment page
+      // Instamojo handles UPI, cards, netbanking, wallets natively
+      // After payment it redirects back to INSTAMOJO_RETURN_URL with payment params
+      window.location.href = order.paymentUrl;
 
-      // 3. Open Razorpay checkout
-      const rzp = new window.Razorpay({
-        key: order.keyId,
-        amount: order.amount,
-        currency: order.currency ?? 'INR',
-        order_id: order.orderId,
-        name: 'StayHardy',
-        description: 'StayHardy Pro — Lifetime Access',
-        prefill: {
-          email: user.email ?? '',
-          name: user.name ?? '',
-        },
-        theme: { color: '#00E87A' },
-
-        handler: async (response: {
-          razorpay_order_id: string;
-          razorpay_payment_id: string;
-          razorpay_signature: string;
-        }) => {
-          // 4. Verify payment server-side
-          try {
-            const { error: verifyErr } = await supabase.functions.invoke('razorpay-verify', {
-              body: {
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                device_platform: 'web',
-              },
-            });
-
-            if (verifyErr) {
-              showToast('Payment verification failed. Contact support if amount was deducted.');
-              setBusy(false);
-              return;
-            }
-
-            // 5. Grant confirmed — show success then reload to refresh Pro status
-            setSuccess(true);
-            setTimeout(() => window.location.reload(), 2500);
-          } catch {
-            showToast('Verification error. Contact support if amount was deducted.');
-            setBusy(false);
-          }
-        },
-
-        modal: {
-          ondismiss: () => setBusy(false),
-        },
-      });
-
-      rzp.open();
+      // Page will navigate away — no further handling needed here.
 
     } catch {
       showToast('Something went wrong. Please try again.');
@@ -171,36 +105,6 @@ export const WebPaywallModal: React.FC<Props> = ({ onClose }) => {
         maxHeight: '90vh', overflow: 'hidden',
         boxShadow: '0 40px 80px rgba(0,0,0,0.8)',
       }}>
-
-        {/* Success overlay */}
-        {success && (
-          <div style={{
-            position: 'absolute', inset: 0, zIndex: 10,
-            background: '#0A0A0A', borderRadius: '24px',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: '16px',
-          }}>
-            <div style={{
-              width: '68px', height: '68px', borderRadius: '50%',
-              background: 'rgba(0,232,122,0.1)',
-              border: '2px solid #00E87A',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 0 32px rgba(0,232,122,0.2)',
-            }}>
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '22px', fontWeight: '900', color: '#fff', marginBottom: '6px', letterSpacing: '-0.5px' }}>
-                Welcome to Pro!
-              </div>
-              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>
-                Activating your access…
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '24px 24px 8px 24px', flexShrink: 0 }}>
@@ -281,9 +185,9 @@ export const WebPaywallModal: React.FC<Props> = ({ onClose }) => {
                   width: '18px', height: '18px', borderRadius: '50%',
                   border: '2.5px solid rgba(0,0,0,0.2)',
                   borderTop: '2.5px solid #000',
-                  animation: 'rzp-spin 0.8s linear infinite',
+                  animation: 'cf-spin 0.8s linear infinite',
                 }} />
-                Processing…
+                Opening Payment…
               </>
             ) : (
               `Unlock Pro — ₹${LIFETIME_PRICE_INR}`
@@ -298,11 +202,11 @@ export const WebPaywallModal: React.FC<Props> = ({ onClose }) => {
               <rect x="5" y="11" width="14" height="11" rx="2"/>
               <path d="M8 11V7a4 4 0 018 0v4"/>
             </svg>
-            Secured by Razorpay · One-time payment
+            Secured by Instamojo · UPI / Cards / Netbanking
           </p>
         </div>
 
-        <style>{`@keyframes rzp-spin { to { transform: rotate(360deg); } }`}</style>
+        <style>{`@keyframes cf-spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
   );

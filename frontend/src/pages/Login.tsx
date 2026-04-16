@@ -9,8 +9,12 @@ import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
 import { processSyncQueue } from '../lib/syncQueue';
 import { hashPin, padPinForAuth } from '../utils/pinUtils';
+import { useDeviceType } from '../hooks/useDeviceType';
 
 const Login: React.FC = () => {
+  const deviceType = useDeviceType();
+  const isTablet = deviceType !== 'phone';
+  const isTablet10 = deviceType === 'tablet10';
   const { setCurrentUser, markLoginComplete } = useAuth();
   const { setLoading: _setGlobalLoading } = useLoading(); void _setGlobalLoading;
   const navigate = useNavigate();
@@ -307,7 +311,9 @@ const Login: React.FC = () => {
   const isFormValid = email.length > 0 && pin.length === 4;
 
   return (
-    <div className="login-page-root fixed inset-0 bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black overflow-hidden" style={{ touchAction: 'none' }}>
+    <div
+      className={`login-page-root fixed inset-0 bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black ${isTablet ? 'justify-center overflow-auto' : 'overflow-hidden'}`}
+    >
       <style>{`@keyframes pinCursor { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       
       {/* BACK BUTTON (TOP LEFT) */}
@@ -319,8 +325,8 @@ const Login: React.FC = () => {
       </div>
 
       {/* BRANDING HEADER */}
-      <div className="flex flex-col items-center justify-center mt-36 mb-10">
-        <h1 className="text-white font-extrabold text-5xl tracking-tight text-center leading-none mb-3">
+      <div className={`flex flex-col items-center justify-center ${isTablet ? 'mb-8' : 'mt-36 mb-10'}`}>
+        <h1 className={`text-white font-extrabold tracking-tight text-center leading-none mb-3 ${isTablet10 ? 'text-7xl' : isTablet ? 'text-6xl' : 'text-5xl'}`}>
           STAY HARDY
         </h1>
         <p className="text-[#00E676] text-sm font-medium tracking-[0.2em] uppercase text-center">
@@ -328,7 +334,7 @@ const Login: React.FC = () => {
         </p>
       </div>
 
-      <div className="w-full max-w-sm space-y-8">
+      <div className={`w-full space-y-8 ${isTablet10 ? 'max-w-lg' : isTablet ? 'max-w-md' : 'max-w-sm'}`}>
         <div className="space-y-6">
           {/* EMAIL INPUT */}
           <div className="space-y-2">
@@ -350,8 +356,9 @@ const Login: React.FC = () => {
             <label className="text-xs font-bold text-white/40 tracking-widest uppercase text-center block">
               Security PIN
             </label>
-            <div 
-              className="relative flex gap-6 justify-center items-center py-4 cursor-pointer" 
+            <div
+              className="relative flex gap-6 justify-center items-center py-4 cursor-pointer"
+              style={{ touchAction: 'none' }}
               onClick={handlePinDotPress}
             >
               <input
@@ -375,7 +382,9 @@ const Login: React.FC = () => {
                     key={index}
                     onClick={handlePinDotPress}
                     style={{
-                      width: '56px', height: '56px', borderRadius: '50%',
+                      width: isTablet10 ? '72px' : isTablet ? '64px' : '56px',
+                      height: isTablet10 ? '72px' : isTablet ? '64px' : '56px',
+                      borderRadius: '50%',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       background: '#0A0A0A',
                       border: isActive ? '2px solid rgba(255,255,255,0.85)' : isFilled ? '2px solid rgba(0,230,118,0.5)' : '2px solid rgba(255,255,255,0.1)',

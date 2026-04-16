@@ -60,6 +60,7 @@ const StayHardyUpdatesPage = React.lazy(() => import('./pages/StayHardyUpdatesPa
 const WhyStayHardy = React.lazy(() => import('./pages/WhyStayHardy'));
 const Paywall = React.lazy(() => import('./pages/Paywall'));
 const Leaderboard = React.lazy(() => import('./pages/Leaderboard'));
+const PaymentSuccess = React.lazy(() => import('./pages/PaymentSuccess'));
 
 // Black screen fallback — matches app background
 const BlackScreen = () => (
@@ -315,6 +316,7 @@ const AppCore: React.FC = () => {
           <Route path="/auth/verify" element={<AuthVerify />} />
           <Route path="/auth/callback" element={<Navigate to="/login" replace />} />
           <Route path="/paywall" element={<Paywall />} />
+          <Route path="/payment-success" element={<PaymentSuccess />} />
           
           {/* Protected Hubs */}
           <Route element={<ProtectedRoute />}>
