@@ -9,7 +9,7 @@
       "destination": "/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!\\.well-known).*)",
       "destination": "/index.html"
     }
   ]
