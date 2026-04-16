@@ -1,10 +1,16 @@
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "com.stayhardy.app",
-    "sha256_cert_fingerprints": [
-      "81:D4:3B:AB:4B:64:AB:F5:34:64:5F:9B:76:7C:97:A6:F8:BC:21:5A:86:AC:9A:A7:88:AD:E4:B7:AB:89:A5:3F"
-    ]
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.stayhardy.app",
+      "sha256_cert_fingerprints": [
+        "81:D4:3B:AB:4B:64:AB:F5:34:64:5F:9B:76:7C:97:A6:F8:BC:21:5A:86:AC:9A:A7:88:AD:E4:B7:AB:89:A5:3F",
+        "64:95:E4:90:B9:3E:EC:1E:B2:A2:0B:03:BB:69:C6:93:42:EA:CD:7B:13:FC:D1:C9:FA:C8:6C:2C:69:BC"
+      ]
+    }
   }
-}]
+]
