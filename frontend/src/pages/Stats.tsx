@@ -882,66 +882,72 @@ const Stats: React.FC = () => {
           <div className="aurora-gradient-2" />
         </div>
 
-        <main 
-          className="stats-premium-main bouncing-scroll" 
-          style={{ 
-            flex: '1', 
+        <main
+          className="stats-premium-main bouncing-scroll"
+          style={{
+            flex: '1',
             padding: '112px 0 120px 0'
           }}
         >
-          {/* 1. Streak — personal milestone, unique opener */}
-          <StreakMilestoneCard currentStreak={currentStreak} bestStreak={bestStreak} />
+          {/* Left column */}
+          <div className="stats-col-left">
+            {/* 1. Streak — personal milestone, unique opener */}
+            <StreakMilestoneCard currentStreak={currentStreak} bestStreak={bestStreak} />
 
-          {/* 2. Habit Heatmap — most visual, most unique */}
-          <HabitHeatmap
-            heatmapData={getDaysArray(heatmapRange).map(d => {
-              const c = heatMap[d] || 0;
-              return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
-            })}
-            activeRange={heatmapRange}
-            setActiveRange={setHeatmapRange}
-          />
+            {/* 3. Weekly Pattern — deeply personal, not on home */}
+            <DayOfWeekChart data={dayOfWeekData} />
 
-          {/* 3. Weekly Pattern — deeply personal, not on home */}
-          <DayOfWeekChart data={dayOfWeekData} />
+            {/* 5. Category Radar */}
+            <CategoryRadarChart categories={categoryStats} />
 
-          {/* 4. Historical Trend */}
-          <InsightsTrend
-            data={{
-              tasks: historicalData.map(d => d.tasks),
-              goals: historicalData.map(d => d.goals),
-              habits: historicalData.map(d => d.habits)
-            }}
-            activeRange={trendDays === 7 ? '7D' : trendDays === 30 ? '30D' : '90D'}
-            setActiveRange={(r) => setTrendDays(r === '7D' ? 7 : r === '30D' ? 30 : 90)}
-          />
+            <InsightCard
+              type="goals"
+              data={{
+                total: totalGoals,
+                active: activeGoalsCount,
+                completed: completedGoalsCount
+              }}
+            />
+          </div>
 
-          {/* 5. Category Radar */}
-          <CategoryRadarChart categories={categoryStats} />
+          {/* Right column */}
+          <div className="stats-col-right">
+            {/* 2. Habit Heatmap — most visual, most unique */}
+            <HabitHeatmap
+              heatmapData={getDaysArray(heatmapRange).map(d => {
+                const c = heatMap[d] || 0;
+                return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
+              })}
+              activeRange={heatmapRange}
+              setActiveRange={setHeatmapRange}
+            />
 
-          {/* 6. Breakdown cards */}
-          <InsightCard
-            type="tasks"
-            data={{
-              total: totalUserTasks,
-              completed: completedUserTasks,
-              pending: pendingCount
-            }}
-          />
+            {/* 4. Historical Trend */}
+            <InsightsTrend
+              data={{
+                tasks: historicalData.map(d => d.tasks),
+                goals: historicalData.map(d => d.goals),
+                habits: historicalData.map(d => d.habits)
+              }}
+              activeRange={trendDays === 7 ? '7D' : trendDays === 30 ? '30D' : '90D'}
+              setActiveRange={(r) => setTrendDays(r === '7D' ? 7 : r === '30D' ? 30 : 90)}
+            />
 
-          <InsightCard
-            type="goals"
-            data={{
-              total: totalGoals,
-              active: activeGoalsCount,
-              completed: completedGoalsCount
-            }}
-          />
+            {/* 6. Breakdown cards */}
+            <InsightCard
+              type="tasks"
+              data={{
+                total: totalUserTasks,
+                completed: completedUserTasks,
+                pending: pendingCount
+              }}
+            />
 
-          <VerdictCard
-            score={dynamicTodayScore}
-            totalItems={totalUserTasks + totalGoals + totalRoutines}
-          />
+            <VerdictCard
+              score={dynamicTodayScore}
+              totalItems={totalUserTasks + totalGoals + totalRoutines}
+            />
+          </div>
 
         </main>
 

@@ -217,7 +217,9 @@ const GoalCard = ({
               margin: 0,
               letterSpacing: '-0.3px',
               lineHeight: 1.2,
-              paddingRight: '8px'
+              paddingRight: '8px',
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word'
             }}>
               {goal.name}
             </p>

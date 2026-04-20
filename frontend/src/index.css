@@ -240,6 +240,14 @@ input, textarea, select {
 }
 
 
+/* ── Stats two-column layout helpers (always active so mobile gap works too) ── */
+.stats-col-left,
+.stats-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
 /* ── Web page content width constraints (tablet 768px+ and desktop 1024px+) ── */
 @media (min-width: 768px) {
   /* Homepage */
@@ -291,6 +299,79 @@ input, textarea, select {
   }
   .routine-page > div:not(.aurora-bg):not([style*="sticky"]) {
     max-width: 860px;
+  }
+}
+
+@media (min-width: 1100px) {
+  /* Home: stretch sections to fill full content width */
+  .hub-daily-page > *:not(style) {
+    max-width: none;
+  }
+
+  /* Stats: two independent flex columns, full width, cards fill columns */
+  .stats-premium-main {
+    max-width: none !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start;
+    padding: 112px 1.25rem 120px 1.25rem !important;
+    gap: 1.15rem;
+    box-sizing: border-box !important;
+  }
+  .stats-col-left,
+  .stats-col-right {
+    flex: 1;
+    min-width: 0;
+  }
+  /* Strip card side/bottom margins — column gap handles spacing */
+  .stats-col-left > div,
+  .stats-col-right > div {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Calendar: full width */
+  .cal-content {
+    max-width: none !important;
+    padding: 0 1.25rem !important;
+  }
+
+  /* Remove narrow max-width so card grids fill the desktop */
+  .goals-page-layout .bouncing-scroll,
+  .dashboard-page-layout .bouncing-scroll {
+    max-width: none;
+    width: 100%;
+  }
+  .routine-page > div:not(.aurora-bg):not([style*="sticky"]) {
+    max-width: none;
+  }
+
+  /* Goals: 3 columns, full-width grid */
+  .goals-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    padding: 0 12px 20px 12px !important;
+  }
+
+  /* Habits: 3 columns */
+  .habit-cards-container {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  /* Tasks: 3 columns, remove card side margins inside grid */
+  .task-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 0 4px;
+  }
+  .task-cards-grid .task-card-item {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
   }
 }
 

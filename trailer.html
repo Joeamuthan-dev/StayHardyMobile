@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>StayHardy — 15s Trailer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+body{
+  background:#000;
+  overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;
+  color:#fff;
+  width:100vw;height:100vh;
+  position:relative;
+}
+
+/* ── Fixed 1920×1080 canvas, scaled + centered ── */
+#canvas{
+  width:1920px;height:1080px;
+  background:#000;
+  position:absolute;
+  top:50%;left:50%;
+  transform-origin:center center;
+  overflow:hidden;
+}
+
+/* ── Scenes ── */
+.scene{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;
+  transition:opacity 0.55s ease;
+  pointer-events:none;
+  z-index:1;
+}
+.scene.active{opacity:1;pointer-events:auto;z-index:2;}
+
+/* ── Persistent aurora bg ── */
+#aurora{
+  position:absolute;inset:0;z-index:0;
+  background:
+    radial-gradient(ellipse 900px 600px at 20% 50%, rgba(0,232,122,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 700px 500px at 80% 30%, rgba(124,77,255,0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 600px 400px at 60% 80%, rgba(255,193,7,0.04) 0%, transparent 70%);
+}
+
+/* ── Progress bar ── */
+#progress{
+  position:absolute;bottom:0;left:0;height:3px;
+  background:linear-gradient(90deg,#00E87A,#00b85e);
+  width:0%;transition:width linear;z-index:999;
+}
+
+/* ── Start screen ── */
+#start{
+  position:fixed;inset:0;z-index:9999;
+  background:#000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
+}
+#start h2{font-size:28px;font-weight:800;color:rgba(255,255,255,0.8);letter-spacing:-0.02em;}
+#start p{font-size:15px;color:rgba(255,255,255,0.35);}
+#startBtn{
+  display:inline-flex;align-items:center;gap:10px;
+  background:linear-gradient(135deg,#00E87A,#00b85e);
+  border:none;border-radius:16px;padding:18px 40px;
+  font-size:18px;font-weight:800;color:#000;cursor:pointer;
+  letter-spacing:-0.2px;
+  box-shadow:0 0 40px rgba(0,232,122,0.35);
+  transition:transform 0.2s,box-shadow 0.2s;
+}
+#startBtn:hover{transform:scale(1.03);box-shadow:0 0 60px rgba(0,232,122,0.5);}
+#countdown{
+  position:fixed;inset:0;z-index:9998;
+  background:#000;
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+}
+#cnum{font-size:140px;font-weight:900;color:#00E87A;line-height:1;animation:cPulse 1s ease-out;}
+@keyframes cPulse{from{transform:scale(1.3);opacity:0.4}to{transform:scale(1);opacity:1}}
+
+/* ═══════════════════════════════════════════
+   SCENE 1 — BRAND INTRO
+═══════════════════════════════════════════ */
+#s1{flex-direction:column;gap:0;}
+.s1-glow{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:800px;height:800px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,232,122,0.12) 0%,transparent 70%);
+  animation:glowPulse 2s ease-in-out infinite;
+}
+@keyframes glowPulse{0%,100%{opacity:0.6}50%{opacity:1}}
+
+.s1-icon{
+  width:160px;height:160px;border-radius:48px;
+  background:linear-gradient(135deg,#0E1E18,#1a2e22);
+  border:2px solid rgba(0,232,122,0.3);
+  display:flex;align-items:center;justify-content:center;
+  font-size:72px;
+  box-shadow:0 0 80px rgba(0,232,122,0.3),0 0 160px rgba(0,232,122,0.1);
+  animation:iconFloat 3s ease-in-out infinite;
+  position:relative;z-index:1;
+  margin-bottom:36px;
+}
+@keyframes iconFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+
+.s1-ring{
+  position:absolute;inset:-20px;border-radius:68px;
+  border:1.5px solid rgba(0,232,122,0.2);
+  animation:ringPulse 2s ease-out infinite;
+}
+@keyframes ringPulse{0%{transform:scale(1);opacity:0.6}100%{transform:scale(1.5);opacity:0}}
+
+.s1-title{
+  font-size:112px;font-weight:900;letter-spacing:-0.05em;line-height:1;
+  position:relative;z-index:1;text-align:center;
+  background:linear-gradient(135deg,#ffffff 40%,rgba(255,255,255,0.75) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:titleSlide 0.7s 0.2s ease both;
+}
+.s1-tag{
+  font-size:28px;font-weight:600;color:rgba(255,255,255,0.45);
+  letter-spacing:0.06em;text-transform:uppercase;
+  margin-top:16px;position:relative;z-index:1;
+  animation:titleSlide 0.7s 0.5s ease both;
+}
+.s1-green{
+  color:#00E87A !important;-webkit-text-fill-color:#00E87A !important;font-weight:800;
+}
+@keyframes titleSlide{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════════════════════════
+   SCENE 2 — HABITS
+═══════════════════════════════════════════ */
+#s2{flex-direction:row;gap:100px;padding:0 120px;align-items:center;}
+
+.scene-label{
+  font-size:13px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;
+  color:#00E87A;margin-bottom:20px;
+  background:rgba(0,232,122,0.1);border:1px solid rgba(0,232,122,0.25);
+  display:inline-block;padding:6px 16px;border-radius:100px;
+}
+.scene-title{
+  font-size:72px;font-weight:900;letter-spacing:-0.04em;line-height:1.05;
+  margin-bottom:24px;
+}
+.scene-sub{font-size:22px;color:rgba(255,255,255,0.45);line-height:1.6;max-width:480px;}
+
+.s2-left{flex:1;display:flex;flex-direction:column;}
+
+/* Habit cards */
+.habit-card{
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:20px;padding:20px 24px;
+  display:flex;align-items:center;gap:16px;
+  margin-bottom:12px;
+  transform:translateX(-60px);opacity:0;
+  transition:transform 0.5s ease,opacity 0.5s ease,border-color 0.3s;
+}
+.habit-card.done{border-color:rgba(0,232,122,0.3);background:rgba(0,232,122,0.05);}
+.habit-card.in{transform:translateX(0);opacity:1;}
+.hcheck{
+  width:44px;height:44px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  border:2px solid rgba(255,255,255,0.1);
+  transition:all 0.3s ease;
+}
+.hcheck.done{background:linear-gradient(135deg,#00E87A,#00b85e);border-color:#00E87A;box-shadow:0 0 20px rgba(0,232,122,0.4);}
+.hcheck svg{opacity:0;transition:opacity 0.3s 0.1s;}
+.hcheck.done svg{opacity:1;}
+.hname{font-size:20px;font-weight:700;flex:1;}
+.hcat{font-size:12px;color:rgba(255,255,255,0.35);font-weight:600;letter-spacing:0.06em;margin-top:3px;}
+.hpill{
+  font-size:12px;font-weight:700;padding:4px 12px;border-radius:100px;
+  letter-spacing:0.04em;
+}
+.hpill.health{background:rgba(0,232,122,0.15);color:#00E87A;}
+.hpill.mind{background:rgba(124,77,255,0.15);color:#A855F7;}
+.hpill.habit{background:rgba(59,130,246,0.15);color:#60A5FA;}
+
+/* Streak widget */
+.streak-widget{
+  background:linear-gradient(135deg,#0E1E18,#111f16);
+  border:1px solid rgba(0,232,122,0.2);
+  border-radius:24px;padding:28px 36px;
+  display:flex;align-items:center;gap:24px;
+  margin-top:8px;
+  box-shadow:0 0 40px rgba(0,232,122,0.1);
+}
+.streak-num{font-size:72px;font-weight:900;color:#00E87A;line-height:1;}
+.streak-label{font-size:14px;color:rgba(255,255,255,0.4);font-weight:600;letter-spacing:0.06em;margin-top:4px;}
+
+/* Phone mock */
+.phone-mock{
+  width:380px;height:760px;flex-shrink:0;
+  background:linear-gradient(145deg,#111,#0a0a0a);
+  border:2px solid rgba(255,255,255,0.1);
+  border-radius:52px;
+  position:relative;overflow:hidden;
+  box-shadow:0 40px 100px rgba(0,0,0,0.8),0 0 0 1px rgba(255,255,255,0.05),inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.phone-notch{
+  position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:120px;height:36px;background:#000;border-radius:0 0 20px 20px;z-index:10;
+}
+.phone-screen{
+  position:absolute;inset:0;
+  background:linear-gradient(180deg,#080C0A 0%,#000 100%);
+  border-radius:50px;
+}
+
+/* ═══════════════════════════════════════════
+   SCENE 3 — TASKS & GOALS
+═══════════════════════════════════════════ */
+#s3{flex-direction:column;padding:0 120px;align-items:flex-start;gap:48px;}
+.s3-top{display:flex;flex-direction:column;}
+
+.task-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:16px;width:100%;
+}
+.task-card{
+  background:rgba(18,18,18,0.95);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:20px;padding:24px;
+  display:flex;flex-direction:column;gap:12px;
+  opacity:0;transform:translateY(20px);
+  transition:opacity 0.4s ease,transform 0.4s ease;
+}
+.task-card.in{opacity:1;transform:translateY(0);}
+.task-card.done{opacity:0.5;}
+.tc-check{
+  width:40px;height:40px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(145deg,#1c1c1c,#0f0f0f);
+  border:1px solid rgba(255,255,255,0.08);
+}
+.tc-check.done{background:linear-gradient(135deg,#00E87A,#00b85e);box-shadow:0 0 16px rgba(0,232,122,0.4);}
+.tc-title{font-size:17px;font-weight:700;line-height:1.3;}
+.tc-title.strike{text-decoration:line-through;opacity:0.4;}
+.priority{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;
+}
+.ph{background:rgba(239,68,68,0.15);color:#EF4444;}
+.pm{background:rgba(245,158,11,0.15);color:#F59E0B;}
+.pl{background:rgba(6,182,212,0.15);color:#06B6D4;}
+
+/* Goal bar */
+.goal-card{
+  background:linear-gradient(135deg,#2E004E,#1A002E);
+  border:1px solid rgba(147,51,234,0.3);
+  border-radius:20px;padding:24px;width:100%;
+  opacity:0;transform:translateY(16px);
+  transition:opacity 0.4s ease,transform 0.4s ease;
+}
+.goal-card.in{opacity:1;transform:translateY(0);}
+.goal-title{font-size:20px;font-weight:800;margin-bottom:12px;}
+.goal-bar-bg{background:rgba(255,255,255,0.08);border-radius:100px;height:8px;overflow:hidden;}
+.goal-bar-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,#A855F7,#7C3AED);width:0%;transition:width 1.2s ease;}
+.goal-pct{font-size:28px;font-weight:900;color:#A855F7;margin-top:8px;}
+
+/* ═══════════════════════════════════════════
+   SCENE 4 — STATS & SCORE
+═══════════════════════════════════════════ */
+#s4{flex-direction:row;gap:80px;padding:0 120px;align-items:center;}
+.s4-left{flex:1;display:flex;flex-direction:column;}
+
+/* Score circle */
+.score-wrap{
+  position:relative;width:320px;height:320px;flex-shrink:0;
+}
+.score-svg{transform:rotate(-90deg);}
+.score-track{stroke:rgba(255,255,255,0.07);fill:none;}
+.score-fill{
+  stroke:#00E87A;fill:none;stroke-linecap:round;
+  stroke-dasharray:879;stroke-dashoffset:879;
+  transition:stroke-dashoffset 2s ease;filter:drop-shadow(0 0 8px rgba(0,232,122,0.5));
+}
+.score-center{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;
+}
+.score-num{font-size:72px;font-weight:900;line-height:1;}
+.score-pct{font-size:18px;color:rgba(255,255,255,0.4);font-weight:600;margin-top:4px;}
+
+/* Heatmap */
+.heatmap-wrap{margin-top:32px;}
+.heatmap-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.25);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:10px;}
+.heatmap-grid{display:grid;grid-template-columns:repeat(26,1fr);gap:4px;}
+.hcell{
+  aspect-ratio:1;border-radius:3px;
+  background:rgba(255,255,255,0.04);
+  transition:background 0.3s ease;
+}
+
+/* Mini stats */
+.mini-stats{display:flex;gap:20px;margin-top:32px;}
+.mini-stat{
+  flex:1;background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:16px;padding:20px;
+}
+.ms-val{font-size:32px;font-weight:900;}
+.ms-label{font-size:12px;color:rgba(255,255,255,0.35);font-weight:600;margin-top:4px;letter-spacing:0.06em;}
+
+/* ═══════════════════════════════════════════
+   SCENE 5 — LEADERBOARD
+═══════════════════════════════════════════ */
+#s5{flex-direction:row;gap:100px;padding:0 120px;align-items:center;}
+.s5-left{flex:1;}
+
+.lb-wrap{flex-shrink:0;width:600px;display:flex;flex-direction:column;gap:10px;}
+.lb-row{
+  display:flex;align-items:center;gap:20px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:16px;padding:18px 24px;
+  opacity:0;transform:translateX(40px);
+  transition:opacity 0.4s ease,transform 0.4s ease;
+}
+.lb-row.in{opacity:1;transform:translateX(0);}
+.lb-row.you{
+  background:linear-gradient(135deg,rgba(255,193,7,0.12),rgba(255,143,0,0.08));
+  border-color:rgba(255,193,7,0.4);
+  box-shadow:0 0 24px rgba(255,193,7,0.1);
+}
+.lb-rank{
+  font-size:22px;font-weight:900;width:36px;text-align:center;
+  color:rgba(255,255,255,0.3);
+}
+.lb-rank.gold{color:#FFD700;}
+.lb-rank.silver{color:#C0C0C0;}
+.lb-rank.bronze{color:#CD7F32;}
+.lb-avatar{
+  width:48px;height:48px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:22px;
+  background:rgba(255,255,255,0.06);flex-shrink:0;
+}
+.lb-name{font-size:18px;font-weight:700;flex:1;}
+.lb-score{font-size:18px;font-weight:800;color:#00E87A;}
+.lb-badge{
+  font-size:11px;font-weight:700;padding:4px 10px;border-radius:100px;
+  background:rgba(255,193,7,0.15);color:#FFD700;letter-spacing:0.05em;
+}
+
+/* ═══════════════════════════════════════════
+   SCENE 6 — CTA
+═══════════════════════════════════════════ */
+#s6{flex-direction:column;gap:0;text-align:center;}
+.s6-glow{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:1000px;height:1000px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,193,7,0.08) 0%,transparent 60%);
+}
+.s6-icon{
+  width:140px;height:140px;border-radius:42px;
+  background:linear-gradient(135deg,#0E1E18,#1a2e22);
+  border:2px solid rgba(0,232,122,0.35);
+  display:flex;align-items:center;justify-content:center;
+  font-size:62px;
+  box-shadow:0 0 60px rgba(0,232,122,0.25);
+  margin:0 auto 36px;position:relative;z-index:1;
+  animation:iconFloat 3s ease-in-out infinite;
+}
+.s6-title{
+  font-size:96px;font-weight:900;letter-spacing:-0.05em;line-height:1;
+  margin-bottom:16px;position:relative;z-index:1;
+}
+.s6-gold{
+  background:linear-gradient(90deg,#FFD700 0%,#FFF3A0 45%,#FFD700 60%,#FFA000 100%);
+  background-size:200% auto;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:shimmer 2s linear infinite;
+}
+@keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
+
+.s6-sub{font-size:24px;color:rgba(255,255,255,0.4);margin-bottom:52px;position:relative;z-index:1;}
+
+.gplay-btn{
+  display:inline-flex;align-items:center;gap:18px;
+  background:linear-gradient(135deg,#FFC107 0%,#FF8F00 100%);
+  border-radius:24px;padding:24px 52px;text-decoration:none;
+  box-shadow:0 0 60px rgba(255,193,7,0.45),0 0 120px rgba(255,193,7,0.2),inset 0 1px 0 rgba(255,255,255,0.25);
+  position:relative;overflow:hidden;z-index:1;
+  animation:btnPop 0.6s 0.3s ease both;
+  transition:transform 0.2s,box-shadow 0.2s;
+}
+.gplay-btn:hover{transform:scale(1.03);box-shadow:0 0 80px rgba(255,193,7,0.6),0 0 160px rgba(255,193,7,0.25),inset 0 1px 0 rgba(255,255,255,0.25);}
+.gplay-shine{position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.2) 0%,transparent 50%);pointer-events:none;}
+.gplay-text-top{font-size:13px;font-weight:700;color:rgba(0,0,0,0.6);letter-spacing:0.1em;text-transform:uppercase;line-height:1;}
+.gplay-text-main{font-size:28px;font-weight:900;color:#000;letter-spacing:-0.4px;line-height:1.2;}
+@keyframes btnPop{from{opacity:0;transform:scale(0.9)}to{opacity:1;transform:scale(1)}}
+
+/* GP icon in btn */
+.gp-icon-wrap{display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex-shrink:0;}
+
+.s6-free{
+  display:inline-flex;align-items:center;gap:6px;
+  margin-top:24px;font-size:14px;color:rgba(255,255,255,0.25);
+  position:relative;z-index:1;
+}
+.s6-free span{color:#00E87A;font-weight:700;}
+
+/* ══ TRANSITIONS / ANIMATIONS ══ */
+@keyframes fadeInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.fade-in-up{animation:fadeInUp 0.6s ease both;}
+
+/* Heatmap cell colors */
+.hc0{background:rgba(255,255,255,0.04);}
+.hc1{background:rgba(0,232,122,0.15);}
+.hc2{background:rgba(0,232,122,0.35);}
+.hc3{background:rgba(0,232,122,0.6);}
+.hc4{background:#00E87A;}
+</style>
+</head>
+<body>
+
+<!-- ── START SCREEN ── -->
+<div id="start">
+  <div style="font-size:52px;margin-bottom:8px;">💪</div>
+  <h2>StayHardy — 15s Play Store Trailer</h2>
+  <p>Click start, then begin your screen recorder. Animation plays automatically.</p>
+  <button id="startBtn" onclick="beginCountdown()">▶ Start Animation</button>
+  <p style="font-size:12px;color:rgba(255,255,255,0.2);margin-top:8px;">Tip: Record at 1080p · 16:9 ratio</p>
+</div>
+
+<!-- ── COUNTDOWN ── -->
+<div id="countdown">
+  <div id="cnum">3</div>
+  <p style="font-size:18px;color:rgba(255,255,255,0.3);margin-top:16px;">Start recording now!</p>
+</div>
+
+<!-- ══════════════ CANVAS ══════════════ -->
+<div id="canvas">
+  <div id="aurora"></div>
+  <div id="progress"></div>
+
+  <!-- SCENE 1 — BRAND INTRO -->
+  <div class="scene" id="s1">
+    <div class="s1-glow"></div>
+    <div style="display:flex;flex-direction:column;align-items:center;z-index:1;">
+      <div class="s1-icon" style="animation-delay:0s">
+        <div class="s1-ring"></div>
+        💪
+      </div>
+      <div class="s1-title">StayHardy</div>
+      <div class="s1-tag">Build · Track · <span class="s1-green">Dominate</span></div>
+    </div>
+  </div>
+
+  <!-- SCENE 2 — HABITS -->
+  <div class="scene" id="s2">
+    <div class="s2-left">
+      <div class="scene-label">Daily Habits</div>
+      <div class="scene-title">Build streaks<br/>that <span style="color:#00E87A">never break.</span></div>
+      <div class="scene-sub">Schedule habits, check them off, protect your streak every single day.</div>
+
+      <div style="margin-top:40px;">
+        <div class="habit-card" id="hc1">
+          <div class="hcheck" id="hck1">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10l4.5 4.5L16 6" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="hname">Morning Workout</div>
+            <div class="hcat">HEALTH</div>
+          </div>
+          <div class="hpill health">Health</div>
+        </div>
+
+        <div class="habit-card" id="hc2">
+          <div class="hcheck" id="hck2">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10l4.5 4.5L16 6" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="hname">Read 30 Mins</div>
+            <div class="hcat">MINDSET</div>
+          </div>
+          <div class="hpill mind">Mindset</div>
+        </div>
+
+        <div class="habit-card" id="hc3">
+          <div class="hcheck" id="hck3">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 10l4.5 4.5L16 6" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="hname">Cold Shower</div>
+            <div class="hcat">COMEBACK</div>
+          </div>
+          <div class="hpill habit">Habit</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;gap:24px;">
+      <div class="streak-widget">
+        <div style="font-size:52px">🔥</div>
+        <div>
+          <div class="streak-num" id="streakNum">0</div>
+          <div class="streak-label">DAY STREAK</div>
+        </div>
+      </div>
+
+      <!-- Mini heatmap preview -->
+      <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:24px;width:100%;">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.25);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:12px;">Habit Consistency</div>
+        <div style="display:grid;grid-template-columns:repeat(14,1fr);gap:4px;" id="miniHeat"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENE 3 — TASKS & GOALS -->
+  <div class="scene" id="s3">
+    <div class="s3-top">
+      <div class="scene-label">Tasks & Goals</div>
+      <div class="scene-title" style="font-size:64px;">Crush every target.<br/><span style="color:#A855F7">Zero excuses.</span></div>
+    </div>
+
+    <div style="width:100%">
+      <div class="task-grid" id="taskGrid">
+        <div class="task-card" id="t1">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="tc-check done"><svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 10l4.5 4.5L16 6" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div class="tc-title strike">Team sync call</div>
+          </div>
+          <div class="priority pm">● Medium</div>
+        </div>
+        <div class="task-card" id="t2">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="tc-check"></div>
+            <div class="tc-title">Launch campaign</div>
+          </div>
+          <div class="priority ph">● High</div>
+        </div>
+        <div class="task-card" id="t3">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="tc-check"></div>
+            <div class="tc-title">Review analytics</div>
+          </div>
+          <div class="priority pl">● Low</div>
+        </div>
+      </div>
+
+      <div class="goal-card" id="goalCard" style="margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div class="goal-title">🎯 Run a Marathon</div>
+          <div style="font-size:24px;">🎯</div>
+        </div>
+        <div class="goal-bar-bg"><div class="goal-bar-fill" id="goalFill"></div></div>
+        <div class="goal-pct" id="goalPct">0%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENE 4 — STATS -->
+  <div class="scene" id="s4">
+    <div class="s4-left">
+      <div class="scene-label">Deep Analytics</div>
+      <div class="scene-title" style="font-size:64px;">Know your<br/><span style="color:#00E87A">productivity</span><br/>inside out.</div>
+      <div class="scene-sub" style="margin-top:16px;">Heatmaps, weekly patterns, category breakdowns — see exactly where your discipline lives.</div>
+
+      <div class="mini-stats" style="margin-top:36px;">
+        <div class="mini-stat">
+          <div class="ms-val" style="color:#00E87A;">6/8</div>
+          <div class="ms-label">HABITS DONE</div>
+        </div>
+        <div class="mini-stat">
+          <div class="ms-val" style="color:#A855F7;">3/5</div>
+          <div class="ms-label">TASKS DONE</div>
+        </div>
+        <div class="mini-stat">
+          <div class="ms-val" style="color:#F59E0B;">2/2</div>
+          <div class="ms-label">GOALS ACTIVE</div>
+        </div>
+      </div>
+
+      <div class="heatmap-wrap">
+        <div class="heatmap-label">Habit Consistency — 30 Days</div>
+        <div class="heatmap-grid" id="heatGrid"></div>
+      </div>
+    </div>
+
+    <!-- Score circle -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0;">
+      <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.25);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:20px;">Today's Productivity</div>
+      <div class="score-wrap">
+        <svg class="score-svg" width="320" height="320" viewBox="0 0 320 320">
+          <circle class="score-track" cx="160" cy="160" r="140" stroke-width="16"/>
+          <circle class="score-fill" id="scoreCircle" cx="160" cy="160" r="140" stroke-width="16"/>
+        </svg>
+        <div class="score-center">
+          <div class="score-num" id="scoreNum" style="color:#00E87A;">0%</div>
+          <div class="score-pct">SCORE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENE 5 — LEADERBOARD -->
+  <div class="scene" id="s5">
+    <div class="s5-left">
+      <div class="scene-label">Leaderboard</div>
+      <div class="scene-title" style="font-size:72px;">Compete.<br/>Rise.<br/><span style="color:#FFD700">Lead.</span></div>
+      <div class="scene-sub">Friendly competition that keeps your streak alive and your rank climbing.</div>
+    </div>
+
+    <div class="lb-wrap" id="lbWrap">
+      <div class="lb-row" id="lb1" style="transition-delay:0s">
+        <div class="lb-rank gold">1</div>
+        <div class="lb-avatar">🏆</div>
+        <div style="flex:1"><div class="lb-name">Alex M.</div><div style="font-size:13px;color:rgba(255,255,255,0.35);">47 day streak</div></div>
+        <div class="lb-score">9,840</div>
+      </div>
+      <div class="lb-row" id="lb2" style="transition-delay:0.1s">
+        <div class="lb-rank silver">2</div>
+        <div class="lb-avatar">🥈</div>
+        <div style="flex:1"><div class="lb-name">Priya K.</div><div style="font-size:13px;color:rgba(255,255,255,0.35);">38 day streak</div></div>
+        <div class="lb-score">9,210</div>
+      </div>
+      <div class="lb-row you" id="lb3" style="transition-delay:0.2s">
+        <div class="lb-rank bronze">3</div>
+        <div class="lb-avatar">💪</div>
+        <div style="flex:1"><div class="lb-name" style="color:#FFD700;">You</div><div style="font-size:13px;color:rgba(255,193,7,0.5);">32 day streak</div></div>
+        <div class="lb-score" style="color:#FFD700;">8,760</div>
+        <div class="lb-badge">YOU</div>
+      </div>
+      <div class="lb-row" id="lb4" style="transition-delay:0.3s">
+        <div class="lb-rank">4</div>
+        <div class="lb-avatar">⚡</div>
+        <div style="flex:1"><div class="lb-name">Jordan T.</div><div style="font-size:13px;color:rgba(255,255,255,0.35);">28 day streak</div></div>
+        <div class="lb-score">8,340</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCENE 6 — CTA -->
+  <div class="scene" id="s6">
+    <div class="s6-glow"></div>
+    <div class="s6-icon">💪</div>
+    <div class="s6-title">
+      Download <span class="s6-gold">Free</span><br/>Today.
+    </div>
+    <div class="s6-sub">Android · Available now on Google Play</div>
+
+    <a class="gplay-btn" href="https://play.google.com/store/apps/details?id=com.stayhardy.app" target="_blank">
+      <div class="s6-shine"></div>
+      <div class="gp-icon-wrap">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+          <path d="M1.22 0.454C0.972 0.706 0.828 1.097 0.828 1.608V22.392C0.828 22.903 0.972 23.294 1.22 23.546L1.284 23.608L12.652 12.24V11.76L1.284 0.392L1.22 0.454Z" fill="url(#gp1b)"/>
+          <path d="M16.46 16.08L12.652 12.24V11.76L16.462 7.92L16.544 7.966L21.094 10.566C22.392 11.302 22.392 12.498 21.094 13.236L16.544 15.834L16.46 16.08Z" fill="url(#gp2b)"/>
+          <path d="M16.544 15.834L12.652 12L1.22 23.546C1.638 23.988 2.33 24.044 3.108 23.608L16.544 15.834Z" fill="url(#gp3b)"/>
+          <path d="M16.544 8.166L3.108 0.392C2.33 -0.044 1.638 0.012 1.22 0.454L12.652 12L16.544 8.166Z" fill="url(#gp4b)"/>
+          <defs>
+            <linearGradient id="gp1b" x1="11.616" y1="1.483" x2="-2.744" y2="15.843" gradientUnits="userSpaceOnUse"><stop stopColor="#00A0FF"/><stop offset="1" stopColor="#00E3FF"/></linearGradient>
+            <linearGradient id="gp2b" x1="23.034" y1="12" x2="0.558" y2="12" gradientUnits="userSpaceOnUse"><stop stopColor="#FFE000"/><stop offset="1" stopColor="#FF9C00"/></linearGradient>
+            <linearGradient id="gp3b" x1="14.296" y1="14.254" x2="-4.868" y2="33.418" gradientUnits="userSpaceOnUse"><stop stopColor="#FF3A44"/><stop offset="1" stopColor="#C31162"/></linearGradient>
+            <linearGradient id="gp4b" x1="-1.786" y1="-5.162" x2="7.396" y2="4.02" gradientUnits="userSpaceOnUse"><stop stopColor="#32A071"/><stop offset="1" stopColor="#00F076"/></linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div>
+        <div class="gplay-text-top">Get it free on</div>
+        <div class="gplay-text-main">Google Play</div>
+      </div>
+    </a>
+
+    <div class="s6-free">
+      <span>✓ Free</span> · No subscription required to get started
+    </div>
+  </div>
+
+</div><!-- /canvas -->
+
+<script>
+// ── Scale canvas to fill viewport ──────────────────────
+function scaleCanvas() {
+  const c = document.getElementById('canvas');
+  const sx = window.innerWidth / 1920;
+  const sy = window.innerHeight / 1080;
+  const s = Math.min(sx, sy);
+  c.style.transform = `translate(-50%, -50%) scale(${s})`;
+}
+window.addEventListener('resize', scaleCanvas);
+scaleCanvas();
+
+// ── Build mini heatmap (scene 2) ───────────────────────
+const miniHeatEl = document.getElementById('miniHeat');
+const miniPattern = [0,0,1,0,2,1,0,3,2,2,4,3,4,4];
+miniPattern.forEach(v => {
+  const d = document.createElement('div');
+  d.className = `hcell hc${v}`;
+  d.style.width = '100%';
+  miniHeatEl.appendChild(d);
+});
+
+// ── Build main heatmap (scene 4) ───────────────────────
+const heatEl = document.getElementById('heatGrid');
+const heatPattern = [0,0,0,1,0,2,1,3,2,4,3,4,4,4,3,4,4,4,2,4,3,4,4,4,4,4];
+heatPattern.forEach(v => {
+  const d = document.createElement('div');
+  d.className = `hcell hc0`;
+  d.dataset.target = v;
+  heatEl.appendChild(d);
+});
+
+// ── Scene management ───────────────────────────────────
+const TOTAL = 15000; // 15 seconds
+
+const timeline = [
+  { id:'s1', inAt:0,    outAt:2600 },
+  { id:'s2', inAt:2200, outAt:5600 },
+  { id:'s3', inAt:5200, outAt:8600 },
+  { id:'s4', inAt:8200, outAt:11600 },
+  { id:'s5', inAt:11200,outAt:13600 },
+  { id:'s6', inAt:13200,outAt:15500 },
+];
+
+let startTime = null;
+let raf = null;
+let triggered = {};
+
+function tick(ts) {
+  if (!startTime) startTime = ts;
+  const elapsed = ts - startTime;
+
+  // Progress bar
+  document.getElementById('progress').style.width = Math.min(elapsed / TOTAL * 100, 100) + '%';
+
+  // Scene activation
+  timeline.forEach(s => {
+    const el = document.getElementById(s.id);
+    if (elapsed >= s.inAt && elapsed < s.outAt) {
+      el.classList.add('active');
+    } else {
+      el.classList.remove('active');
+    }
+  });
+
+  // Scene-specific triggers (one-shot animations)
+  if (elapsed >= 2200 && !triggered.s2) {
+    triggered.s2 = true;
+    initS2();
+  }
+  if (elapsed >= 5200 && !triggered.s3) {
+    triggered.s3 = true;
+    initS3();
+  }
+  if (elapsed >= 8200 && !triggered.s4) {
+    triggered.s4 = true;
+    initS4();
+  }
+  if (elapsed >= 11200 && !triggered.s5) {
+    triggered.s5 = true;
+    initS5();
+  }
+
+  if (elapsed < TOTAL + 1000) {
+    raf = requestAnimationFrame(tick);
+  }
+}
+
+// ── Scene 2 init ───────────────────────────────────────
+function initS2() {
+  // Slide in habit cards
+  setTimeout(() => { document.getElementById('hc1').classList.add('in'); }, 100);
+  setTimeout(() => { document.getElementById('hc2').classList.add('in'); }, 400);
+  setTimeout(() => { document.getElementById('hc3').classList.add('in'); }, 700);
+
+  // Check off habits with delay
+  setTimeout(() => {
+    document.getElementById('hc1').classList.add('done');
+    document.getElementById('hck1').classList.add('done');
+  }, 800);
+  setTimeout(() => {
+    document.getElementById('hc2').classList.add('done');
+    document.getElementById('hck2').classList.add('done');
+  }, 1400);
+
+  // Animate streak counter
+  let n = 0;
+  const target = 47;
+  const si = setInterval(() => {
+    n = Math.min(n + 3, target);
+    document.getElementById('streakNum').textContent = n;
+    if (n >= target) clearInterval(si);
+  }, 40);
+}
+
+// ── Scene 3 init ───────────────────────────────────────
+function initS3() {
+  setTimeout(() => { document.getElementById('t1').classList.add('in'); }, 100);
+  setTimeout(() => { document.getElementById('t2').classList.add('in'); }, 300);
+  setTimeout(() => { document.getElementById('t3').classList.add('in'); }, 500);
+  setTimeout(() => { document.getElementById('goalCard').classList.add('in'); }, 700);
+
+  // Animate goal bar
+  setTimeout(() => {
+    document.getElementById('goalFill').style.width = '68%';
+    let p = 0;
+    const si = setInterval(() => {
+      p = Math.min(p + 2, 68);
+      document.getElementById('goalPct').textContent = p + '%';
+      if (p >= 68) clearInterval(si);
+    }, 20);
+  }, 900);
+}
+
+// ── Scene 4 init ───────────────────────────────────────
+function initS4() {
+  // Animate score circle
+  setTimeout(() => {
+    const circle = document.getElementById('scoreCircle');
+    const circumference = 2 * Math.PI * 140; // 879
+    const targetOffset = circumference * (1 - 0.87);
+    circle.style.strokeDashoffset = targetOffset;
+
+    let s = 0;
+    const si = setInterval(() => {
+      s = Math.min(s + 2, 87);
+      document.getElementById('scoreNum').textContent = s + '%';
+      if (s >= 87) clearInterval(si);
+    }, 22);
+  }, 400);
+
+  // Light up heatmap cells
+  const cells = heatEl.querySelectorAll('.hcell');
+  cells.forEach((cell, i) => {
+    setTimeout(() => {
+      cell.className = `hcell hc${cell.dataset.target}`;
+    }, i * 60);
+  });
+}
+
+// ── Scene 5 init ───────────────────────────────────────
+function initS5() {
+  ['lb1','lb2','lb3','lb4'].forEach((id, i) => {
+    setTimeout(() => {
+      document.getElementById(id).classList.add('in');
+    }, i * 150);
+  });
+}
+
+// ── Countdown & start ─────────────────────────────────
+function beginCountdown() {
+  document.getElementById('start').style.display = 'none';
+  const cd = document.getElementById('countdown');
+  cd.style.display = 'flex';
+  const numEl = document.getElementById('cnum');
+
+  let count = 3;
+  numEl.textContent = count;
+
+  const interval = setInterval(() => {
+    count--;
+    if (count <= 0) {
+      clearInterval(interval);
+      cd.style.display = 'none';
+      // Activate scene 1 immediately
+      document.getElementById('s1').classList.add('active');
+      requestAnimationFrame(tick);
+    } else {
+      numEl.textContent = count;
+      // Re-trigger pulse animation
+      numEl.style.animation = 'none';
+      numEl.offsetHeight; // reflow
+      numEl.style.animation = 'cPulse 1s ease-out';
+    }
+  }, 1000);
+}
+</script>
+</body>
+</html>
