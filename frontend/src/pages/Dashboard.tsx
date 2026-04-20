@@ -96,7 +96,7 @@ const TaskCard = ({
       transition: 'all 0.3s ease',
       position: 'relative',
       overflow: 'hidden'
-    }} className={task.id === task.id ? 'task-live-flash' : ''}>
+    }} className={`task-card-item${task.id === task.id ? ' task-live-flash' : ''}`}>
 
 
 
@@ -171,9 +171,11 @@ const TaskCard = ({
             ? 'line-through' : 'none',
           textDecorationColor:
             'rgba(255,255,255,0.3)',
-          whiteSpace: 'nowrap',
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
-          textOverflow: 'ellipsis'
+          wordBreak: 'break-word'
         }}>
           {task.title}
         </p>
@@ -1075,26 +1077,30 @@ const Dashboard: React.FC = () => {
             );
           }
 
-          return visibleTasks
-            .sort((a, b) => {
-                const priorities = { 'High': 3, 'Medium': 2, 'Low': 1 };
-                if (priorities[a.priority] !== priorities[b.priority]) {
-                    return (priorities[b.priority] || 0) - (priorities[a.priority] || 0);
-                }
-                return (a.order_index || 0) - (b.order_index || 0);
-            })
-            .map(task => (
-              <TaskCard 
-                key={task.id} 
-                task={task} 
-                onComplete={() => {
-                  showTopToast();
-                  void toggleTaskStatus(task);
-                }}
-                onDelete={(id) => deleteTask(id)}
-                onEdit={(t) => openModal(t)}
-              />
-            ));
+          return (
+            <div className="task-cards-grid">
+              {visibleTasks
+                .sort((a, b) => {
+                    const priorities = { 'High': 3, 'Medium': 2, 'Low': 1 };
+                    if (priorities[a.priority] !== priorities[b.priority]) {
+                        return (priorities[b.priority] || 0) - (priorities[a.priority] || 0);
+                    }
+                    return (a.order_index || 0) - (b.order_index || 0);
+                })
+                .map(task => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={() => {
+                      showTopToast();
+                      void toggleTaskStatus(task);
+                    }}
+                    onDelete={(id) => deleteTask(id)}
+                    onEdit={(t) => openModal(t)}
+                  />
+                ))}
+            </div>
+          );
         })()}
       </div>
 

@@ -1449,7 +1449,7 @@ const Routine: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }} className="bouncing-scroll">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }} className="bouncing-scroll habit-cards-container">
           {routines.length === 0 ? (
             <button type="button" className="routine-empty-tile" onClick={() => checkAndGate('habits', () => setShowModal(true))}>Add your first habit.</button>
           ) : orderedForToday.length === 0 ? (
