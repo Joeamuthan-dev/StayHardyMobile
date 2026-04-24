@@ -312,7 +312,7 @@ const Login: React.FC = () => {
 
   return (
     <div
-      className={`login-page-root fixed inset-0 bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black ${isTablet ? 'justify-center overflow-auto' : 'overflow-hidden'}`}
+      className={`login-page-root fixed inset-0 bg-black flex flex-col items-center px-6 selection:bg-[#00E676] selection:text-black ${isTablet ? 'justify-center overflow-auto' : 'overflow-y-auto'}`}
     >
       <style>{`@keyframes pinCursor { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       
@@ -325,13 +325,24 @@ const Login: React.FC = () => {
       </div>
 
       {/* BRANDING HEADER */}
-      <div className={`flex flex-col items-center justify-center ${isTablet ? 'mb-8' : 'mt-36 mb-10'}`}>
+      <div className={`flex flex-col items-center justify-center ${isTablet ? 'mb-8' : 'mt-24 mb-6'}`}>
         <h1 className={`text-white font-extrabold tracking-tight text-center leading-none mb-3 ${isTablet10 ? 'text-7xl' : isTablet ? 'text-6xl' : 'text-5xl'}`}>
           STAY HARDY
         </h1>
         <p className="text-[#00E676] text-sm font-medium tracking-[0.2em] uppercase text-center">
           The 1% starts here.
         </p>
+        {!isTablet && (
+          <p className="text-white/30 text-sm font-medium mt-4">
+            New here?{' '}
+            <span
+              onClick={() => navigate('/signup')}
+              className="text-[#00E676] font-black cursor-pointer hover:underline"
+            >
+              Sign Up
+            </span>
+          </p>
+        )}
       </div>
 
       <div className={`w-full space-y-8 ${isTablet10 ? 'max-w-lg' : isTablet ? 'max-w-md' : 'max-w-sm'}`}>
@@ -405,18 +416,7 @@ const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* PRIMARY ACTION BUTTON */}
-        <button 
-          onClick={handleLogin}
-          disabled={isLoading || !isFormValid}
-          className="w-full bg-[#00E676] text-black font-black uppercase h-14 rounded-2xl flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,230,118,0.4)] active:scale-95 transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? 'Unlocking the Vault...' : "Let's Start"}
-          <svg width="20" height="20" viewBox="0 0 24 24" className="fill-none stroke-black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14m-7-7l7 7-7 7" />
-          </svg>
-        </button>
-
+        {/* FORGOT PIN */}
         <button
           onClick={() => navigate('/forgot-pin')}
           style={{
@@ -426,7 +426,6 @@ const Login: React.FC = () => {
             fontSize: '13px',
             fontWeight: '500',
             cursor: 'pointer',
-            marginTop: '16px',
             padding: '8px',
             textDecoration: 'underline',
             textUnderlineOffset: '3px',
@@ -437,6 +436,18 @@ const Login: React.FC = () => {
           }}
         >
           Forgot PIN?
+        </button>
+
+        {/* PRIMARY ACTION BUTTON */}
+        <button
+          onClick={handleLogin}
+          disabled={isLoading || !isFormValid}
+          className="w-full bg-[#00E676] text-black font-black uppercase h-14 rounded-2xl flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,230,118,0.4)] active:scale-95 transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? 'Unlocking the Vault...' : "Let's Start"}
+          <svg width="20" height="20" viewBox="0 0 24 24" className="fill-none stroke-black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14m-7-7l7 7-7 7" />
+          </svg>
         </button>
 
         {/* ERROR UI BLOCK */}
@@ -473,18 +484,20 @@ const Login: React.FC = () => {
           </div>
         )}
 
-        {/* SIGN UP LINK */}
-        <div className="text-center pt-2">
-          <p className="text-white/30 text-sm font-medium">
-            New here?{' '}
-            <span 
-              onClick={() => navigate('/signup')} 
-              className="text-[#00E676] font-black cursor-pointer hover:underline"
-            >
-              Sign Up
-            </span>
-          </p>
-        </div>
+        {/* SIGN UP LINK — tablets only (phones see it above the form) */}
+        {isTablet && (
+          <div className="text-center pt-2">
+            <p className="text-white/30 text-sm font-medium">
+              New here?{' '}
+              <span
+                onClick={() => navigate('/signup')}
+                className="text-[#00E676] font-black cursor-pointer hover:underline"
+              >
+                Sign Up
+              </span>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
