@@ -6,7 +6,6 @@ import { isWeb } from './utils/platform';
 import { App as CapApp } from '@capacitor/app';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
-import { storage } from './utils/storage';
 import { supabase } from './supabase';
 
 // Contexts
@@ -217,59 +216,6 @@ const AppCore: React.FC = () => {
       });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  // Handle deep link when app is opened from email verification link
-  useEffect(() => {
-    const handleDeepLink = async (data: { url: string }) => {
-      const url = data.url;
-      console.log('App opened with URL:', url);
-
-      if (
-        url.includes('stayhardy://auth/verify') ||
-        url.includes('access_token=') ||
-        url.includes('type=signup')
-      ) {
-        // Normalize URL for parsing if native scheme is used
-        const normalizedUrl = url.replace('stayhardy://', 'https://stayhardy.app/');
-        const urlObj = new URL(normalizedUrl);
-        
-        // Supabase tokens can be in the hash or search params
-        const hashParams = new URLSearchParams(urlObj.hash.slice(1));
-        const accessToken = urlObj.searchParams.get('access_token') || hashParams.get('access_token');
-        const refreshToken = urlObj.searchParams.get('refresh_token') || hashParams.get('refresh_token');
-
-        if (accessToken && refreshToken) {
-          console.log('Detected auth session in deep link. Authenticating...');
-          const { data: sessionData, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-
-          if (!error && sessionData.user) {
-            await storage.set('user_session', sessionData.user.email || '');
-            await storage.remove('pending_verification_email');
-            
-            // Critical: Redirect to entry point or home
-            navigate('/home', { replace: true });
-          }
-        }
-      }
-    };
-
-    // Register active listener
-    const subPromise = CapApp.addListener('appUrlOpen', handleDeepLink);
-
-    // Initial check for cold boot
-    CapApp.getLaunchUrl().then((result) => {
-      if (result?.url) {
-        handleDeepLink({ url: result.url });
-      }
-    });
-
-    return () => {
-      subPromise.then(sub => sub.remove());
-    };
   }, [navigate]);
 
   useEffect(() => {
