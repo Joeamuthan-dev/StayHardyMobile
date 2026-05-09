@@ -35,14 +35,175 @@
   --primary-light: #10b981;
 }
 
-/* Enforce Strict Dark Mode - Light mode components removed as per Stay Hardy UI Laws */
-
 html, body, #root {
   background-color: #000000;
   margin: 0;
   padding: 0;
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+/* ── LIGHT MODE ─────────────────────────────────────────────────────────── */
+
+html.light-mode,
+html.light-mode body,
+html.light-mode #root {
+  background-color: #F2F2F7 !important;
+  color: #0A0A0A !important;
+}
+
+/* CSS variable overrides */
+html.light-mode {
+  --text-main: #0A0A0A;
+  --text-secondary: rgba(0,0,0,0.50);
+  --card-bg: #FFFFFF;
+  --border-color: rgba(0,0,0,0.07);
+  --background-dark: #F2F2F7;
+  --surface-glass: rgba(255,255,255,0.7);
+  --glass-border: rgba(0,0,0,0.08);
+}
+
+/* ── Page shells ── */
+html.light-mode .bg-black,
+html.light-mode .login-page-root,
+html.light-mode .page-shell,
+html.light-mode .hub-daily-page,
+html.light-mode .goals-page-layout,
+html.light-mode .routine-page,
+html.light-mode .hist-page,
+html.light-mode .cal-premium-page,
+html.light-mode .dashboard-page-layout,
+html.light-mode .fb-page {
+  background: #F2F2F7 !important;
+  background-color: #F2F2F7 !important;
+}
+
+/* ── Bottom nav pill (Tailwind arbitrary rgba class) ── */
+html.light-mode .bottom-nav-container [class*="rounded-"] {
+  background: rgba(255,255,255,0.96) !important;
+  border-color: rgba(0,0,0,0.08) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.10) !important;
+}
+
+/* ── Tailwind text overrides ── */
+html.light-mode .text-white        { color: #0A0A0A !important; }
+html.light-mode .text-white\/60    { color: rgba(0,0,0,0.60) !important; }
+html.light-mode .text-white\/50,
+html.light-mode .text-white\/45    { color: rgba(0,0,0,0.50) !important; }
+html.light-mode .text-white\/40,
+html.light-mode .text-white\/35,
+html.light-mode .text-white\/30    { color: rgba(0,0,0,0.40) !important; }
+html.light-mode .text-white\/25,
+html.light-mode .text-white\/20    { color: rgba(0,0,0,0.30) !important; }
+
+/* ── Inline style dark-background overrides (attribute selector) ── */
+/* These cover every hardcoded dark hex used across cards, modals, sheets */
+html.light-mode [style*="background: #000000"],
+html.light-mode [style*="background-color: #000000"],
+html.light-mode [style*="background: #080808"],
+html.light-mode [style*="background: #080C0A"],
+html.light-mode [style*="background: #0A0A0A"],
+html.light-mode [style*="background: #0A0F0D"],
+html.light-mode [style*="background: #0D0D0D"],
+html.light-mode [style*="background: #0D1410"],
+html.light-mode [style*="background: #0f0f0f"],
+html.light-mode [style*="background: #0F0F0F"],
+html.light-mode [style*="background: #111111"],
+html.light-mode [style*="background: #121212"],
+html.light-mode [style*="background: #131313"],
+html.light-mode [style*="background: #141414"],
+html.light-mode [style*="background: #1A1A1A"],
+html.light-mode [style*="background: #1a1a1a"],
+html.light-mode [style*="background: #111"],
+html.light-mode [style*="background: #000"],
+html.light-mode [style*="background: rgba(18,18,18"],
+html.light-mode [style*="background: rgba(10,10,10"],
+html.light-mode [style*="background: rgba(14,14,14"],
+html.light-mode [style*="background: rgba(13,13,13"],
+html.light-mode [style*="background: rgba(0,0,0,0.9"],
+html.light-mode [style*="background: rgba(0,0,0,0.8"],
+html.light-mode [style*="background: rgba(0,0,0,0.7"],
+html.light-mode [style*="background: rgba(0,0,0,0.6"],
+html.light-mode [style*="background: rgba(0,0,0,0.95"],
+html.light-mode [style*="background-color: #0A0A0A"],
+html.light-mode [style*="background-color: #121212"],
+html.light-mode [style*="background-color: #1A1A1A"] {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+}
+
+/* gradient dark backgrounds on cards */
+html.light-mode [style*="linear-gradient(135deg, #0C1812"],
+html.light-mode [style*="linear-gradient(135deg, #0D0D0D"],
+html.light-mode [style*="linear-gradient(145deg,#080808"],
+html.light-mode [style*="linear-gradient(145deg, #050a07"],
+html.light-mode [style*="linear-gradient(145deg,#050a07"],
+html.light-mode [style*="linear-gradient(180deg, #0D0D0D"],
+html.light-mode [style*="linear-gradient(180deg, #080808"] {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+}
+
+/* ── Inline text-color overrides ── */
+html.light-mode [style*="color: #FFFFFF"],
+html.light-mode [style*="color: #ffffff"],
+html.light-mode [style*="color: #fff"],
+html.light-mode [style*="color: white"] {
+  color: #0A0A0A !important;
+}
+html.light-mode [style*="color: rgba(255,255,255,0.4"],
+html.light-mode [style*="color: rgba(255,255,255,0.3"],
+html.light-mode [style*="color: rgba(255,255,255,0.2"],
+html.light-mode [style*="color: rgba(255,255,255,0.5"],
+html.light-mode [style*="color: rgba(255,255,255,0.6"],
+html.light-mode [style*="color: rgba(255,255,255,0.7"] {
+  color: rgba(0,0,0,0.50) !important;
+}
+
+/* ── Inline border-color overrides ── */
+html.light-mode [style*="border: 1px solid rgba(255,255,255"],
+html.light-mode [style*="border: 2px solid rgba(255,255,255"],
+html.light-mode [style*="borderColor: rgba(255,255,255"],
+html.light-mode [style*="border-color: rgba(255,255,255"] {
+  border-color: rgba(0,0,0,0.10) !important;
+}
+
+/* ── Inputs ── */
+html.light-mode input,
+html.light-mode textarea,
+html.light-mode select {
+  background-color: #F8F8F8 !important;
+  color: #0A0A0A !important;
+  border-color: rgba(0,0,0,0.12) !important;
+}
+html.light-mode input::placeholder,
+html.light-mode textarea::placeholder { color: rgba(0,0,0,0.35) !important; }
+
+/* ── Section containers (Settings) ── */
+html.light-mode .section-container {
+  background: #FFFFFF !important;
+  border-color: rgba(0,0,0,0.06) !important;
+}
+
+/* ── Sidebar (tablet/web) ── */
+html.light-mode .desktop-sidebar {
+  background: rgba(255,255,255,0.92) !important;
+  border-right-color: rgba(0,0,0,0.08) !important;
+}
+html.light-mode .sidebar-nav-item       { color: rgba(0,0,0,0.55) !important; }
+html.light-mode .sidebar-nav-item:hover { background: rgba(0,0,0,0.05) !important; }
+
+/* ── Skeleton shimmer ── */
+html.light-mode [class*="shimmer"],
+html.light-mode [class*="skeleton"] {
+  background: linear-gradient(90deg,#E5E5EA 25%,#F2F2F7 50%,#E5E5EA 75%) !important;
+  background-size: 200% 100% !important;
+}
+
+/* ── Backdrop overlays — lighten in light mode ── */
+html.light-mode [style*="background: rgba(0,0,0,0.85)"],
+html.light-mode [style*="background: rgba(0,0,0,0.8)"] {
+  background: rgba(0,0,0,0.4) !important;
 }
 
 /* Native-feel performance optimizations */
@@ -295,3 +456,75 @@ input, textarea, select {
 }
 
 
+
+@media (min-width: 1100px) {
+  /* Home: stretch sections to fill full content width */
+  .hub-daily-page > *:not(style) {
+    max-width: none;
+  }
+
+  /* Stats: two independent flex columns, full width, cards fill columns */
+  .stats-premium-main {
+    max-width: none !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start;
+    padding: 112px 1.25rem 120px 1.25rem !important;
+    gap: 1.15rem;
+    box-sizing: border-box !important;
+  }
+  .stats-col-left,
+  .stats-col-right {
+    flex: 1;
+    min-width: 0;
+  }
+  .stats-col-left > div,
+  .stats-col-right > div {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Calendar: full width */
+  .cal-content {
+    max-width: none !important;
+    padding: 0 1.25rem !important;
+  }
+
+  /* Remove narrow max-width so card grids fill the desktop */
+  .goals-page-layout .bouncing-scroll,
+  .dashboard-page-layout .bouncing-scroll {
+    max-width: none;
+    width: 100%;
+  }
+  .routine-page > div:not(.aurora-bg):not([style*="sticky"]) {
+    max-width: none;
+  }
+
+  /* Goals: 3 columns, full-width grid */
+  .goals-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    padding: 0 12px 20px 12px !important;
+  }
+
+  /* Habits: 3 columns */
+  .habit-cards-container {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  /* Tasks: 3 columns, remove card side margins inside grid */
+  .task-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding: 0 4px;
+  }
+  .task-cards-grid .task-card-item {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
+  }
+}

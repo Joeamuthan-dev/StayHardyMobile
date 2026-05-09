@@ -35,10 +35,8 @@ export default function VerifyEmail() {
     setResendMessage('');
     setResendError('');
 
-    console.log('[VerifyEmail] Attempting resend to:', email);
-
     try {
-      const { data, error } = await supabase.auth.resend({
+      const { error } = await supabase.auth.resend({
         type: 'signup',
         email: email,
         options: {
@@ -46,17 +44,12 @@ export default function VerifyEmail() {
         }
       });
 
-      // Log full details — stringify so it shows in Android logcat
-      console.log('[VerifyEmail] Resend data:', JSON.stringify(data));
-      console.log('[VerifyEmail] Resend error:', JSON.stringify(error));
-
       if (error) {
         console.error('[VerifyEmail] Error code:', error.status);
         console.error('[VerifyEmail] Error message:', error.message);
         console.error('[VerifyEmail] Error details:', JSON.stringify(error));
         setResendError(`Failed: ${error.message}`);
       } else {
-        console.log('[VerifyEmail] Resend SUCCESS — data:', JSON.stringify(data));
         setResendMessage("Mail sent again. Check your inbox, soldier.");
         setCooldown(60);
       }

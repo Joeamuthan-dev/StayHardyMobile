@@ -39,7 +39,6 @@ const AuthVerify: React.FC = () => {
         const refreshToken = params?.get('refresh_token');
 
         if (accessToken) {
-          console.log('[AuthVerify] Valid token detected. Setting session...');
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || '',
@@ -47,7 +46,6 @@ const AuthVerify: React.FC = () => {
 
           if (sessionError) throw sessionError;
 
-          console.log('[AuthVerify] Session established. Redirecting to Login...');
           await supabase.auth.signOut({ scope: 'local' });
           
           navigate('/login', { 

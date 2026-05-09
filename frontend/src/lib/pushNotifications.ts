@@ -4,6 +4,7 @@ import { PushNotifications, type Token, type ActionPerformed } from '@capacitor/
 const LOG_PREFIX = '[StayHardy Push]';
 
 export function pushLog(step: string, detail?: unknown) {
+  if (!import.meta.env.DEV) return;
   if (detail !== undefined) {
     console.log(LOG_PREFIX, step, detail);
   } else {

@@ -12,6 +12,8 @@ import { ProductivityService, type ProductivityScoreData } from '../lib/Producti
 import { getScoreLabels } from '../utils/productivity';
 
 import { useLoading } from '../context/LoadingContext';
+import { useTheme } from '../context/ThemeContext';
+import { getTheme } from '../utils/theme';
 
 interface Task {
   id: string;
@@ -38,7 +40,6 @@ interface Goal {
   name: string;
   targetDate: string;
   status: 'pending' | 'completed';
-  progress: number;
   createdAt: string;
   updatedAt?: string;
 }
@@ -64,12 +65,15 @@ const HabitHeatmap = ({
   activeRange: string;
   setActiveRange: (r: '30D' | '90D' | '1Y') => void;
 }) => {
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
+  const emptyCellColor = theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.03)';
   const getCellColor = (val: number) => {
     if (val >= 4) return '#00E87A';
     if (val === 3) return 'rgba(0,232,122,0.7)';
     if (val === 2) return 'rgba(0,232,122,0.4)';
     if (val === 1) return 'rgba(0,232,122,0.2)';
-    return 'rgba(255,255,255,0.03)';
+    return emptyCellColor;
   };
   const getCellGlow = (val: number) => {
     if (val >= 3) return '0 0 4px rgba(0,232,122,0.5)';
@@ -77,26 +81,26 @@ const HabitHeatmap = ({
     return 'none';
   };
   return (
-    <div style={{ margin: '0 16px 12px 16px', background: '#0A0F0D', border: '1px solid rgba(0,232,122,0.12)', borderRadius: '20px', padding: '18px', boxSizing: 'border-box' }}>
+    <div style={{ margin: '10px 16px 10px 16px', background: tc.surface, border: '1px solid rgba(0,232,122,0.12)', borderRadius: '20px', padding: '18px', boxSizing: 'border-box' }}>
       {/* Header + range toggle */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-        <p style={{ fontSize: '10px', fontWeight: 800, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>HABIT CONSISTENCY</p>
-        <div style={{ display: 'flex', background: '#060D09', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '3px', gap: '2px' }}>
+        <p style={{ fontSize: '10px', fontWeight: 900, color: theme === 'light' ? '#0A0A0A' : tc.textTertiary, letterSpacing: '0.15em', margin: 0 }}>HABIT CONSISTENCY</p>
+        <div style={{ display: 'flex', background: theme === 'light' ? '#F0F0F0' : '#060D09', border: `1px solid ${tc.border}`, borderRadius: '10px', padding: '3px', gap: '2px' }}>
           {(['30D','90D','1Y'] as const).map((r, i) => {
             const isActive = activeRange === r;
             return (
               <div key={i} onClick={() => setActiveRange(r)} style={{ padding: '4px 8px', borderRadius: '7px', cursor: 'pointer', background: isActive ? '#00E87A' : 'transparent', transition: 'all 0.2s ease', boxShadow: isActive ? '0 0 8px rgba(0,232,122,0.4)' : 'none' }}>
-                <span style={{ fontSize: '9px', fontWeight: 800, color: isActive ? '#000' : '#666', letterSpacing: '0.06em' }}>{r}</span>
+                <span style={{ fontSize: '9px', fontWeight: 800, color: isActive ? '#000' : tc.textTertiary, letterSpacing: '0.06em' }}>{r}</span>
               </div>
             );
           })}
         </div>
       </div>
       {/* Heatmap grid */}
-      <div style={{ background: 'linear-gradient(145deg,#050a07,#080f0a)', borderRadius: '12px', padding: '12px', boxShadow: 'inset 3px 3px 8px rgba(0,0,0,0.6),inset -1px -1px 4px rgba(255,255,255,0.02)', marginBottom: '12px' }}>
+      <div style={{ background: theme === 'light' ? '#F5F5F5' : 'linear-gradient(145deg,#050a07,#080f0a)', borderRadius: '12px', padding: '12px', boxShadow: theme === 'light' ? 'inset 2px 2px 6px rgba(0,0,0,0.06)' : 'inset 3px 3px 8px rgba(0,0,0,0.6),inset -1px -1px 4px rgba(255,255,255,0.02)', marginBottom: '12px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', padding: '0 2px' }}>
           {['JAN','APR','JUL','OCT'].map((m, i) => (
-            <span key={i} style={{ fontSize: '8px', fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em' }}>{m}</span>
+            <span key={i} style={{ fontSize: '8px', fontWeight: 700, color: tc.textTertiary, letterSpacing: '0.08em' }}>{m}</span>
           ))}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(26, 1fr)', gap: '2.5px' }}>
@@ -105,40 +109,31 @@ const HabitHeatmap = ({
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', marginTop: '8px' }}>
-          <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}>Less</span>
+          <span style={{ fontSize: '8px', color: tc.textTertiary }}>Less</span>
           {[0,1,2,3,4].map(v => (
             <div key={v} style={{ width: '10px', height: '10px', borderRadius: '2px', background: getCellColor(v), boxShadow: 'inset 1px 1px 2px rgba(0,0,0,0.4)' }}/>
           ))}
-          <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}>More</span>
+          <span style={{ fontSize: '8px', color: tc.textTertiary }}>More</span>
         </div>
       </div>
     </div>
   );
 };
 
-// ─── COCKPIT INSIGHT CARD ────────────────────────────────────────────────────
-// ─── GLOBAL STAT CARD STYLE ──────────────────────────────────────────────────
-const cardStyle = {
-  margin: '0 16px 12px 16px',
-  background: 'rgba(255, 255, 255, 0.03)',
-  backdropFilter: 'blur(12px)',
-  WebkitBackdropFilter: 'blur(12px)',
-  border: '0.5px solid rgba(255, 255, 255, 0.12)',
-  borderRadius: '16px',
-  boxSizing: 'border-box' as const
-};
+
 
 // ─── COCKPIT INSIGHT CARD ────────────────────────────────────────────────────
 const InsightCard = ({ type, data }: {
   type: 'tasks' | 'goals' | 'habits';
-  data: { 
-    total?: number; 
-    completed?: number; 
-    pending?: number; 
-    active?: number; 
-    today?: number; 
-    streak?: number; 
-    consistency?: number 
+  data: {
+    total?: number;
+    completed?: number;
+    pending?: number;
+    active?: number;
+    today?: number;
+    streak?: number;
+    consistency?: number;
+    progressPct?: number;
   };
 }) => {
   const configs = {
@@ -157,7 +152,7 @@ const InsightCard = ({ type, data }: {
       label: 'GOAL INSIGHTS',
       color: '#A855F7',
       icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A855F7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
-      percentage: data?.total ? Math.round((data.completed || 0) / data.total * 100) : 0,
+      percentage: data?.progressPct ?? (data?.total ? Math.round((data.completed || 0) / data.total * 100) : 0),
       stats: [
         { label: 'Total', val: data.total || 0 },
         { label: 'Active', val: data.active || 0 },
@@ -177,13 +172,16 @@ const InsightCard = ({ type, data }: {
     }
   };
 
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
+
   const config = configs[type];
   if (!config) return null;
 
   return (
-    <div style={{ 
-      margin: '0 16px 12px 16px',
-      background: 'rgba(255, 255, 255, 0.03)',
+    <div style={{
+      margin: '10px 16px 10px 16px',
+      background: tc.surface,
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
       border: `0.5px solid ${config.color}`,
@@ -196,20 +194,20 @@ const InsightCard = ({ type, data }: {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
            {config.icon}
-           <span style={{ 
-             fontSize: '11px', 
-             fontWeight: '800', 
-             color: '#FFFFFF', 
+           <span style={{
+             fontSize: '11px',
+             fontWeight: '800',
+             color: tc.text,
              letterSpacing: '0.06em',
-             fontFamily: "'DM Sans', sans-serif" 
+             fontFamily: "'DM Sans', sans-serif"
            }}>
              {config.label}
            </span>
         </div>
-        <span style={{ 
-          fontSize: '24px', 
-          fontWeight: '900', 
-          color: '#FFFFFF',
+        <span style={{
+          fontSize: '24px',
+          fontWeight: '900',
+          color: tc.text,
           fontFamily: "'DM Sans', sans-serif"
         }}>
           {config.percentage}%
@@ -217,47 +215,47 @@ const InsightCard = ({ type, data }: {
       </div>
 
       {/* Middle Row: Inline Stats with split dividers */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: '12px', 
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
         marginBottom: '16px'
       }}>
         {config.stats.map((s, i) => (
           <React.Fragment key={i}>
             <div style={{ display: 'flex', gap: '4px', alignItems: 'baseline' }}>
-               <span style={{ 
-                 fontSize: '10px', 
-                 fontWeight: '600', 
-                 color: 'rgba(255,255,255,0.4)',
+               <span style={{
+                 fontSize: '10px',
+                 fontWeight: '600',
+                 color: tc.textTertiary,
                  fontFamily: "'DM Sans', sans-serif"
                }}>{s.label}:</span>
-               <span style={{ 
-                 fontSize: '13px', 
-                 fontWeight: '800', 
-                 color: '#FFFFFF',
+               <span style={{
+                 fontSize: '13px',
+                 fontWeight: '800',
+                 color: tc.text,
                  fontFamily: "'DM Sans', sans-serif"
                }}>{s.val}</span>
             </div>
             {i < config.stats.length - 1 && (
-              <div style={{ width: '1px', height: '10px', background: 'rgba(255,255,255,0.08)' }} />
+              <div style={{ width: '1px', height: '10px', background: tc.border }} />
             )}
           </React.Fragment>
         ))}
       </div>
 
       {/* Bottom Row: Ultra-thin 4px Progress Bar */}
-      <div style={{ 
-        height: '4px', 
-        background: 'rgba(255,255,255,0.05)', 
-        borderRadius: '2px', 
+      <div style={{
+        height: '4px',
+        background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)',
+        borderRadius: '2px',
         overflow: 'hidden',
         width: '100%'
       }}>
-        <div style={{ 
-          height: '100%', 
-          width: `${config.percentage}%`, 
-          background: config.color, 
+        <div style={{
+          height: '100%',
+          width: `${config.percentage}%`,
+          background: config.color,
           transition: 'width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
           boxShadow: `0 0 8px ${config.color}40`
         }} />
@@ -270,6 +268,8 @@ const InsightCard = ({ type, data }: {
 
 
 const VerdictCard = ({ score, totalItems }: { score: number; totalItems: number }) => {
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
   const getVerdict = (s: number) => {
     if (s >= 90) return { icon: '🏆', color: '#FFD700', glow: 'rgba(255,215,0,0.3)' };
     if (s >= 75) return { icon: '⚡', color: '#00E87A', glow: 'rgba(0,232,122,0.3)' };
@@ -281,24 +281,26 @@ const VerdictCard = ({ score, totalItems }: { score: number; totalItems: number 
   const v = getVerdict(score);
   const labels = useMemo(() => getScoreLabels(score, totalItems), [score, totalItems]);
   return (
-    <div style={{ ...cardStyle, padding: '20px', border: `0.5px solid ${v.color}40`, position: 'relative', overflow: 'hidden' }}>
+    <div style={{ margin: '10px 16px 10px 16px', background: tc.surface, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: '16px', boxSizing: 'border-box' as const, padding: '20px', border: `0.5px solid ${v.color}40`, position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: '-40px', left: '50%', transform: 'translateX(-50%)', width: '200px', height: '200px', background: `radial-gradient(circle, ${v.glow} 0%, transparent 70%)`, pointerEvents: 'none' }} />
       <div style={{ padding: '20px', position: 'relative', zIndex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
           <div style={{ fontSize: '28px', filter: `drop-shadow(0 0 12px ${v.glow})` }}>{v.icon}</div>
           <div>
-            <p style={{ fontSize: '9px', fontWeight: 800, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: '0 0 2px 0' }}>THE VERDICT</p>
+            <p style={{ fontSize: '9px', fontWeight: 800, color: tc.textTertiary, letterSpacing: '0.15em', margin: '0 0 2px 0' }}>THE VERDICT</p>
             <p style={{ fontSize: '14px', fontWeight: 900, color: v.color, margin: 0, letterSpacing: '0.04em', fontFamily: 'monospace' }}>{labels.label}</p>
           </div>
         </div>
-        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', marginBottom: '14px' }} />
-        <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', margin: 0, lineHeight: 1.7, fontWeight: 400 }}>{labels.verdict}</p>
+        <div style={{ height: '1px', background: tc.border, marginBottom: '14px' }} />
+        <p style={{ fontSize: '14px', color: tc.textSecondary, margin: 0, lineHeight: 1.7, fontWeight: 400 }}>{labels.verdict}</p>
       </div>
     </div>
   );
 };
 
 const InsightsTrend = ({ data, activeRange, setActiveRange }: { data: { tasks: number[], goals: number[], habits: number[] }, activeRange: string, setActiveRange: (r: string) => void }) => {
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
   const buildPath = (points: number[], w: number, h: number) => {
     if (!points?.length) return '';
     const max = Math.max(...points, 1);
@@ -326,15 +328,15 @@ const InsightsTrend = ({ data, activeRange, setActiveRange }: { data: { tasks: n
   const habitPath = buildPath(data.habits, W, H);
 
   return (
-    <div style={{ ...cardStyle, padding: '20px', border: '0.5px solid rgba(255,255,255,0.08)' }}>
+    <div style={{ margin: '10px 16px 10px 16px', background: tc.surface, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: '16px', boxSizing: 'border-box' as const, padding: '20px', border: `0.5px solid ${tc.border}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>INSIGHTS TREND</p>
-        <div style={{ display: 'flex', background: '#060D09', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '3px', gap: '2px', position: 'relative' }}>
+        <p style={{ fontSize: '10px', fontWeight: 900, color: theme === 'light' ? '#0A0A0A' : tc.textTertiary, letterSpacing: '0.15em', margin: 0 }}>INSIGHTS TREND</p>
+        <div style={{ display: 'flex', background: theme === 'light' ? '#F0F0F0' : '#060D09', border: `1px solid ${tc.border}`, borderRadius: '12px', padding: '3px', gap: '2px', position: 'relative' }}>
           {['7D', '30D', '90D'].map((range, i) => {
             const isActive = activeRange === range;
             return (
               <div key={i} onClick={() => setActiveRange(range)} style={{ padding: '5px 10px', borderRadius: '9px', cursor: 'pointer', background: isActive ? '#00E87A' : 'transparent', transition: 'all 0.25s ease', animation: isActive ? 'segSlide 0.2s ease' : 'none', boxShadow: isActive ? '0 0 10px rgba(0,232,122,0.4)' : 'none' }}>
-                <span style={{ fontSize: '10px', fontWeight: '800', color: isActive ? '#000000' : 'rgba(255,255,255,0.35)', letterSpacing: '0.06em' }}>{range}</span>
+                <span style={{ fontSize: '10px', fontWeight: '800', color: isActive ? '#000000' : tc.textTertiary, letterSpacing: '0.06em' }}>{range}</span>
               </div>
             );
           })}
@@ -344,11 +346,11 @@ const InsightsTrend = ({ data, activeRange, setActiveRange }: { data: { tasks: n
         {[{ label: 'Tasks', color: '#00E87A' }, { label: 'Goals', color: '#A855F7' }, { label: 'Habits', color: '#06B6D4' }].map((l, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <div style={{ width: '16px', height: '2px', borderRadius: '2px', background: l.color, boxShadow: `0 0 6px ${l.color}80` }} />
-            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontWeight: '600' }}>{l.label}</span>
+            <span style={{ fontSize: '10px', color: tc.textSecondary, fontWeight: '600' }}>{l.label}</span>
           </div>
         ))}
       </div>
-      <div style={{ background: 'linear-gradient(145deg, #050a07, #080f0a)', borderRadius: '12px', padding: '12px 8px 8px 8px', boxShadow: 'inset 2px 2px 8px rgba(0,0,0,0.6)' }}>
+      <div style={{ background: theme === 'light' ? '#F5F5F5' : 'linear-gradient(145deg, #050a07, #080f0a)', borderRadius: '12px', padding: '12px 8px 8px 8px', boxShadow: theme === 'light' ? 'inset 2px 2px 6px rgba(0,0,0,0.06)' : 'inset 2px 2px 8px rgba(0,0,0,0.6)' }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', overflow: 'visible' }}>
           <defs>
             <linearGradient id="taskAreaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#00E87A" stopOpacity="0.3" /><stop offset="100%" stopColor="#00E87A" stopOpacity="0" /></linearGradient>
@@ -357,7 +359,7 @@ const InsightsTrend = ({ data, activeRange, setActiveRange }: { data: { tasks: n
             <filter id="taskGlow"><feGaussianBlur stdDeviation="2" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
           </defs>
           {[25, 50, 75].map((y, i) => (
-            <line key={i} x1="0" y1={H - (y / 100) * H * 0.8 - H * 0.1} x2={W} y2={H - (y / 100) * H * 0.8 - H * 0.1} stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="3 6" />
+            <line key={i} x1="0" y1={H - (y / 100) * H * 0.8 - H * 0.1} x2={W} y2={H - (y / 100) * H * 0.8 - H * 0.1} stroke={theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)'} strokeWidth="1" strokeDasharray="3 6" />
           ))}
           {taskPath && <path d={buildAreaPath(taskPath, W, H)} fill="url(#taskAreaGrad)" style={{ animation: 'auraGlow 3s ease-in-out infinite' }} />}
           {goalPath && <path d={buildAreaPath(goalPath, W, H)} fill="url(#goalAreaGrad)" style={{ animation: 'auraGlow 3s ease-in-out infinite 0.5s' }} />}
@@ -375,36 +377,38 @@ const InsightsTrend = ({ data, activeRange, setActiveRange }: { data: { tasks: n
 
 // ─── STREAK MILESTONE CARD ───────────────────────────────────────────────────
 const StreakMilestoneCard = ({ currentStreak, bestStreak }: { currentStreak: number; bestStreak: number }) => {
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
   const getStreakLabel = (s: number) => {
     if (s >= 100) return { label: 'LEGENDARY', color: '#FFD700' };
     if (s >= 60)  return { label: 'UNSTOPPABLE', color: '#00E87A' };
     if (s >= 30)  return { label: 'ON FIRE', color: '#F97316' };
     if (s >= 14)  return { label: 'MOMENTUM', color: '#06B6D4' };
     if (s >= 7)   return { label: 'BUILDING', color: '#A855F7' };
-    if (s >= 1)   return { label: 'STARTED', color: '#6B7280' };
-    return { label: 'START TODAY', color: '#6B7280' };
+    if (s >= 1)   return { label: 'STARTED', color: '#00E87A' };
+    return { label: 'START TODAY', color: '#00E87A' };
   };
   const badge = getStreakLabel(currentStreak);
   const isPB = currentStreak > 0 && currentStreak >= bestStreak;
   return (
-    <div style={{ margin: '0 16px 12px 16px', background: '#0A0F0D', border: '1px solid rgba(0,232,122,0.18)', borderRadius: '20px', padding: '18px', boxSizing: 'border-box' }}>
+    <div style={{ margin: '10px 16px 10px 16px', background: tc.surface, border: '1px solid rgba(0,232,122,0.18)', borderRadius: '20px', padding: '18px', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-        <p style={{ fontSize: '10px', fontWeight: 800, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>STREAK</p>
+        <p style={{ fontSize: '10px', fontWeight: 900, color: theme === 'light' ? '#0A0A0A' : tc.textTertiary, letterSpacing: '0.15em', margin: 0 }}>STREAK</p>
         <div style={{ background: `${badge.color}18`, border: `1px solid ${badge.color}40`, borderRadius: '10px', padding: '3px 10px', fontSize: '9px', fontWeight: 900, color: badge.color, letterSpacing: '0.1em' }}>
           {badge.label}
         </div>
       </div>
       <div style={{ display: 'flex', gap: '12px' }}>
-        <div style={{ flex: 1, background: 'linear-gradient(145deg,#050a07,#080f0a)', borderRadius: '16px', padding: '16px', boxShadow: 'inset 2px 2px 8px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', border: '1px solid rgba(0,232,122,0.1)' }}>
+        <div style={{ flex: 1, background: theme === 'light' ? '#F5F5F5' : 'linear-gradient(145deg,#050a07,#080f0a)', borderRadius: '16px', padding: '16px', boxShadow: theme === 'light' ? 'inset 2px 2px 6px rgba(0,0,0,0.06)' : 'inset 2px 2px 8px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', border: '1px solid rgba(0,232,122,0.1)' }}>
           <span style={{ fontSize: '13px', animation: 'flamePulse 1.2s ease-in-out infinite' }}>🔥</span>
-          <span style={{ fontSize: '36px', fontWeight: 900, color: '#FFFFFF', fontFamily: 'monospace', lineHeight: 1 }}>{currentStreak}</span>
-          <span style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em' }}>CURRENT</span>
+          <span style={{ fontSize: '36px', fontWeight: 900, color: tc.text, fontFamily: 'monospace', lineHeight: 1 }}>{currentStreak}</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: tc.textTertiary, letterSpacing: '0.1em' }}>CURRENT</span>
           {isPB && <span style={{ fontSize: '8px', fontWeight: 800, color: '#00E87A', letterSpacing: '0.08em', background: 'rgba(0,232,122,0.1)', borderRadius: '6px', padding: '2px 6px' }}>PERSONAL BEST</span>}
         </div>
-        <div style={{ flex: 1, background: 'linear-gradient(145deg,#050a07,#080f0a)', borderRadius: '16px', padding: '16px', boxShadow: 'inset 2px 2px 8px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ flex: 1, background: theme === 'light' ? '#F5F5F5' : 'linear-gradient(145deg,#050a07,#080f0a)', borderRadius: '16px', padding: '16px', boxShadow: theme === 'light' ? 'inset 2px 2px 6px rgba(0,0,0,0.06)' : 'inset 2px 2px 8px rgba(0,0,0,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', border: `1px solid ${tc.border}` }}>
           <span style={{ fontSize: '13px' }}>🏆</span>
-          <span style={{ fontSize: '36px', fontWeight: 900, color: 'rgba(255,255,255,0.55)', fontFamily: 'monospace', lineHeight: 1 }}>{bestStreak}</span>
-          <span style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em' }}>BEST EVER</span>
+          <span style={{ fontSize: '36px', fontWeight: 900, color: tc.textSecondary, fontFamily: 'monospace', lineHeight: 1 }}>{bestStreak}</span>
+          <span style={{ fontSize: '9px', fontWeight: 700, color: tc.textTertiary, letterSpacing: '0.1em' }}>BEST EVER</span>
         </div>
       </div>
     </div>
@@ -412,8 +416,8 @@ const StreakMilestoneCard = ({ currentStreak, bestStreak }: { currentStreak: num
 };
 
 // ─── DAY OF WEEK PATTERN CHART ───────────────────────────────────────────────
-const weekBarColor = (ratio: number): string => {
-  if (ratio <= 0) return 'rgba(255,255,255,0.08)';
+const weekBarColor = (ratio: number, emptyColor = 'rgba(255,255,255,0.08)'): string => {
+  if (ratio <= 0) return emptyColor;
   const r1 = [255, 59, 48], r2 = [255, 204, 0], r3 = [0, 230, 118];
   const [a, b] = ratio < 0.5 ? [r1, r2, ratio * 2] : [r2, r3, (ratio - 0.5) * 2] as [number[], number[], number];
   const t = ratio < 0.5 ? ratio * 2 : (ratio - 0.5) * 2;
@@ -422,12 +426,15 @@ const weekBarColor = (ratio: number): string => {
 };
 
 const DayOfWeekChart = ({ data }: { data: { day: string; count: number }[] }) => {
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
+  const emptyBarColor = theme === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
   const max = Math.max(...data.map(d => d.count), 1);
   const bestDayIdx = data.reduce((bi, d, i) => d.count > data[bi].count ? i : bi, 0);
   return (
-    <div style={{ margin: '0 16px 12px 16px', background: '#0A0F0D', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', padding: '18px', boxSizing: 'border-box' }}>
+    <div style={{ margin: '10px 16px 10px 16px', background: tc.surface, border: `1px solid ${tc.border}`, borderRadius: '20px', padding: '18px', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <p style={{ fontSize: '10px', fontWeight: 800, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>WEEKLY PATTERN</p>
+        <p style={{ fontSize: '10px', fontWeight: 900, color: theme === 'light' ? '#0A0A0A' : tc.textTertiary, letterSpacing: '0.15em', margin: 0 }}>WEEKLY PATTERN</p>
         {data[bestDayIdx].count > 0 && (
           <span style={{ fontSize: '9px', fontWeight: 700, color: '#00E87A', letterSpacing: '0.06em' }}>
             PEAK: {data[bestDayIdx].day.toUpperCase()}
@@ -439,7 +446,7 @@ const DayOfWeekChart = ({ data }: { data: { day: string; count: number }[] }) =>
           const ratio = max > 0 ? d.count / max : 0;
           const heightPct = ratio * 100;
           const isBest = i === bestDayIdx && d.count > 0;
-          const color = weekBarColor(ratio);
+          const color = weekBarColor(ratio, emptyBarColor);
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', height: '100%', justifyContent: 'flex-end' }}>
               <div style={{
@@ -450,13 +457,13 @@ const DayOfWeekChart = ({ data }: { data: { day: string; count: number }[] }) =>
                 boxShadow: isBest ? `0 0 8px ${color}80` : 'none',
                 transition: 'height 0.8s cubic-bezier(0.34,1.56,0.64,1)',
               }} />
-              <span style={{ fontSize: '9px', fontWeight: isBest ? 800 : 600, color: isBest ? '#00E87A' : 'rgba(255,255,255,0.25)', letterSpacing: '0.04em' }}>{d.day}</span>
+              <span style={{ fontSize: '9px', fontWeight: isBest ? 800 : 600, color: isBest ? '#00E87A' : tc.textTertiary, letterSpacing: '0.04em' }}>{d.day}</span>
             </div>
           );
         })}
       </div>
-      <div style={{ marginTop: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px 12px' }}>
-        <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
+      <div style={{ marginTop: '12px', background: theme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '8px 12px' }}>
+        <span style={{ fontSize: '11px', color: tc.textSecondary, fontWeight: 500 }}>
           {data[bestDayIdx].count > 0
             ? `You complete the most habits on ${data[bestDayIdx].day}s — keep that momentum.`
             : 'Complete habits to see your weekly pattern.'}
@@ -468,10 +475,13 @@ const DayOfWeekChart = ({ data }: { data: { day: string; count: number }[] }) =>
 
 const CategoryRadarChart = ({ categories }: { categories: { name: string; rate: number }[] }) => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
+
   if (categories.length === 0) {
     return (
-      <div style={{ ...cardStyle, padding: '20px', border: '0.5px solid rgba(255,255,255,0.08)', margin: '0 16px 12px 16px' }}>
-        <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: '0 0 12px 0' }}>CATEGORY RADAR</p>
+      <div style={{ margin: '10px 16px 10px 16px', background: tc.surface, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: '16px', boxSizing: 'border-box' as const, padding: '20px', border: `0.5px solid ${tc.border}` }}>
+        <p style={{ fontSize: '10px', fontWeight: 900, color: theme === 'light' ? '#0A0A0A' : tc.textTertiary, letterSpacing: '0.15em', margin: '0 0 12px 0' }}>CATEGORY RADAR</p>
         <p
           onClick={() => navigate('/routine')}
           style={{ fontSize: '12px', color: '#00E676', textAlign: 'center', cursor: 'pointer', margin: 0 }}
@@ -492,9 +502,9 @@ const CategoryRadarChart = ({ categories }: { categories: { name: string; rate: 
   const weakest = categories[categories.length - 1];
 
   return (
-    <div style={{ ...cardStyle, padding: '20px', border: '0.5px solid rgba(0,232,122,0.15)', margin: '0 16px 12px 16px' }}>
+    <div style={{ margin: '10px 16px 10px 16px', background: tc.surface, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: '16px', boxSizing: 'border-box' as const, padding: '20px', border: '0.5px solid rgba(0,232,122,0.15)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-        <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.15em', margin: 0 }}>
+        <p style={{ fontSize: '10px', fontWeight: 900, color: theme === 'light' ? '#0A0A0A' : tc.textTertiary, letterSpacing: '0.15em', margin: 0 }}>
           CATEGORY RADAR
         </p>
         <span style={{ fontSize: '9px', color: 'rgba(0,232,122,0.6)', fontWeight: '700', letterSpacing: '0.06em' }}>
@@ -504,10 +514,10 @@ const CategoryRadarChart = ({ categories }: { categories: { name: string; rate: 
 
       <ResponsiveContainer width="100%" height={260}>
         <RadarChart key={categories.map(c => `${c.name}:${c.rate}`).join('|')} data={data} margin={{ top: 16, right: 32, bottom: 16, left: 32 }}>
-          <PolarGrid stroke="rgba(255,255,255,0.07)" />
+          <PolarGrid stroke={tc.border} />
           <PolarAngleAxis
             dataKey="subject"
-            tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 700 }}
+            tick={{ fill: tc.textSecondary, fontSize: 10, fontWeight: 700 }}
           />
           <Radar
             name="Score"
@@ -532,18 +542,18 @@ const CategoryRadarChart = ({ categories }: { categories: { name: string; rate: 
         borderRadius: '12px'
       }}>
         <div>
-          <p style={{ fontSize: '8px', color: 'rgba(255,255,255,0.25)', fontWeight: '800', letterSpacing: '0.1em', margin: '0 0 3px 0' }}>STRONGEST</p>
+          <p style={{ fontSize: '8px', color: tc.textTertiary, fontWeight: '800', letterSpacing: '0.1em', margin: '0 0 3px 0' }}>STRONGEST</p>
           <p style={{ fontSize: '13px', color: '#00E87A', fontWeight: '900', margin: 0, fontFamily: 'monospace' }}>
             {strongest.name}&nbsp;
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: '700' }}>{strongest.rate}%</span>
+            <span style={{ fontSize: '11px', color: tc.textSecondary, fontWeight: '700' }}>{strongest.rate}%</span>
           </p>
         </div>
         {categories.length > 1 && (
           <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '8px', color: 'rgba(255,255,255,0.25)', fontWeight: '800', letterSpacing: '0.1em', margin: '0 0 3px 0' }}>NEEDS WORK</p>
+            <p style={{ fontSize: '8px', color: tc.textTertiary, fontWeight: '800', letterSpacing: '0.1em', margin: '0 0 3px 0' }}>NEEDS WORK</p>
             <p style={{ fontSize: '13px', color: '#F97316', fontWeight: '900', margin: 0, fontFamily: 'monospace' }}>
               {weakest.name}&nbsp;
-              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: '700' }}>{weakest.rate}%</span>
+              <span style={{ fontSize: '11px', color: tc.textSecondary, fontWeight: '700' }}>{weakest.rate}%</span>
             </p>
           </div>
         )}
@@ -552,6 +562,8 @@ const CategoryRadarChart = ({ categories }: { categories: { name: string; rate: 
   );
 };
 const Stats: React.FC = () => {
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const [heatmapRange, setHeatmapRange] = useState<'30D' | '90D' | '1Y'>('30D');
 
@@ -589,7 +601,7 @@ const Stats: React.FC = () => {
       supabase.from('categories').select('name').eq('userId', user.id),
       supabase.from('routines').select('id, title, days, category').eq('user_id', user.id),
       supabase.from('routine_logs').select('routine_id, completed_at').eq('user_id', user.id).gte('completed_at', startDayStr),
-      supabase.from('goals').select('id, name, targetDate, status, progress, createdAt, updatedAt').eq('userId', user.id),
+      supabase.from('goals').select('id, name, targetDate, status, createdAt, updatedAt').eq('userId', user.id),
     ]);
     if (taskErr) console.error('Supabase fetch error:', taskErr);
     if (catErr) console.warn('Categories fetch error:', catErr.message);
@@ -728,9 +740,18 @@ const Stats: React.FC = () => {
     ]),
   ).filter((c) => c && c !== '');
 
+  const calcGoalProgress = (g: Goal): number => {
+    if ((g.status as string) === 'completed' || (g.status as string) === 'done' || (g.status as string) === 'achieved') return 100;
+    if (!g.targetDate || !g.createdAt) return 0;
+    const totalDays = Math.max(1, Math.ceil((new Date(g.targetDate).getTime() - new Date(g.createdAt).getTime()) / (1000 * 60 * 60 * 24)));
+    const elapsed = Math.ceil((Date.now() - new Date(g.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+    return Math.min(100, Math.max(0, Math.round((elapsed / totalDays) * 100)));
+  };
+
   const totalGoals = goals.length;
   const activeGoalsCount = goals.filter((g) => g.status === 'pending').length;
   const completedGoalsCount = goals.filter((g) => (g.status as string) === 'completed' || (g.status as string) === 'done' || (g.status as string) === 'achieved').length;
+  const goalsProgressPct = totalGoals > 0 ? Math.round(goals.reduce((sum, g) => sum + calcGoalProgress(g), 0) / totalGoals) : 0;
 
   const totalUserTasks = scoreData?.tasks_total ?? tasks.length;
   const completedUserTasks = scoreData?.tasks_completed ?? tasks.filter((t: Task) => t.status === 'completed').length;
@@ -883,7 +904,7 @@ const Stats: React.FC = () => {
           minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
-          background: '#080C0A',
+          background: tc.bgPage,
           overflowY: 'auto'
         }}
       >
@@ -899,59 +920,66 @@ const Stats: React.FC = () => {
             padding: '112px 0 120px 0'
           }}
         >
-          {/* 1. Streak — personal milestone, unique opener */}
-          <StreakMilestoneCard currentStreak={currentStreak} bestStreak={bestStreak} />
+          {/* Left column */}
+          <div className="stats-col-left">
+            {/* 1. Streak — personal milestone, unique opener */}
+            <StreakMilestoneCard currentStreak={currentStreak} bestStreak={bestStreak} />
 
-          {/* 2. Habit Heatmap — most visual, most unique */}
-          <HabitHeatmap
-            heatmapData={getDaysArray(heatmapRange).map(d => {
-              const c = heatMap[d] || 0;
-              return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
-            })}
-            activeRange={heatmapRange}
-            setActiveRange={setHeatmapRange}
-          />
+            {/* 3. Weekly Pattern — deeply personal, not on home */}
+            <DayOfWeekChart data={dayOfWeekData} />
 
-          {/* 3. Weekly Pattern — deeply personal, not on home */}
-          <DayOfWeekChart data={dayOfWeekData} />
+            {/* 5. Category Radar */}
+            <CategoryRadarChart categories={categoryStats} />
 
-          {/* 4. Historical Trend */}
-          <InsightsTrend
-            data={{
-              tasks: historicalData.map(d => d.tasks),
-              goals: historicalData.map(d => d.goals),
-              habits: historicalData.map(d => d.habits)
-            }}
-            activeRange={trendDays === 7 ? '7D' : trendDays === 30 ? '30D' : '90D'}
-            setActiveRange={(r) => setTrendDays(r === '7D' ? 7 : r === '30D' ? 30 : 90)}
-          />
+            <InsightCard
+              type="goals"
+              data={{
+                total: totalGoals,
+                active: activeGoalsCount,
+                completed: completedGoalsCount,
+                progressPct: goalsProgressPct
+              }}
+            />
+          </div>
 
-          {/* 5. Category Radar */}
-          <CategoryRadarChart categories={categoryStats} />
+          {/* Right column */}
+          <div className="stats-col-right">
+            {/* 2. Habit Heatmap — most visual, most unique */}
+            <HabitHeatmap
+              heatmapData={getDaysArray(heatmapRange).map(d => {
+                const c = heatMap[d] || 0;
+                return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
+              })}
+              activeRange={heatmapRange}
+              setActiveRange={setHeatmapRange}
+            />
 
-          {/* 6. Breakdown cards */}
-          <InsightCard
-            type="tasks"
-            data={{
-              total: totalUserTasks,
-              completed: completedUserTasks,
-              pending: pendingCount
-            }}
-          />
+            {/* 4. Historical Trend */}
+            <InsightsTrend
+              data={{
+                tasks: historicalData.map(d => d.tasks),
+                goals: historicalData.map(d => d.goals),
+                habits: historicalData.map(d => d.habits)
+              }}
+              activeRange={trendDays === 7 ? '7D' : trendDays === 30 ? '30D' : '90D'}
+              setActiveRange={(r) => setTrendDays(r === '7D' ? 7 : r === '30D' ? 30 : 90)}
+            />
 
-          <InsightCard
-            type="goals"
-            data={{
-              total: totalGoals,
-              active: activeGoalsCount,
-              completed: completedGoalsCount
-            }}
-          />
+            {/* 6. Breakdown cards */}
+            <InsightCard
+              type="tasks"
+              data={{
+                total: totalUserTasks,
+                completed: completedUserTasks,
+                pending: pendingCount
+              }}
+            />
 
-          <VerdictCard
-            score={dynamicTodayScore}
-            totalItems={totalUserTasks + totalGoals + totalRoutines}
-          />
+            <VerdictCard
+              score={dynamicTodayScore}
+              totalItems={totalUserTasks + totalGoals + totalRoutines}
+            />
+          </div>
 
         </main>
 

@@ -1,16 +1,19 @@
 // src/pages/Settings.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '../context/SubscriptionContext';
 
 import { isNative } from '../utils/platform';
+import { openExternalUrl } from '../lib/openExternalUrl';
+import { Capacitor } from '@capacitor/core';
 import { storage } from '../utils/storage';
 import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 import {
   Camera, ChevronRight, Zap, Info,
   Lock, Trash2, LogOut,
-  MessageSquare, Heart, Megaphone, RotateCcw
+  MessageSquare, Heart, Megaphone, RotateCcw, CreditCard, Star
 } from 'lucide-react';
 import UserAvatar from '../components/UserAvatar';
 import { supabase } from '../supabase';
@@ -44,7 +47,10 @@ const SettingsRow: React.FC<{
   onClick?: () => void;
   danger?: boolean;
   upgrade?: boolean;
-}> = ({ icon, title, subtitle, right, onClick, danger = false, upgrade = false }) => (
+}> = ({ icon, title, subtitle, right, onClick, danger = false, upgrade = false }) => {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+  return (
   <button
     onClick={onClick}
     style={{
@@ -57,7 +63,7 @@ const SettingsRow: React.FC<{
         ? 'linear-gradient(135deg, rgba(0,230,118,0.08), transparent)'
         : 'transparent',
       border: 'none',
-      borderBottom: upgrade ? 'none' : '1px solid rgba(255,255,255,0.04)',
+      borderBottom: upgrade ? 'none' : `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)'}`,
       cursor: onClick ? 'pointer' : 'default',
       textAlign: 'left',
       WebkitTapHighlightColor: 'transparent',
@@ -74,12 +80,12 @@ const SettingsRow: React.FC<{
         ? 'rgba(239,68,68,0.1)'
         : upgrade
           ? 'rgba(0,230,118,0.1)'
-          : 'rgba(255,255,255,0.06)',
+          : isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       flexShrink: 0,
-      color: danger ? '#EF4444' : upgrade ? '#00E676' : 'rgba(255,255,255,0.6)',
+      color: danger ? '#EF4444' : upgrade ? '#00E676' : isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)',
     }}>
       {icon}
     </div>
@@ -99,7 +105,7 @@ const SettingsRow: React.FC<{
           ? 'rgba(239,68,68,0.85)'
           : upgrade
             ? '#00E676'
-            : '#FFFFFF',
+            : isLight ? '#0A0A0A' : '#FFFFFF',
         display: 'block',
       }}>
         {title}
@@ -107,7 +113,7 @@ const SettingsRow: React.FC<{
       {subtitle && (
         <span style={{
           fontSize: '12px',
-          color: 'rgba(255,255,255,0.35)',
+          color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)',
           display: 'block',
         }}>
           {subtitle}
@@ -123,18 +129,21 @@ const SettingsRow: React.FC<{
     ) : onClick ? (
       <ChevronRight
         size={16}
-        color={danger ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.2)'}
+        color={danger ? 'rgba(239,68,68,0.5)' : isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.2)'}
         style={{ flexShrink: 0, marginLeft: 'auto' }}
       />
     ) : null}
   </button>
-);
+  );
+};
 
-const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
+const SectionHeader: React.FC<{ label: string }> = ({ label }) => {
+  const { theme } = useTheme();
+  return (
   <p style={{
     fontSize: '11px',
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.3)',
+    color: theme === 'light' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.3)',
     letterSpacing: '0.12em',
     textTransform: 'uppercase',
     margin: '28px 0 8px 4px',
@@ -142,9 +151,11 @@ const SectionHeader: React.FC<{ label: string }> = ({ label }) => (
   }}>
     {label}
   </p>
-);
+  );
+};
 
 const MembershipBadge: React.FC<{ email: string; isPro: boolean }> = ({ email, isPro }) => {
+  const { theme: mbTheme } = useTheme();
   const isAdmin = email === import.meta.env.VITE_ADMIN_EMAIL;
   if (isAdmin) return (
     <span style={{ padding: '4px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '800', letterSpacing: '0.12em', textTransform: 'uppercase', border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }}>
@@ -157,7 +168,7 @@ const MembershipBadge: React.FC<{ email: string; isPro: boolean }> = ({ email, i
     </span>
   );
   return (
-    <span style={{ padding: '4px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '800', letterSpacing: '0.12em', textTransform: 'uppercase', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)' }}>
+    <span style={{ padding: '4px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '800', letterSpacing: '0.12em', textTransform: 'uppercase', border: `1px solid ${mbTheme === 'light' ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.1)'}`, background: mbTheme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', color: mbTheme === 'light' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)' }}>
       BASIC
     </span>
   );
@@ -168,6 +179,8 @@ const MembershipBadge: React.FC<{ email: string; isPro: boolean }> = ({ email, i
 const Settings: React.FC = () => {
   const { user, logout, setCurrentUser, refreshUserProfile } = useAuth();
   const { isPro } = useSubscription();
+  const { theme, toggleTheme } = useTheme();
+  const isLight = theme === 'light';
   const navigate = useNavigate();
 
   const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
@@ -178,6 +191,11 @@ const Settings: React.FC = () => {
   const [memberSince, setMemberSince] = useState('');
   const [userRole, setUserRole] = useState<'admin' | 'pro' | 'basic'>('basic');
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
+
+  // Subscription info from Supabase (source of truth for plan/amount/expiry)
+  const [subPlan, setSubPlan] = useState<string | null>(null);
+  const [subExpiresAt, setSubExpiresAt] = useState<string | null>(null);
+  const [subStatus, setSubStatus] = useState<string | null>(null);
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -265,7 +283,7 @@ const Settings: React.FC = () => {
 
       const { data: userRecord } = await supabase
         .from('users')
-        .select('name,created_at')
+        .select('name,created_at,subscription_plan,pro_expires_at,subscription_status')
         .eq('email', email)
         .maybeSingle();
 
@@ -274,6 +292,11 @@ const Settings: React.FC = () => {
       } else {
         setUserName(email.split('@')[0]);
       }
+
+      // Subscription details
+      setSubPlan(userRecord?.subscription_plan ?? null);
+      setSubExpiresAt(userRecord?.pro_expires_at ?? null);
+      setSubStatus(userRecord?.subscription_status ?? null);
 
       const createdAt = userRecord?.created_at || session.user.created_at;
       if (createdAt) {
@@ -468,46 +491,46 @@ const Settings: React.FC = () => {
   return (
     <div className={`page-shell set-premium-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`}>
       <style>{`
-        .set-premium-page { 
-          background: #000000; 
-          min-height: 100dvh; 
-          font-family: 'DM Sans', system-ui, sans-serif; 
-          padding: calc(env(safe-area-inset-top, 0px) + 60px) 16px calc(110px + env(safe-area-inset-bottom, 0px)); 
-          overflow-y: auto; 
+        .set-premium-page {
+          background: ${isLight ? '#F2F2F7' : '#000000'};
+          min-height: 100dvh;
+          font-family: 'DM Sans', system-ui, sans-serif;
+          padding: calc(env(safe-area-inset-top, 0px) + 60px) 16px calc(110px + env(safe-area-inset-bottom, 0px));
+          overflow-y: auto;
         }
-        .set-switch { 
-          position: relative; 
-          width: 50px; 
-          height: 28px; 
-          border-radius: 999px; 
-          border: none; 
-          cursor: pointer; 
-          background: rgba(255,255,255,0.1); 
-          transition: background 0.2s; 
+        .set-switch {
+          position: relative;
+          width: 50px;
+          height: 28px;
+          border-radius: 999px;
+          border: none;
+          cursor: pointer;
+          background: rgba(255,255,255,0.1);
+          transition: background 0.2s;
           flex-shrink: 0;
         }
         .set-switch[data-on="1"] { background: #00E676; }
-        .set-switch-knob { 
-          position: absolute; 
-          top: 3px; 
-          left: 3px; 
-          width: 22px; 
-          height: 22px; 
-          border-radius: 50%; 
-          background: #fff; 
-          transition: left 0.2s; 
+        .set-switch-knob {
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background: #fff;
+          transition: left 0.2s;
         }
         .set-switch[data-on="1"] .set-switch-knob { left: 25px; }
         .set-switch-spin { font-size: 16px; color: #FFFFFF; opacity: 0.6; }
         @keyframes rotating { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .rotating { animation: rotating 0.8s linear infinite; }
-        
+
         .section-container {
-          background: #0D0D0D;
+          background: ${isLight ? '#FFFFFF' : '#0D0D0D'};
           border-radius: 16px;
-          border: 1px solid rgba(255,255,255,0.06);
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)'};
           overflow: hidden;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+          box-shadow: ${isLight ? '0 1px 8px rgba(0,0,0,0.06)' : '0 4px 20px rgba(0,0,0,0.3)'};
         }
 
         .sp-toast {
@@ -527,13 +550,39 @@ const Settings: React.FC = () => {
         }
 
         .glass-card {
-          background: rgba(20, 20, 20, 0.8);
+          background: ${isLight ? '#FFFFFF' : 'rgba(20, 20, 20, 0.8)'};
           backdrop-filter: blur(16px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255, 255, 255, 0.1)'};
           border-radius: 24px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+          box-shadow: ${isLight ? '0 8px 32px rgba(0,0,0,0.12)' : '0 20px 60px rgba(0,0,0,0.5)'};
         }
       `}</style>
+
+      {/* Close Button */}
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          position: 'fixed',
+          top: 'calc(env(safe-area-inset-top, 0px) + 14px)',
+          right: '16px',
+          zIndex: 100,
+          width: '34px',
+          height: '34px',
+          borderRadius: '50%',
+          background: isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.1)',
+          border: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M18 6L6 18M6 6l12 12" stroke={isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)'}
+            strokeWidth="2.5" strokeLinecap="round"/>
+        </svg>
+      </button>
 
       {/* Profile Card — Redesigned */}
       <div style={{
@@ -541,15 +590,19 @@ const Settings: React.FC = () => {
         borderRadius: '24px',
         overflow: 'hidden',
         margin: '0 0 4px 0',
-        background: isProUser
-          ? 'linear-gradient(135deg, #0B1A12 0%, #0D0D0D 50%, #0A1410 100%)'
-          : 'linear-gradient(135deg, #111111 0%, #0D0D0D 100%)',
-        border: isProUser
-          ? '1px solid rgba(0,230,118,0.2)'
-          : '1px solid rgba(255,255,255,0.07)',
-        boxShadow: isProUser
-          ? '0 0 60px rgba(0,230,118,0.07), 0 20px 40px rgba(0,0,0,0.5)'
-          : '0 20px 40px rgba(0,0,0,0.5)',
+        background: isLight
+          ? '#FFFFFF'
+          : isProUser
+            ? 'linear-gradient(135deg, #0B1A12 0%, #0D0D0D 50%, #0A1410 100%)'
+            : 'linear-gradient(135deg, #111111 0%, #0D0D0D 100%)',
+        border: isLight
+          ? isProUser ? '1px solid rgba(0,230,118,0.3)' : '1px solid rgba(0,0,0,0.08)'
+          : isProUser ? '1px solid rgba(0,230,118,0.2)' : '1px solid rgba(255,255,255,0.07)',
+        boxShadow: isLight
+          ? '0 2px 16px rgba(0,0,0,0.08)'
+          : isProUser
+            ? '0 0 60px rgba(0,230,118,0.07), 0 20px 40px rgba(0,0,0,0.5)'
+            : '0 20px 40px rgba(0,0,0,0.5)',
       }}>
         {/* Decorative glow blob top-left */}
         <div style={{
@@ -603,7 +656,7 @@ const Settings: React.FC = () => {
                 width: '22px', height: '22px', borderRadius: '50%',
                 background: '#00E676', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
-                border: '2px solid #0D0D0D',
+                border: `2px solid ${isLight ? '#FFFFFF' : '#0D0D0D'}`,
                 boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
               }}>
                 <Camera size={11} color="#000000" />
@@ -615,7 +668,7 @@ const Settings: React.FC = () => {
               {/* Name + Badge inline */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                 <span style={{
-                  fontSize: '17px', fontWeight: '800', color: '#FFFFFF',
+                  fontSize: '17px', fontWeight: '800', color: isLight ? '#0A0A0A' : '#FFFFFF',
                   fontFamily: 'Syne, sans-serif',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   maxWidth: '160px',
@@ -630,7 +683,7 @@ const Settings: React.FC = () => {
 
               {/* Email */}
               <span style={{
-                fontSize: '11.5px', color: 'rgba(255,255,255,0.35)',
+                fontSize: '11.5px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)',
                 display: 'block', overflow: 'hidden',
                 textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
@@ -640,8 +693,8 @@ const Settings: React.FC = () => {
               {/* Member since */}
               {memberSince && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '7px' }}>
-                  <div style={{ width: '14px', height: '1px', background: 'rgba(255,255,255,0.12)' }} />
-                  <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.04em' }}>
+                  <div style={{ width: '14px', height: '1px', background: isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)' }} />
+                  <span style={{ fontSize: '10px', color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.2)', letterSpacing: '0.04em' }}>
                     Since {memberSince}
                   </span>
                 </div>
@@ -739,9 +792,9 @@ const Settings: React.FC = () => {
           {/* Sheet */}
           <div style={{
             position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9001,
-            background: 'linear-gradient(180deg, #111111 0%, #0D0D0D 100%)',
+            background: isLight ? '#F2F2F7' : 'linear-gradient(180deg, #111111 0%, #0D0D0D 100%)',
             borderRadius: '24px 24px 0 0',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`,
             borderBottom: 'none',
             maxHeight: '85vh', overflowY: 'auto',
             paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
@@ -749,7 +802,7 @@ const Settings: React.FC = () => {
             {/* Handle */}
             <div style={{
               width: '36px', height: '4px', borderRadius: '99px',
-              background: 'rgba(255,255,255,0.15)',
+              background: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)',
               margin: '12px auto 0',
             }} />
 
@@ -761,12 +814,12 @@ const Settings: React.FC = () => {
               <div>
                 <h2 style={{
                   margin: 0, fontSize: '20px', fontWeight: '800',
-                  color: '#FFFFFF', fontFamily: 'Syne, sans-serif',
+                  color: isLight ? '#0A0A0A' : '#FFFFFF', fontFamily: 'Syne, sans-serif',
                 }}>
                   Achievements
                 </h2>
                 {isProUser && (
-                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)' }}>
                     {earnedCount}/{totalCount} badges earned
                   </p>
                 )}
@@ -775,13 +828,13 @@ const Settings: React.FC = () => {
                 onClick={() => setShowAchievements(false)}
                 style={{
                   width: '32px', height: '32px', borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.08)', border: 'none',
+                  background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)', border: 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 6L6 18M6 6l12 12" stroke="rgba(255,255,255,0.6)"
+                  <path d="M18 6L6 18M6 6l12 12" stroke={isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)'}
                     strokeWidth="2.5" strokeLinecap="round"/>
                 </svg>
               </button>
@@ -794,14 +847,14 @@ const Settings: React.FC = () => {
                   display: 'flex', justifyContent: 'space-between',
                   marginBottom: '6px',
                 }}>
-                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)' }}>Next milestone</span>
+                  <span style={{ fontSize: '11px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)' }}>Next milestone</span>
                   <span style={{ fontSize: '11px', fontWeight: '700', color: nextBadgeDef.color }}>
                     {nextBadgeDef.name} · {nextBadgeDef.requiredStreak}d streak
                   </span>
                 </div>
                 <div style={{
                   height: '4px', borderRadius: '99px',
-                  background: 'rgba(255,255,255,0.07)', overflow: 'hidden',
+                  background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)', overflow: 'hidden',
                 }}>
                   <div style={{
                     height: '100%', borderRadius: '99px',
@@ -817,7 +870,7 @@ const Settings: React.FC = () => {
             {/* Badge grid */}
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '1px', background: 'rgba(255,255,255,0.05)',
+              gap: '1px', background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
               margin: '0 20px', borderRadius: '16px', overflow: 'hidden',
             }}>
               {BADGE_DEFS.map((bd) => {
@@ -832,7 +885,7 @@ const Settings: React.FC = () => {
                     gap: '7px', padding: '18px 8px 14px',
                     background: earned
                       ? `linear-gradient(145deg, ${bd.color}14, ${bd.color}06)`
-                      : '#0D0D0D',
+                      : isLight ? '#F5F5F5' : '#0D0D0D',
                     position: 'relative', overflow: 'hidden',
                   }}>
                     {earned && (
@@ -846,8 +899,8 @@ const Settings: React.FC = () => {
                       width: '56px', height: '56px',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       borderRadius: '50%',
-                      background: earned ? `${bd.color}20` : 'rgba(255,255,255,0.05)',
-                      border: earned ? `1.5px solid ${bd.color}40` : '1.5px solid rgba(255,255,255,0.06)',
+                      background: earned ? `${bd.color}20` : isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                      border: earned ? `1.5px solid ${bd.color}40` : `1.5px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)'}`,
                       boxShadow: earned ? `0 0 24px ${bd.color}35` : 'none',
                     }}>
                       {earned ? (
@@ -855,16 +908,16 @@ const Settings: React.FC = () => {
                       ) : (
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                           <rect x="5" y="11" width="14" height="11" rx="2.5"
-                            fill="rgba(255,255,255,0.12)"/>
+                            fill={isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.12)'}/>
                           <path d="M8 11V7C8 4.8 9.8 3 12 3C14.2 3 16 4.8 16 7V11"
-                            stroke="rgba(255,255,255,0.18)" strokeWidth="2.2"
+                            stroke={isLight ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.18)'} strokeWidth="2.2"
                             strokeLinecap="round" fill="none"/>
                         </svg>
                       )}
                     </div>
                     <span style={{
                       fontSize: '9.5px', fontWeight: '800', textAlign: 'center', lineHeight: 1.3,
-                      color: earned ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.2)',
+                      color: earned ? (isLight ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)') : (isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)'),
                     }}>
                       {bd.name}
                     </span>
@@ -873,7 +926,7 @@ const Settings: React.FC = () => {
                         {earnedDate}
                       </span>
                     ) : (
-                      <span style={{ fontSize: '8.5px', color: 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
+                      <span style={{ fontSize: '8.5px', color: isLight ? 'rgba(0,0,0,0.30)' : 'rgba(255,255,255,0.15)', textAlign: 'center' }}>
                         {bd.requiredStreak}d streak
                       </span>
                     )}
@@ -927,6 +980,96 @@ const Settings: React.FC = () => {
       )}
 
 
+      {/* Subscription Info Card — Pro users only (not admin), reads from Supabase */}
+      {isPro && !isAdmin && subPlan && (
+        (() => {
+          const plan = subPlan ?? 'monthly';
+          const planLabel = plan === 'lifetime' ? 'Lifetime'
+            : plan === 'yearly' ? 'Yearly'
+            : 'Monthly';
+          const isLifetime = plan === 'lifetime' || subStatus === 'lifetime';
+          const renewalLabel = isLifetime
+            ? 'Never expires · Lifetime access'
+            : subExpiresAt
+              ? `Renews on ${new Date(subExpiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`
+              : 'Active';
+
+          const handleManage = async () => {
+            try {
+              const platform = Capacitor.getPlatform();
+              if (platform === 'ios') {
+                await openExternalUrl('https://apps.apple.com/account/subscriptions');
+              } else {
+                // Android — deep link directly to StayHardy subscriptions
+                await openExternalUrl(
+                  'https://play.google.com/store/account/subscriptions?sku=stayhardy_pro&package=com.stayhardy.app'
+                );
+              }
+            } catch {
+              setNotificationToast('Unable to open subscription manager.');
+            }
+          };
+
+          return (
+            <div style={{
+              margin: '8px 0 4px',
+              padding: '14px 16px',
+              background: 'linear-gradient(135deg, #0B1A12 0%, #0D0D0D 60%, #0A1410 100%)',
+              border: '1px solid rgba(0,230,118,0.2)',
+              borderRadius: '20px',
+              boxShadow: '0 0 30px rgba(0,230,118,0.05), 0 8px 24px rgba(0,0,0,0.4)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {/* Icon */}
+                <div style={{
+                  width: '42px', height: '42px', borderRadius: '12px',
+                  background: 'rgba(0,230,118,0.1)',
+                  border: '1px solid rgba(0,230,118,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <CreditCard size={18} color="#00E676" />
+                </div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: '#FFFFFF' }}>
+                      StayHardy Pro
+                    </span>
+                    <span style={{
+                      fontSize: '9px', fontWeight: '800', letterSpacing: '0.1em',
+                      textTransform: 'uppercase', padding: '2px 8px', borderRadius: '99px',
+                      background: 'rgba(0,230,118,0.15)', color: '#00E676',
+                      border: '1px solid rgba(0,230,118,0.25)',
+                    }}>
+                      {planLabel}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>
+                    {renewalLabel}
+                  </span>
+                </div>
+
+                {/* Manage — opens Google Play / App Store subscriptions */}
+                {isNative && (
+                  <button
+                    onClick={handleManage}
+                    style={{
+                      padding: '8px 14px', borderRadius: '10px', border: 'none',
+                      background: 'rgba(0,230,118,0.1)', color: '#00E676',
+                      fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+                      flexShrink: 0, WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >
+                    Manage
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()
+      )}
+
       {/* Support Section */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {/* News & Updates Highlighted Row */}
@@ -969,7 +1112,7 @@ const Settings: React.FC = () => {
             <span style={{ fontSize: '14px', fontWeight: '500', color: '#00E676', display: 'block' }}>
               News & Updates
             </span>
-            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', display: 'block' }}>
+            <span style={{ fontSize: '12px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)', display: 'block' }}>
               {announcements.length > 0 ? `${announcements.length} announcements` : "No updates yet"}
             </span>
           </div>
@@ -1025,7 +1168,7 @@ const Settings: React.FC = () => {
             <span style={{ fontSize: '14px', fontWeight: '500', color: '#6366F1', display: 'block' }}>
               Send Feedback
             </span>
-            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', display: 'block' }}>
+            <span style={{ fontSize: '12px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)', display: 'block' }}>
               Report issues or suggest ideas
             </span>
           </div>
@@ -1068,11 +1211,59 @@ const Settings: React.FC = () => {
             <span style={{ fontSize: '14px', fontWeight: '500', color: '#F59E0B', display: 'block' }}>
               Support the Mission
             </span>
-            <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', display: 'block' }}>
+            <span style={{ fontSize: '12px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)', display: 'block' }}>
               Help us grow Stay Hardy
             </span>
           </div>
           <ChevronRight size={16} color="#F59E0B" style={{ flexShrink: 0, marginLeft: 'auto', opacity: 0.4 }} />
+        </button>
+
+        {/* Rate on Play Store */}
+        <button
+          onClick={() => {
+            const url = isNative
+              ? 'market://details?id=com.stayhardy.app'
+              : 'https://play.google.com/store/apps/details?id=com.stayhardy.app';
+            openExternalUrl(url);
+          }}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            padding: '14px 16px',
+            background: 'rgba(0,232,122,0.06)',
+            border: '1px solid rgba(0,232,122,0.15)',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            textAlign: 'left',
+            WebkitTapHighlightColor: 'transparent',
+            transition: 'background 0.15s ease',
+            outline: 'none',
+          }}
+        >
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: 'rgba(0,232,122,0.12)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            color: '#00E87A',
+          }}>
+            <Star size={16} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: '14px', fontWeight: '500', color: '#00E87A', display: 'block' }}>
+              Rate StayHardy
+            </span>
+            <span style={{ fontSize: '12px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)', display: 'block' }}>
+              Enjoy the app? Leave us a review ⭐
+            </span>
+          </div>
+          <ChevronRight size={16} color="#00E87A" style={{ flexShrink: 0, marginLeft: 'auto', opacity: 0.4 }} />
         </button>
 
         {/* Why Stay Hardy */}
@@ -1124,6 +1315,68 @@ const Settings: React.FC = () => {
           subtitle="Keep your vault secure"
           onClick={() => { resetPinModalFields(); setShowPinModal(true); }}
         />
+      </div>
+
+      {/* Appearance Section */}
+      <SectionHeader label="Appearance" />
+      <div className="section-container">
+        <button
+          onClick={toggleTheme}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            padding: '14px 16px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <span style={{
+            width: '34px', height: '34px', borderRadius: '10px',
+            background: theme === 'light' ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            color: theme === 'light' ? '#0A0A0A' : '#FFFFFF',
+          }}>
+            {theme === 'light' ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            )}
+          </span>
+          <div style={{ flex: 1, textAlign: 'left' }}>
+            <p style={{ fontSize: '15px', fontWeight: '600', color: theme === 'light' ? '#0A0A0A' : '#FFFFFF', marginBottom: '2px' }}>
+              {theme === 'light' ? 'Light Mode' : 'Dark Mode'}
+            </p>
+            <p style={{ fontSize: '12px', color: theme === 'light' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.40)' }}>
+              {theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            </p>
+          </div>
+          {/* Toggle pill */}
+          <div style={{
+            width: '48px', height: '28px', borderRadius: '14px',
+            background: theme === 'light' ? '#00E676' : 'rgba(255,255,255,0.15)',
+            position: 'relative', transition: 'background 0.25s ease', flexShrink: 0,
+          }}>
+            <div style={{
+              position: 'absolute', top: '4px',
+              left: theme === 'light' ? '24px' : '4px',
+              width: '20px', height: '20px', borderRadius: '50%',
+              background: '#FFFFFF',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+              transition: 'left 0.25s ease',
+            }} />
+          </div>
+        </button>
       </div>
 
       {/* Danger Zone Section */}
@@ -1212,7 +1465,7 @@ const Settings: React.FC = () => {
         
         <p style={{
           textAlign: 'center',
-          color: 'rgba(255,255,255,0.15)',
+          color: isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.15)',
           fontSize: '11px',
           fontWeight: '600',
           letterSpacing: '0.05em',
@@ -1227,10 +1480,10 @@ const Settings: React.FC = () => {
       {showConfirmReset.show && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1.5rem' }}>
           <div className="glass-card" style={{ padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
-            <h2 style={{ color: '#fff', fontSize: '20px', fontWeight: '800', marginBottom: '12px' }}>Are you sure?</h2>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px', marginBottom: '24px' }}>This will permanently clear your {showConfirmReset.type}. This action cannot be undone.</p>
+            <h2 style={{ color: isLight ? '#0A0A0A' : '#fff', fontSize: '20px', fontWeight: '800', marginBottom: '12px' }}>Are you sure?</h2>
+            <p style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)', fontSize: '14px', marginBottom: '24px' }}>This will permanently clear your {showConfirmReset.type}. This action cannot be undone.</p>
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <button onClick={() => setShowConfirmReset({ show: false, type: '' })} style={{ flex: 1, padding: '12px', borderRadius: '12px', color: '#fff', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', fontWeight: '700' }}>Cancel</button>
+              <button onClick={() => setShowConfirmReset({ show: false, type: '' })} style={{ flex: 1, padding: '12px', borderRadius: '12px', color: isLight ? '#0A0A0A' : '#fff', background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`, fontWeight: '700' }}>Cancel</button>
               <button onClick={handleResetData} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: '#EF4444', color: '#fff', border: 'none', fontWeight: '800' }}>Yes, Reset</button>
             </div>
           </div>
@@ -1240,10 +1493,10 @@ const Settings: React.FC = () => {
       {showDeleteStep1Modal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1.5rem' }}>
           <div className="glass-card" style={{ padding: '2rem', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
-            <h2 style={{ color: '#fff', fontSize: '20px', fontWeight: '800', marginBottom: '12px' }}>Delete Account?</h2>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '14px', marginBottom: '24px' }}>All your data will be wiped from our servers forever. Access to your Pro subscription will be lost.</p>
+            <h2 style={{ color: isLight ? '#0A0A0A' : '#fff', fontSize: '20px', fontWeight: '800', marginBottom: '12px' }}>Delete Account?</h2>
+            <p style={{ color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)', fontSize: '14px', marginBottom: '24px' }}>All your data will be wiped from our servers forever. Access to your Pro subscription will be lost.</p>
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <button onClick={() => setShowDeleteStep1Modal(false)} style={{ flex: 1, padding: '12px', borderRadius: '12px', color: '#fff', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', fontWeight: '700' }}>Cancel</button>
+              <button onClick={() => setShowDeleteStep1Modal(false)} style={{ flex: 1, padding: '12px', borderRadius: '12px', color: isLight ? '#0A0A0A' : '#fff', background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`, fontWeight: '700' }}>Cancel</button>
               <button onClick={() => { setShowDeleteStep1Modal(false); setShowDeleteFinalModal(true); }} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: '#EF4444', color: '#fff', border: 'none', fontWeight: '800' }}>Continue</button>
             </div>
           </div>
@@ -1254,7 +1507,7 @@ const Settings: React.FC = () => {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1.5rem' }}>
           <div className="glass-card" style={{ padding: '2.5rem 2rem', maxWidth: '400px', width: '100%', textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
             <Trash2 size={48} color="#EF4444" style={{ marginBottom: '16px' }} />
-            <h2 style={{ color: '#fff', fontSize: '22px', fontWeight: '900', marginBottom: '12px' }}>Final Warning</h2>
+            <h2 style={{ color: isLight ? '#0A0A0A' : '#fff', fontSize: '22px', fontWeight: '900', marginBottom: '12px' }}>Final Warning</h2>
             <p style={{ color: '#EF4444', fontSize: '13px', fontWeight: '700', marginBottom: '32px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>This is irreversible.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <button
@@ -1283,7 +1536,7 @@ const Settings: React.FC = () => {
                   'DELETE MY ACCOUNT NOW'
                 )}
               </button>
-              <button onClick={() => setShowDeleteFinalModal(false)} style={{ width: '100%', padding: '16px', borderRadius: '14px', color: 'rgba(255,255,255,0.4)', background: 'none', border: 'none', fontWeight: '700', fontSize: '14px' }}>
+              <button onClick={() => setShowDeleteFinalModal(false)} style={{ width: '100%', padding: '16px', borderRadius: '14px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)', background: 'none', border: 'none', fontWeight: '700', fontSize: '14px' }}>
                 Wait, take me back
               </button>
             </div>
@@ -1294,25 +1547,25 @@ const Settings: React.FC = () => {
       {showPinModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '1.5rem' }}>
           <div className="glass-card" style={{ padding: '2rem', maxWidth: '400px', width: '100%' }}>
-            <h2 style={{ color: '#fff', textAlign: 'center', fontSize: '20px', fontWeight: '800', marginBottom: '24px' }}>Update Access PIN</h2>
+            <h2 style={{ color: isLight ? '#0A0A0A' : '#fff', textAlign: 'center', fontSize: '20px', fontWeight: '800', marginBottom: '24px' }}>Update Access PIN</h2>
             <form onSubmit={_handleUpdatePin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontWeight: '700', textTransform: 'uppercase', paddingLeft: '4px' }}>Current PIN</label>
-                <input type="password" maxLength={4} inputMode="numeric" value={currentPin.join('')} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').split('').slice(0, 4); const n = [...currentPin]; v.forEach((x, i) => n[i] = x); for(let i=v.length; i<4; i++) n[i] = ''; setCurrentPin(n); }} placeholder="••••" style={{ width: '100%', padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', textAlign: 'center', fontSize: '24px', letterSpacing: '8px', outline: 'none' }} />
+                <label style={{ fontSize: '11px', color: isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', fontWeight: '700', textTransform: 'uppercase', paddingLeft: '4px' }}>Current PIN</label>
+                <input type="password" maxLength={4} inputMode="numeric" value={currentPin.join('')} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').split('').slice(0, 4); const n = [...currentPin]; v.forEach((x, i) => n[i] = x); for(let i=v.length; i<4; i++) n[i] = ''; setCurrentPin(n); }} placeholder="••••" style={{ width: '100%', padding: '16px', background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', borderRadius: '12px', border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`, color: isLight ? '#0A0A0A' : '#fff', textAlign: 'center', fontSize: '24px', letterSpacing: '8px', outline: 'none' }} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontWeight: '700', textTransform: 'uppercase', paddingLeft: '4px' }}>New PIN</label>
-                <input type="password" maxLength={4} inputMode="numeric" value={newPin.join('')} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').split('').slice(0, 4); const n = [...newPin]; v.forEach((x, i) => n[i] = x); for(let i=v.length; i<4; i++) n[i] = ''; setNewPin(n); }} placeholder="••••" style={{ width: '100%', padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', textAlign: 'center', fontSize: '24px', letterSpacing: '8px', outline: 'none' }} />
+                <label style={{ fontSize: '11px', color: isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', fontWeight: '700', textTransform: 'uppercase', paddingLeft: '4px' }}>New PIN</label>
+                <input type="password" maxLength={4} inputMode="numeric" value={newPin.join('')} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').split('').slice(0, 4); const n = [...newPin]; v.forEach((x, i) => n[i] = x); for(let i=v.length; i<4; i++) n[i] = ''; setNewPin(n); }} placeholder="••••" style={{ width: '100%', padding: '16px', background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', borderRadius: '12px', border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`, color: isLight ? '#0A0A0A' : '#fff', textAlign: 'center', fontSize: '24px', letterSpacing: '8px', outline: 'none' }} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontWeight: '700', textTransform: 'uppercase', paddingLeft: '4px' }}>Confirm New PIN</label>
-                <input type="password" maxLength={4} inputMode="numeric" value={confirmPin.join('')} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').split('').slice(0, 4); const n = [...confirmPin]; v.forEach((x, i) => n[i] = x); for(let i=v.length; i<4; i++) n[i] = ''; setConfirmPin(n); }} placeholder="••••" style={{ width: '100%', padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', textAlign: 'center', fontSize: '24px', letterSpacing: '8px', outline: 'none' }} />
+                <label style={{ fontSize: '11px', color: isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.3)', fontWeight: '700', textTransform: 'uppercase', paddingLeft: '4px' }}>Confirm New PIN</label>
+                <input type="password" maxLength={4} inputMode="numeric" value={confirmPin.join('')} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').split('').slice(0, 4); const n = [...confirmPin]; v.forEach((x, i) => n[i] = x); for(let i=v.length; i<4; i++) n[i] = ''; setConfirmPin(n); }} placeholder="••••" style={{ width: '100%', padding: '16px', background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', borderRadius: '12px', border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`, color: isLight ? '#0A0A0A' : '#fff', textAlign: 'center', fontSize: '24px', letterSpacing: '8px', outline: 'none' }} />
               </div>
               
               {pinError && <p style={{ color: '#ef4444', fontSize: '12px', textAlign: 'center', marginTop: '4px' }}>{pinError}</p>}
               
               <div style={{ display: 'flex', gap: '1rem', marginTop: '12px' }}>
-                <button type="button" onClick={() => setShowPinModal(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', color: '#fff', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', fontWeight: '700' }}>Cancel</button>
+                <button type="button" onClick={() => setShowPinModal(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', color: isLight ? '#0A0A0A' : '#fff', background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`, fontWeight: '700' }}>Cancel</button>
                 <button
                   type="submit"
                   disabled={
@@ -1352,15 +1605,15 @@ const Settings: React.FC = () => {
           />
           <div style={{
             position: 'fixed', bottom: 0, left: 0, right: 0,
-            background: '#111111',
-            borderTop: '1px solid rgba(255,255,255,0.1)',
+            background: isLight ? '#FFFFFF' : '#111111',
+            borderTop: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.1)'}`,
             borderRadius: '24px 24px 0 0',
             padding: '12px 16px calc(env(safe-area-inset-bottom, 0px) + 24px)',
             zIndex: 10011,
           }}>
             {/* Handle */}
-            <div style={{ width: '36px', height: '4px', background: 'rgba(255,255,255,0.15)', borderRadius: '99px', margin: '0 auto 20px' }} />
-            <p style={{ fontSize: '12px', fontWeight: '700', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center', marginBottom: '16px' }}>
+            <div style={{ width: '36px', height: '4px', background: isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)', borderRadius: '99px', margin: '0 auto 20px' }} />
+            <p style={{ fontSize: '12px', fontWeight: '700', color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', textTransform: 'uppercase', textAlign: 'center', marginBottom: '16px' }}>
               Profile Photo
             </p>
 
@@ -1378,8 +1631,8 @@ const Settings: React.FC = () => {
                 <Camera size={18} color="#00E676" />
               </div>
               <div style={{ textAlign: 'left' }}>
-                <p style={{ fontSize: '15px', fontWeight: '700', color: '#FFFFFF', margin: '0 0 2px' }}>Upload Photo</p>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>Take a photo or choose from gallery</p>
+                <p style={{ fontSize: '15px', fontWeight: '700', color: isLight ? '#0A0A0A' : '#FFFFFF', margin: '0 0 2px' }}>Upload Photo</p>
+                <p style={{ fontSize: '12px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)', margin: 0 }}>Take a photo or choose from gallery</p>
               </div>
             </button>
 
@@ -1399,7 +1652,7 @@ const Settings: React.FC = () => {
                 </div>
                 <div style={{ textAlign: 'left' }}>
                   <p style={{ fontSize: '15px', fontWeight: '700', color: '#EF4444', margin: '0 0 2px' }}>Remove Photo</p>
-                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>Revert to default initials avatar</p>
+                  <p style={{ fontSize: '12px', color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)', margin: 0 }}>Revert to default initials avatar</p>
                 </div>
               </button>
             )}
@@ -1409,8 +1662,8 @@ const Settings: React.FC = () => {
               onClick={() => setShowPhotoOptions(false)}
               style={{
                 width: '100%', padding: '16px', borderRadius: '16px',
-                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-                fontSize: '15px', fontWeight: '600', color: 'rgba(255,255,255,0.5)',
+                background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.07)'}`,
+                fontSize: '15px', fontWeight: '600', color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)',
                 cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
               }}
             >

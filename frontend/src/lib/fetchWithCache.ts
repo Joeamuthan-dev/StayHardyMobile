@@ -13,7 +13,6 @@ export const fetchWithCache = async <T>(
   if (!options?.forceRefresh) {
     const cached = await CacheManager.get<T>(cacheKey);
     if (cached !== null) {
-      console.log(`Cache HIT: ${cacheKey}`);
       options?.onCacheHit?.(cached);
       void fetchFn()
         .then(async (freshData) => {
@@ -29,7 +28,6 @@ export const fetchWithCache = async <T>(
     }
   }
 
-  console.log(`Cache MISS: ${cacheKey}`);
   try {
     const data = await fetchFn();
     if (data !== null && data !== undefined) {

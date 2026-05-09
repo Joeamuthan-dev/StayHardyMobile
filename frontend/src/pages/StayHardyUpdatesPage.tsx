@@ -3,6 +3,8 @@ import { storage } from '../utils/storage';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { CacheManager, CACHE_EXPIRY, CACHE_KEYS } from '../lib/smartCacheManager';
+import { useTheme } from '../context/ThemeContext';
+import { getTheme } from '../utils/theme';
 
 type AnnouncementCategory = 'feature' | 'update' | 'fix' | 'info';
 type UpdateRow = {
@@ -71,6 +73,9 @@ const formatDate = (dateStr: string) => {
 
 const StayHardyUpdatesPage: React.FC = () => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
+  const isLight = theme === 'light';
   const [updates, setUpdates] = useState<UpdateRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarHidden] = useState(
@@ -137,8 +142,8 @@ const StayHardyUpdatesPage: React.FC = () => {
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        background: 'transparent',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        background: tc.bgPage,
+        borderBottom: `1px solid ${tc.border}`,
       }}>
         <button
           onClick={() => navigate(-1)}
@@ -146,8 +151,8 @@ const StayHardyUpdatesPage: React.FC = () => {
             width: '40px',
             height: '40px',
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${tc.border}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -156,7 +161,7 @@ const StayHardyUpdatesPage: React.FC = () => {
           }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24"
-            fill="none" stroke="white" strokeWidth="2.5"
+            fill="none" stroke={tc.text} strokeWidth="2.5"
             strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
@@ -165,7 +170,7 @@ const StayHardyUpdatesPage: React.FC = () => {
         <span style={{
           fontSize: '16px',
           fontWeight: '700',
-          color: '#FFFFFF',
+          color: tc.text,
           fontFamily: 'Syne, sans-serif'
         }}>
           NEWS & UPDATES
@@ -179,15 +184,15 @@ const StayHardyUpdatesPage: React.FC = () => {
         {isLoading ? (
           <div className="updates-empty">
             <div style={{ fontSize: 38, marginBottom: 8 }}>⏳</div>
-            <p style={{ color: 'rgba(255,255,255,0.5)', margin: 0 }}>Loading updates...</p>
+            <p style={{ color: tc.textSecondary, margin: 0 }}>Loading updates...</p>
           </div>
         ) : updates.length === 0 ? (
           <div className="updates-empty">
             <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
-            <h3 style={{ color: 'white', fontFamily: 'Syne, sans-serif', fontSize: 16, margin: '0 0 8px' }}>
+            <h3 style={{ color: tc.text, fontFamily: 'Syne, sans-serif', fontSize: 16, margin: '0 0 8px' }}>
               No Updates Yet
             </h3>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, margin: 0 }}>
+            <p style={{ color: tc.textSecondary, fontSize: 13, margin: 0 }}>
               Check back soon for new features and updates from the team!
             </p>
           </div>
@@ -226,20 +231,20 @@ const StayHardyUpdatesPage: React.FC = () => {
 
 
       <style>{`
-        .updates-page { background: #0D1410 !important; min-height: 100dvh; }
+        .updates-page { background: ${tc.bgPage} !important; min-height: 100dvh; }
         .updates-wrap { max-width: 680px; margin: 0 auto; padding: 16px 14px 110px; }
         .updates-top { display: flex; justify-content: space-between; margin-bottom: 10px; }
         .updates-title {
-          text-align: center; margin: 6px 0 2px; color: #fff;
+          text-align: center; margin: 6px 0 2px; color: ${tc.text};
           font-family: 'Syne, sans-serif'; font-size: 21px; font-weight: 800; letter-spacing: 0.8px;
         }
         .updates-tagline {
-          text-align: center; margin: 0 0 14px; color: rgba(255,255,255,0.44);
+          text-align: center; margin: 0 0 14px; color: ${tc.textSecondary};
           font-size: 10px; letter-spacing: 2px; font-weight: 700;
         }
         .updates-empty {
           text-align: center; padding: 40px 20px; border-radius: 16px;
-          background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+          background: ${isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.02)'}; border: 1px solid ${tc.border};
         }
         .updates-card {
           border-radius: 16px; padding: 16px; margin-bottom: 12px;
@@ -252,13 +257,13 @@ const StayHardyUpdatesPage: React.FC = () => {
           display: inline-flex; align-items: center; gap: 5px; border-radius: 20px; padding: 3px 10px;
         }
         .updates-badge-label { font-size: 9px; font-weight: 700; letter-spacing: 1px; }
-        .updates-date { color: rgba(255,255,255,0.3); font-size: 11px; }
+        .updates-date { color: ${tc.textSecondary}; font-size: 11px; }
         .updates-card-title {
           font-family: 'Syne, sans-serif'; font-weight: 800; font-size: 16px;
-          color: #fff; margin: 0 0 8px; line-height: 1.3;
+          color: ${tc.text}; margin: 0 0 8px; line-height: 1.3;
         }
         .updates-card-message {
-          color: rgba(255,255,255,0.62); font-size: 13px; line-height: 1.7; margin: 0; white-space: pre-wrap;
+          color: ${isLight ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.62)'}; font-size: 13px; line-height: 1.7; margin: 0; white-space: pre-wrap;
         }
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(12px); }

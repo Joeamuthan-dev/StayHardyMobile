@@ -1,8 +1,7 @@
-// Deploy: supabase functions deploy tip-record-success --no-verify-jwt
+// Deploy: supabase functions deploy tip-record-success
 //
-// Records a successful tip payment made via direct client-side Razorpay checkout
-// (no order_id / signature flow). Auth is via anon key + userId in body.
-// Verifies the payment with Razorpay API before writing to DB to prevent spoofing.
+// Records a successful tip payment made via direct client-side Razorpay checkout.
+// Requires a valid Supabase JWT. Verifies caller.id === body.userId before writing.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -30,6 +29,27 @@ serve(async (req) => {
   }
 
   try {
+    // ── JWT auth — caller must be authenticated ───────────────────────────────
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const supabaseUserClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user: caller }, error: callerErr } = await supabaseUserClient.auth.getUser();
+    if (callerErr || !caller) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Parse body first
     let body: {
       razorpay_payment_id?: string;
@@ -60,6 +80,14 @@ serve(async (req) => {
     if (!userId) {
       return new Response(JSON.stringify({ error: 'Missing userId' }), {
         status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── Ownership check — caller must own the userId they submit ─────────────
+    if (userId !== caller.id) {
+      return new Response(JSON.stringify({ error: 'Forbidden: userId mismatch' }), {
+        status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

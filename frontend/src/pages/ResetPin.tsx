@@ -72,7 +72,6 @@ const ResetPin: React.FC = () => {
           const type = params.get('type');
           
           if (accessToken && type === 'recovery') {
-            console.log('[ResetPIN] Valid recovery token detected. Authenticating session...');
             const { data, error: sessionError } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken || '',
@@ -85,7 +84,6 @@ const ResetPin: React.FC = () => {
               return;
             }
             
-            console.log('[ResetPIN] Session verified successfully.');
             setStatus('verified');
             return;
           }
@@ -94,7 +92,6 @@ const ResetPin: React.FC = () => {
         // 3. Fallback: listen for PASSWORD_RECOVERY event
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
           if (event === 'PASSWORD_RECOVERY' && session) {
-            console.log('[ResetPIN] PASSWORD_RECOVERY event detected via listener.');
             setStatus('verified');
           }
         });

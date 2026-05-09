@@ -28,6 +28,7 @@ const triggerHapticHeavy = async () => {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { canAccessStatsAndRoutine, shouldShowLifetimeUpsell } from '../lib/lifetimeAccess';
 import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
@@ -84,6 +85,8 @@ const BottomNav: React.FC<{
   const location = useLocation();
   const { t } = useLanguage();
   const { logout, user } = useAuth();
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const { isPro: isSubscribed } = useSubscription();
 
   // Read fast cache for instant role resolution
@@ -249,6 +252,11 @@ const BottomNav: React.FC<{
               50%  { transform: scale(1.2) }
               100% { transform: scale(1) }
             }
+            @keyframes fabGreenRing {
+              0%   { box-shadow: 0 0 0 0px rgba(0,232,122,0.7), 0 0 28px rgba(0,232,122,0.45); }
+              50%  { box-shadow: 0 0 0 10px rgba(0,232,122,0.0), 0 0 28px rgba(0,232,122,0.45); }
+              100% { box-shadow: 0 0 0 0px rgba(0,232,122,0.0), 0 0 28px rgba(0,232,122,0.45); }
+            }
             /* Hide the bar in some UI states but also force it stay hidden on tablet/desktop where sidebar shows */
             body.mobile-drawer-open .bottom-nav-container,
             body.sheet-open .bottom-nav-container {
@@ -261,7 +269,7 @@ const BottomNav: React.FC<{
 
           <div className="bottom-nav-container fixed bottom-0 left-0 right-0 w-full z-[1000] flex justify-center px-4 pb-[max(20px,env(safe-area-inset-bottom,20px))] pointer-events-none">
             {/* Floating dock */}
-            <div className="flex items-center justify-around bg-[rgba(14,14,14,0.94)] backdrop-blur-2xl rounded-[30px] py-2.5 px-4 w-full max-w-[440px] pointer-events-auto relative shadow-[0_8px_32px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.05)] border-t border-[rgba(0,232,122,0.12)]" style={{ willChange: 'transform', transform: 'translateZ(0)' }}>
+            <div className="flex items-center justify-around backdrop-blur-2xl rounded-[30px] py-2.5 px-4 w-full max-w-[440px] pointer-events-auto relative" style={{ willChange: 'transform', transform: 'translateZ(0)', background: isLight ? 'rgba(255,255,255,0.92)' : 'rgba(14,14,14,0.94)', boxShadow: isLight ? '0 8px 32px rgba(0,0,0,0.12),0 0 0 1px rgba(0,0,0,0.06)' : '0 8px 32px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.05)', borderTop: isLight ? '1px solid rgba(0,232,122,0.2)' : '1px solid rgba(0,232,122,0.12)' }}>
 
               {/* Liquid indicator dot */}
               {activeNavIdx >= 0 && (
@@ -290,7 +298,7 @@ const BottomNav: React.FC<{
                     <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
                   </svg>
                 </div>
-                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${isActive('/routine') ? 'text-white' : 'text-white/30'}`}>HABITS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors`} style={{ color: isActive('/routine') ? (isLight ? '#0A0A0A' : '#FFFFFF') : (isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)') }}>HABITS</span>
               </div>
 
               {/* TASKS */}
@@ -303,7 +311,7 @@ const BottomNav: React.FC<{
                     <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                   </svg>
                 </div>
-                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${isActive('/dashboard') ? 'text-white' : 'text-white/30'}`}>TASKS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors`} style={{ color: isActive('/dashboard') ? (isLight ? '#0A0A0A' : '#FFFFFF') : (isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)') }}>TASKS</span>
               </div>
 
               {/* CENTER FAB */}
@@ -311,8 +319,8 @@ const BottomNav: React.FC<{
                 {/* Progress ring */}
                 {pressProgress > 0 && pressProgress < 100 && (
                   <svg className="absolute -top-[5px] -left-[5px] rotate-[-90deg] pointer-events-none" width="66" height="66" viewBox="0 0 66 66">
-                    <circle cx="33" cy="33" r="30" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="3"/>
-                    <circle cx="33" cy="33" r="30" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round"
+                    <circle cx="33" cy="33" r="30" fill="none" stroke={isLight ? 'rgba(0,232,122,0.25)' : 'rgba(255,255,255,0.15)'} strokeWidth="3"/>
+                    <circle cx="33" cy="33" r="30" fill="none" stroke={isLight ? '#00E87A' : '#FFFFFF'} strokeWidth="3" strokeLinecap="round"
                       strokeDasharray={String(2 * Math.PI * 30)}
                       strokeDashoffset={String(2 * Math.PI * 30 * (1 - pressProgress / 100))}
                       style={{ transition: 'stroke-dashoffset 0.016s linear' }}
@@ -322,8 +330,18 @@ const BottomNav: React.FC<{
                 {/* FAB */}
                 <div
                   {...longPressHandlers}
-                  style={{ willChange: 'transform, opacity', boxShadow: '0 0 24px rgba(0,232,122,0.35), 0 8px 24px rgba(0,0,0,0.5)' }}
-                  className={`w-14 h-14 rounded-full flex items-center justify-center cursor-pointer select-none transition-all duration-200 ${fabState === 'longpress' ? 'bg-white scale-115 shadow-[0_0_40px_rgba(255,255,255,0.6)]' : 'bg-[#00E87A]'} ${fabState === 'pressing' ? 'scale-108' : 'scale-100'} ${fabState === 'idle' ? 'animate-[fabHalo_3s_ease-in-out_infinite]' : fabState === 'longpress' ? 'animate-[fabMorphHome_0.4s_ease]' : ''}`}
+                  style={{
+                    willChange: 'transform, opacity',
+                    boxShadow: fabState === 'longpress'
+                      ? (isLight
+                          ? undefined
+                          : '0 0 40px rgba(255,255,255,0.6), 0 8px 24px rgba(0,0,0,0.5)')
+                      : '0 0 24px rgba(0,232,122,0.35), 0 8px 24px rgba(0,0,0,0.5)',
+                    animation: fabState === 'longpress' && isLight
+                      ? 'fabGreenRing 0.5s ease, fabMorphHome 0.4s ease'
+                      : undefined,
+                  }}
+                  className={`w-14 h-14 rounded-full flex items-center justify-center cursor-pointer select-none transition-all duration-200 ${fabState === 'longpress' ? (isLight ? 'bg-[#00E87A] scale-115' : 'bg-white scale-115 shadow-[0_0_40px_rgba(255,255,255,0.6)]') : 'bg-[#00E87A]'} ${fabState === 'pressing' ? 'scale-108' : 'scale-100'} ${fabState === 'idle' ? 'animate-[fabHalo_3s_ease-in-out_infinite]' : fabState === 'longpress' && !isLight ? 'animate-[fabMorphHome_0.4s_ease]' : ''}`}
                 >
                   {fabState === 'longpress' ? (
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -359,7 +377,7 @@ const BottomNav: React.FC<{
                     <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
                   </svg>
                 </div>
-                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${isActive('/goals') ? 'text-white' : 'text-white/30'}`}>GOALS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors`} style={{ color: isActive('/goals') ? (isLight ? '#0A0A0A' : '#FFFFFF') : (isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)') }}>GOALS</span>
               </div>
 
               {/* STATS */}
@@ -372,7 +390,7 @@ const BottomNav: React.FC<{
                     <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
                   </svg>
                 </div>
-                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors ${isActive('/stats') ? 'text-white' : 'text-white/30'}`}>STATS</span>
+                <span className={`text-[8px] font-extrabold tracking-wider uppercase transition-colors`} style={{ color: isActive('/stats') ? (isLight ? '#0A0A0A' : '#FFFFFF') : (isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)') }}>STATS</span>
               </div>
 
             </div>

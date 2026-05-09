@@ -38,7 +38,6 @@ const ResetPassword: React.FC = () => {
 
       // 2. CHECK FOR RECOVERY TOKEN
       if (accessToken && type === 'recovery') {
-        console.log('[ResetPassword] Recovery token detected. Setting session...');
         try {
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,

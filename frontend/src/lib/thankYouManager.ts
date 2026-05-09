@@ -25,7 +25,6 @@ function notifyListeners() {
 export const ThankYouManager = {
   show(amount: number) {
     const normalizedAmount = Number.isFinite(amount) ? Math.max(1, Math.floor(amount)) : 0;
-    console.log('ThankYouManager.show called:', normalizedAmount);
     showThankYou = normalizedAmount > 0;
     thankYouAmount = normalizedAmount;
     notifyListeners();
@@ -76,7 +75,6 @@ export const ThankYouManager = {
       const timestamp = Number(parsed?.timestamp);
       const age = Date.now() - timestamp;
       if (Number.isFinite(amount) && amount > 0 && Number.isFinite(age) && age < MAX_RESTORE_AGE_MS) {
-        console.log('Restoring thank you:', { amount, timestamp });
         showThankYou = true;
         thankYouAmount = Math.floor(amount);
         notifyListeners();

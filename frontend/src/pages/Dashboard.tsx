@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useProGate } from '../hooks/useProGate';
 import ProGateModal from '../components/ProGateModal';
 import { useLocation } from 'react-router-dom';
 import { isWeb } from '../utils/platform';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
+import { getTheme } from '../utils/theme';
 
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired, invalidateUserStatsCache } from '../lib/cacheManager';
@@ -55,6 +57,9 @@ const TaskCard = ({
   const [justCompleted,
     setJustCompleted] = useState(false)
 
+  const { theme: tcTheme } = useTheme();
+  const tcColors = getTheme(tcTheme);
+
   const getPriorityColor = (priority: string) => {
     switch((priority || '').toLowerCase()) {
       case 'high': return '#EF4444'
@@ -78,25 +83,22 @@ const TaskCard = ({
   return (
     <div style={{
       margin: '0 16px 8px 16px',
-      background:
-        'rgba(18,18,18,0.95)',
-      border: '1px solid ' +
-        'rgba(255,255,255,0.06)',
+      background: tcTheme === 'light' ? '#FFFFFF' : 'rgba(18,18,18,0.95)',
+      border: `1px solid ${tcColors.border}`,
       borderRadius: '18px',
       padding: '14px 14px 14px 14px',
       display: 'flex',
       alignItems: 'center',
       gap: '12px',
-      boxShadow:
-        '0 4px 12px rgba(0,0,0,0.4),' +
-        'inset 0 1px 0 ' +
-        'rgba(255,255,255,0.03)',
+      boxShadow: tcTheme === 'light'
+        ? '0 2px 10px rgba(0,0,0,0.07)'
+        : '0 4px 12px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.03)',
       opacity: isCompleted ? 0.5 : 1,
 
       transition: 'all 0.3s ease',
       position: 'relative',
       overflow: 'hidden'
-    }} className={task.id === task.id ? 'task-live-flash' : ''}>
+    }} className={`task-card-item${task.id === task.id ? ' task-live-flash' : ''}`}>
 
 
 
@@ -114,21 +116,18 @@ const TaskCard = ({
               ? 'linear-gradient(' +
                 '135deg,' +
                 '#00E87A,#00C563)'
-              : 'linear-gradient(' +
-                '145deg,' +
-                '#1c1c1c,#0f0f0f)',
+              : (tcTheme === 'light'
+                  ? 'linear-gradient(145deg,#F0F0F0,#E8E8E8)'
+                  : 'linear-gradient(145deg,#1c1c1c,#0f0f0f)'),
           boxShadow: isCompleted ||
             justCompleted
               ? '0 0 16px ' +
                 'rgba(0,232,122,0.7),' +
                 '0 0 32px ' +
                 'rgba(0,232,122,0.3)'
-              : 'inset 4px 4px 8px ' +
-                'rgba(0,0,0,0.8),' +
-                'inset -2px -2px 6px ' +
-                'rgba(255,255,255,0.04),' +
-                '0 0 0 1px ' +
-                'rgba(255,255,255,0.06)',
+              : (tcTheme === 'light'
+                  ? 'inset 2px 2px 5px rgba(0,0,0,0.08),inset -1px -1px 3px rgba(255,255,255,0.9),0 0 0 1px rgba(0,0,0,0.06)'
+                  : 'inset 4px 4px 8px rgba(0,0,0,0.8),inset -2px -2px 6px rgba(255,255,255,0.04),0 0 0 1px rgba(255,255,255,0.06)'),
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -147,7 +146,7 @@ const TaskCard = ({
             stroke={
               isCompleted || justCompleted
                 ? '#000000'
-                : 'rgba(255,255,255,0.15)'
+                : (tcTheme === 'light' ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)')
             }
             strokeWidth="2.5"
             strokeLinecap="round"
@@ -164,13 +163,12 @@ const TaskCard = ({
         <p style={{
           fontSize: '15px',
           fontWeight: '700',
-          color: '#FFFFFF',
+          color: tcColors.text,
           margin: '0 0 4px 0',
           letterSpacing: '-0.2px',
           textDecoration: isCompleted
             ? 'line-through' : 'none',
-          textDecorationColor:
-            'rgba(255,255,255,0.3)',
+          textDecorationColor: tcColors.textTertiary,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis'
@@ -269,9 +267,8 @@ const TaskCard = ({
           width: '32px',
           height: '32px',
           borderRadius: '10px',
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid ' +
-            'rgba(255,255,255,0.06)',
+          background: tcTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${tcColors.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -280,7 +277,7 @@ const TaskCard = ({
         }}>
         <svg width="14" height="14"
           viewBox="0 0 24 24"
-          fill="rgba(255,255,255,0.4)">
+          fill={tcColors.textSecondary}>
           <circle cx="12" cy="5" r="2"/>
           <circle cx="12" cy="12" r="2"/>
           <circle cx="12" cy="19" r="2"/>
@@ -291,12 +288,20 @@ const TaskCard = ({
 }
 
 
+const PRIORITY_OPTIONS = [
+  { value: 'High',   label: 'High',   activeColor: '#EF4444', activeBg: 'rgba(239,68,68,0.15)',   activeBorder: 'rgba(239,68,68,0.5)',   glow: '0 0 12px rgba(239,68,68,0.4)' },
+  { value: 'Medium', label: 'Medium', activeColor: '#F59E0B', activeBg: 'rgba(245,158,11,0.15)',  activeBorder: 'rgba(245,158,11,0.5)',  glow: '0 0 12px rgba(245,158,11,0.4)' },
+  { value: 'Low',    label: 'Low',    activeColor: '#06B6D4', activeBg: 'rgba(6,182,212,0.15)',   activeBorder: 'rgba(6,182,212,0.5)',   glow: '0 0 12px rgba(6,182,212,0.4)' },
+];
+
 const triggerGlobalRefresh = () => {
   window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
-  console.log('Global refresh triggered');
 };
 
 const Dashboard: React.FC = () => {
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
+  const isLight = theme === 'light';
   const { gateOpen, gateResource, closeGate, checkAndGate } = useProGate();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -353,7 +358,6 @@ const Dashboard: React.FC = () => {
     async (options?: { force?: boolean }) => {
       if (!user?.id) return;
       if (isCreatingTask.current) {
-        console.log('fetchTasks blocked — task creation in progress');
         return;
       }
       const cachedTasks = await loadTasksListStale<Task>(user.id);
@@ -851,13 +855,13 @@ const Dashboard: React.FC = () => {
 
 
 
-  const pendingCount = tasks.filter(t => t.status === 'pending').length;
-  const doneCount = tasks.filter(t => t.status === 'completed').length;
+  const pendingCount = useMemo(() => tasks.filter(t => t.status === 'pending').length, [tasks]);
+  const doneCount = useMemo(() => tasks.filter(t => t.status === 'completed').length, [tasks]);
 
   return (
     <div className={`page-shell dashboard-page-layout ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{
       paddingBottom: '120px',
-      background: '#000000',
+      background: tc.bgPage,
       minHeight: '100vh',
       overflowY: 'auto',
       position: 'relative'
@@ -872,10 +876,10 @@ const Dashboard: React.FC = () => {
         position: 'sticky',
         top: 0,
         zIndex: 100,
-        background: 'rgba(0,0,0,0.65)',
+        background: theme === 'light' ? 'rgba(242,242,247,0.92)' : 'rgba(0,0,0,0.65)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255,255,255,0.08)'
+        borderBottom: `1px solid ${tc.border}`
       }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <p style={{
@@ -891,7 +895,7 @@ const Dashboard: React.FC = () => {
           <h2 style={{
             fontSize: '28px',
             fontWeight: '900',
-            color: '#FFFFFF',
+            color: tc.text,
             margin: 0,
             letterSpacing: '-1px',
             lineHeight: 1
@@ -977,7 +981,8 @@ const Dashboard: React.FC = () => {
                 padding: '40px 32px',
                 gap: '32px',
                 marginTop: '30px',
-                animation: 'fadeIn 0.5s ease-out forwards'
+                animation: 'fadeIn 0.5s ease-out forwards',
+                color: tc.text
               }}>
                 <div style={{
                   position: 'relative',
@@ -1027,7 +1032,7 @@ const Dashboard: React.FC = () => {
                   <p style={{
                     fontSize: '22px',
                     fontWeight: '900',
-                    color: '#FFFFFF',
+                    color: tc.text,
                     margin: '0 0 12px 0',
                     letterSpacing: '-0.5px'
                   }}>
@@ -1035,7 +1040,7 @@ const Dashboard: React.FC = () => {
                   </p>
                   <p style={{
                     fontSize: '14px',
-                    color: 'rgba(255,255,255,0.4)',
+                    color: tc.textSecondary,
                     margin: 0,
                     lineHeight: 1.5,
                     maxWidth: '260px'
@@ -1075,26 +1080,30 @@ const Dashboard: React.FC = () => {
             );
           }
 
-          return visibleTasks
-            .sort((a, b) => {
-                const priorities = { 'High': 3, 'Medium': 2, 'Low': 1 };
-                if (priorities[a.priority] !== priorities[b.priority]) {
-                    return (priorities[b.priority] || 0) - (priorities[a.priority] || 0);
-                }
-                return (a.order_index || 0) - (b.order_index || 0);
-            })
-            .map(task => (
-              <TaskCard 
-                key={task.id} 
-                task={task} 
-                onComplete={() => {
-                  showTopToast();
-                  void toggleTaskStatus(task);
-                }}
-                onDelete={(id) => deleteTask(id)}
-                onEdit={(t) => openModal(t)}
-              />
-            ));
+          return (
+            <div className="task-cards-grid">
+              {visibleTasks
+                .sort((a, b) => {
+                    const priorities = { 'High': 3, 'Medium': 2, 'Low': 1 };
+                    if (priorities[a.priority] !== priorities[b.priority]) {
+                        return (priorities[b.priority] || 0) - (priorities[a.priority] || 0);
+                    }
+                    return (a.order_index || 0) - (b.order_index || 0);
+                })
+                .map(task => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={() => {
+                      showTopToast();
+                      void toggleTaskStatus(task);
+                    }}
+                    onDelete={(id) => deleteTask(id)}
+                    onEdit={(t) => openModal(t)}
+                  />
+                ))}
+            </div>
+          );
         })()}
       </div>
 
@@ -1168,7 +1177,7 @@ const Dashboard: React.FC = () => {
             <circle cx="8" cy="8" r="8" fill="#00E87A" opacity="0.15"/>
             <path d="M4 8.5l2.5 2.5L12 6" stroke="#00E87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.02em' }}>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: isLight ? '#0A0A0A' : '#FFFFFF', letterSpacing: '0.02em' }}>
             Task secured.
           </span>
         </div>
@@ -1202,7 +1211,7 @@ const Dashboard: React.FC = () => {
             style={{
               position: 'relative',
               width: '100%',
-              background: '#000000',
+              background: theme === 'light' ? '#FFFFFF' : '#000000',
               backdropFilter: 'blur(40px)',
               WebkitBackdropFilter: 'blur(40px)',
               borderRadius: '32px 32px 0 0',
@@ -1220,7 +1229,7 @@ const Dashboard: React.FC = () => {
           >
             {/* Drag handle */}
             <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0 0' }}>
-              <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)' }}/>
+              <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: theme === 'light' ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.15)' }}/>
             </div>
 
             {/* Header */}
@@ -1228,12 +1237,12 @@ const Dashboard: React.FC = () => {
               <div style={{ width: '40px' }}/>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '18px', filter: 'drop-shadow(0 0 8px rgba(0,232,122,0.8))' }}>⚡</span>
-                <h2 style={{ fontSize: '20px', fontWeight: '900', color: '#FFFFFF', margin: 0, letterSpacing: '-0.5px', animation: 'titleGlow 3s ease-in-out infinite' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: '900', color: tc.text, margin: 0, letterSpacing: '-0.5px', animation: 'titleGlow 3s ease-in-out infinite' }}>
                   {editTask ? t('edit_task') : 'New Task'}
                 </h2>
               </div>
-              <div onClick={closeModal} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round">
+              <div onClick={closeModal} style={{ width: '40px', height: '40px', borderRadius: '50%', background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)', border: `1px solid ${tc.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke={tc.textSecondary} strokeWidth="2" strokeLinecap="round">
                   <line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/>
                 </svg>
               </div>
@@ -1241,30 +1250,30 @@ const Dashboard: React.FC = () => {
 
             <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div>
-                <label style={{ fontSize: '10px', fontWeight: '800', color: '#666666', letterSpacing: '0.12em', display: 'block', marginBottom: '8px' }}>TASK NAME</label>
-                <div style={{ borderRadius: '16px', background: '#121212', border: `1px solid ${focusedField === 'title' ? 'rgba(0,232,122,0.6)' : 'rgba(255,255,255,0.07)'}`, boxShadow: focusedField === 'title' ? 'inset 4px 4px 10px rgba(0,0,0,0.8), inset -1px -1px 4px rgba(255,255,255,0.02), 0 0 0 1px rgba(0,232,122,0.3), 0 0 16px rgba(0,232,122,0.15)' : 'inset 4px 4px 10px rgba(0,0,0,0.8), inset -1px -1px 4px rgba(255,255,255,0.02)', transition: 'all 0.2s ease' }}>
-                  <input type="text" placeholder="What needs to be done?" value={title} onChange={e => setTitle(e.target.value)} onFocus={() => setFocusedField('title')} onBlur={() => setFocusedField('')} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '15px', fontWeight: '600', color: '#FFFFFF', caretColor: '#00E87A', boxSizing: 'border-box' }}/>
+                <label style={{ fontSize: '10px', fontWeight: '800', color: tc.textTertiary, letterSpacing: '0.12em', display: 'block', marginBottom: '8px' }}>TASK NAME</label>
+                <div style={{ borderRadius: '16px', background: theme === 'light' ? '#F5F5F5' : '#121212', border: `1px solid ${focusedField === 'title' ? 'rgba(0,232,122,0.6)' : tc.border}`, boxShadow: focusedField === 'title' ? '0 0 0 1px rgba(0,232,122,0.3), 0 0 16px rgba(0,232,122,0.15)' : 'none', transition: 'all 0.2s ease' }}>
+                  <input type="text" placeholder="What needs to be done?" value={title} onChange={e => setTitle(e.target.value)} onFocus={() => setFocusedField('title')} onBlur={() => setFocusedField('')} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '15px', fontWeight: '600', color: tc.text, caretColor: '#00E87A', boxSizing: 'border-box' }}/>
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '10px', fontWeight: '800', color: '#666666', letterSpacing: '0.12em', display: 'block', marginBottom: '8px' }}>DESCRIPTION</label>
-                <div style={{ borderRadius: '16px', background: '#121212', border: `1px solid ${focusedField === 'desc' ? 'rgba(0,232,122,0.6)' : 'rgba(255,255,255,0.07)'}`, boxShadow: focusedField === 'desc' ? 'inset 4px 4px 10px rgba(0,0,0,0.8), inset -1px -1px 4px rgba(255,255,255,0.02), 0 0 0 1px rgba(0,232,122,0.3), 0 0 16px rgba(0,232,122,0.15)' : 'inset 4px 4px 10px rgba(0,0,0,0.8), inset -1px -1px 4px rgba(255,255,255,0.02)', transition: 'all 0.2s ease' }}>
-                  <textarea placeholder="Add details... (optional)" value={description} onChange={e => { setDescription(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} onFocus={() => setFocusedField('desc')} onBlur={() => setFocusedField('')} rows={1} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '14px', fontWeight: '500', color: '#FFFFFF', caretColor: '#00E87A', resize: 'none', lineHeight: 1.6, boxSizing: 'border-box', fontFamily: 'inherit', overflow: 'hidden', minHeight: '48px', transition: 'height 0.15s ease' }}/>
+                <label style={{ fontSize: '10px', fontWeight: '800', color: tc.textTertiary, letterSpacing: '0.12em', display: 'block', marginBottom: '8px' }}>DESCRIPTION</label>
+                <div style={{ borderRadius: '16px', background: theme === 'light' ? '#F5F5F5' : '#121212', border: `1px solid ${focusedField === 'desc' ? 'rgba(0,232,122,0.6)' : tc.border}`, boxShadow: focusedField === 'desc' ? '0 0 0 1px rgba(0,232,122,0.3), 0 0 16px rgba(0,232,122,0.15)' : 'none', transition: 'all 0.2s ease' }}>
+                  <textarea placeholder="Add details... (optional)" value={description} onChange={e => { setDescription(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} onFocus={() => setFocusedField('desc')} onBlur={() => setFocusedField('')} rows={1} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '14px', fontWeight: '500', color: tc.text, caretColor: '#00E87A', resize: 'none', lineHeight: 1.6, boxSizing: 'border-box', fontFamily: 'inherit', overflow: 'hidden', minHeight: '48px', transition: 'height 0.15s ease' }}/>
                 </div>
               </div>
 
 
 
               <div>
-                <label style={{ fontSize: '10px', fontWeight: '800', color: '#666666', letterSpacing: '0.12em', display: 'block', marginBottom: '10px' }}>PRIORITY</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: '#0A0A0A', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', padding: '4px', gap: '4px', boxShadow: 'inset 3px 3px 8px rgba(0,0,0,0.6)' }}>
-                  {[{ value: 'High', label: 'High', activeColor: '#EF4444', activeBg: 'rgba(239,68,68,0.15)', activeBorder: 'rgba(239,68,68,0.5)', glow: '0 0 12px rgba(239,68,68,0.4)' }, { value: 'Medium', label: 'Medium', activeColor: '#F59E0B', activeBg: 'rgba(245,158,11,0.15)', activeBorder: 'rgba(245,158,11,0.5)', glow: '0 0 12px rgba(245,158,11,0.4)' }, { value: 'Low', label: 'Low', activeColor: '#06B6D4', activeBg: 'rgba(6,182,212,0.15)', activeBorder: 'rgba(6,182,212,0.5)', glow: '0 0 12px rgba(6,182,212,0.4)' }].map((p, i) => {
+                <label style={{ fontSize: '10px', fontWeight: '800', color: tc.textTertiary, letterSpacing: '0.12em', display: 'block', marginBottom: '10px' }}>PRIORITY</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', background: theme === 'light' ? '#F0F0F0' : '#0A0A0A', borderRadius: '16px', border: `1px solid ${tc.border}`, padding: '4px', gap: '4px', boxShadow: theme === 'light' ? 'none' : 'inset 3px 3px 8px rgba(0,0,0,0.6)' }}>
+                  {PRIORITY_OPTIONS.map((p, i) => {
                     const isActive = priority === p.value;
                     return (
                       <div key={i} onClick={() => setPriority(p.value as any)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px 8px', borderRadius: '12px', cursor: 'pointer', background: isActive ? p.activeBg : 'transparent', border: isActive ? `1px solid ${p.activeBorder}` : '1px solid transparent', boxShadow: isActive ? p.glow : 'none', transition: 'all 0.25s ease', animation: isActive ? 'segmentSlide 0.2s ease' : 'none' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isActive ? p.activeColor : 'rgba(255,255,255,0.2)', boxShadow: isActive ? `0 0 8px ${p.activeColor}` : 'none', transition: 'all 0.2s ease', flexShrink: 0 }}/>
-                        <span style={{ fontSize: '13px', fontWeight: '800', color: isActive ? p.activeColor : 'rgba(255,255,255,0.3)', transition: 'color 0.2s ease', letterSpacing: '-0.2px' }}>{p.label}</span>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isActive ? p.activeColor : tc.textTertiary, boxShadow: isActive ? `0 0 8px ${p.activeColor}` : 'none', transition: 'all 0.2s ease', flexShrink: 0 }}/>
+                        <span style={{ fontSize: '13px', fontWeight: '800', color: isActive ? p.activeColor : tc.textSecondary, transition: 'color 0.2s ease', letterSpacing: '-0.2px' }}>{p.label}</span>
                       </div>
                     );
                   })}
@@ -1310,7 +1319,7 @@ const Dashboard: React.FC = () => {
 
                   <span
                     style={{
-                      background: 'rgba(255,255,255,0.03)',
+                      background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)',
                       color: detailTask.priority === 'High' ? '#ef4444' : detailTask.priority === 'Medium' ? '#f59e0b' : '#10b981',
                       border: `1px solid ${detailTask.priority === 'High' ? 'rgba(239,68,68,0.2)' : detailTask.priority === 'Medium' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}`,
                       padding: '0.35rem 0.75rem',
@@ -1327,7 +1336,7 @@ const Dashboard: React.FC = () => {
               <button 
                 onClick={() => setDetailTask(null)} 
                 className="notification-btn"
-                style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '50%' }}
+                style={{ background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '50%' }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -1336,13 +1345,13 @@ const Dashboard: React.FC = () => {
             </div>
 
             {detailTask.image_url && (
-              <div style={{ width: '100%', maxHeight: '240px', borderRadius: '1.25rem', overflow: 'hidden', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <img src={detailTask.image_url} alt={detailTask.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ width: '100%', maxHeight: '240px', borderRadius: '1.25rem', overflow: 'hidden', marginBottom: '1.5rem', border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.05)' }}>
+                <img src={detailTask.image_url} alt={detailTask.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
             )}
 
             {detailTask.description && (
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1.25rem', borderRadius: '1.25rem', marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.03)' }}>
+              <div style={{ background: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.02)', padding: '1.25rem', borderRadius: '1.25rem', marginBottom: '2rem', border: isLight ? '1px solid rgba(0,0,0,0.06)' : '1px solid rgba(255,255,255,0.03)' }}>
                 <p style={{ margin: 0, color: 'var(--text-main)', fontSize: '0.95rem', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
                   {detailTask.description}
                 </p>
@@ -1357,12 +1366,12 @@ const Dashboard: React.FC = () => {
                   openModal(t); // Chain triggers Edit form modal
                 }}
                 className="glow-btn-primary"
-                style={{ 
-                  height: '3.5rem', 
-                  borderRadius: '1.25rem', 
-                  background: 'rgba(255,255,255,0.05)', 
+                style={{
+                  height: '3.5rem',
+                  borderRadius: '1.25rem',
+                  background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                   color: 'var(--text-main)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.1)',
                   fontSize: '0.9rem',
                   fontWeight: 900,
                   textTransform: 'uppercase',

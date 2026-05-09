@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 const MONTHS = [
@@ -73,6 +74,8 @@ function chipStyleForDate(dateStr: string, todayStr: string): { label: string; c
 
 const Calendar: React.FC = () => {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const [isSidebarHidden, setIsSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const toggleSidebar = () => {
     setIsSidebarHidden((prev) => {
@@ -268,7 +271,7 @@ const Calendar: React.FC = () => {
           font-weight: 400;
           letter-spacing: 0.28em;
           margin: 0;
-          color: #f8fafc;
+          color: ${isLight ? '#0A0A0A' : '#f8fafc'};
           line-height: 1;
         }
         .cal-marquee-wrap {
@@ -311,8 +314,8 @@ const Calendar: React.FC = () => {
           height: 38px;
           margin: 0 auto;
           border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255, 255, 255, 0.1)'};
+          background: ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(0, 0, 0, 0.35)'};
           color: #4ade80;
           display: flex;
           align-items: center;
@@ -360,10 +363,11 @@ const Calendar: React.FC = () => {
         .cal-card {
           border-radius: 20px;
           padding: 1.15rem 1rem 1.25rem;
-          border: 1px solid rgba(52, 211, 153, 0.14);
-          background:
-            radial-gradient(ellipse 85% 70% at 50% 45%, rgba(16, 185, 129, 0.1), rgba(6, 8, 14, 0.97));
-          box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.35), 0 0 40px rgba(16, 185, 129, 0.04);
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(52, 211, 153, 0.14)'};
+          background: ${isLight
+            ? '#ffffff'
+            : 'radial-gradient(ellipse 85% 70% at 50% 45%, rgba(16, 185, 129, 0.1), rgba(6, 8, 14, 0.97))'};
+          box-shadow: ${isLight ? '0 2px 12px rgba(0,0,0,0.06)' : 'inset 0 0 60px rgba(0, 0, 0, 0.35), 0 0 40px rgba(16, 185, 129, 0.04)'};
           position: relative;
           overflow: hidden;
         }
@@ -382,9 +386,9 @@ const Calendar: React.FC = () => {
           width: 46px;
           height: 46px;
           border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          background: rgba(0, 0, 0, 0.45);
-          color: #e2e8f0;
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255, 255, 255, 0.08)'};
+          background: ${isLight ? '#ffffff' : 'rgba(0, 0, 0, 0.45)'};
+          color: ${isLight ? '#0A0A0A' : '#e2e8f0'};
           display: flex;
           align-items: center;
           justify-content: center;
@@ -403,7 +407,7 @@ const Calendar: React.FC = () => {
           font-size: clamp(1.5rem, 5vw, 1.95rem);
           font-weight: 400;
           letter-spacing: 0.1em;
-          color: #f8fafc;
+          color: ${isLight ? '#0A0A0A' : '#f8fafc'};
           text-align: center;
           line-height: 1.05;
         }
@@ -439,8 +443,8 @@ const Calendar: React.FC = () => {
           aspect-ratio: 1;
           max-height: 52px;
           border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.04);
-          background: rgba(0, 0, 0, 0.28);
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255, 255, 255, 0.04)'};
+          background: ${isLight ? 'rgba(0,0,0,0.04)' : 'rgba(0, 0, 0, 0.28)'};
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -478,7 +482,7 @@ const Calendar: React.FC = () => {
           font-family: 'JetBrains Mono', monospace;
           font-size: 0.78rem;
           font-weight: 700;
-          color: rgba(226, 232, 240, 0.88);
+          color: ${isLight ? '#0A0A0A' : 'rgba(226, 232, 240, 0.88)'};
           line-height: 1;
         }
         .cal-cell-dots {
@@ -512,7 +516,7 @@ const Calendar: React.FC = () => {
           font-size: 10px;
           font-weight: 800;
           letter-spacing: 0.2em;
-          color: rgba(226, 232, 240, 0.9);
+          color: ${isLight ? '#0A0A0A' : 'rgba(226, 232, 240, 0.9)'};
           margin: 1.75rem 0 0.85rem;
         }
         .cal-rem-card {
@@ -521,8 +525,8 @@ const Calendar: React.FC = () => {
           gap: 0.75rem;
           padding: 0.95rem 1rem;
           border-radius: 16px;
-          border: 1px solid rgba(255, 255, 255, 0.06);
-          background: rgba(0, 0, 0, 0.28);
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255, 255, 255, 0.06)'};
+          background: ${isLight ? '#ffffff' : 'rgba(0, 0, 0, 0.28)'};
           margin-bottom: 0.55rem;
           box-shadow: inset 4px 0 0 var(--cal-glow, rgba(52, 211, 153, 0.45));
         }
@@ -546,7 +550,7 @@ const Calendar: React.FC = () => {
         .cal-rem-title {
           font-weight: 800;
           font-size: 0.9rem;
-          color: #fff;
+          color: ${isLight ? '#0A0A0A' : '#fff'};
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -596,8 +600,8 @@ const Calendar: React.FC = () => {
           text-align: center;
           padding: 2.25rem 1rem;
           border-radius: 20px;
-          border: 1px dashed rgba(255, 255, 255, 0.08);
-          color: rgba(148, 163, 184, 0.95);
+          border: 1px dashed ${isLight ? 'rgba(0,0,0,0.15)' : 'rgba(255, 255, 255, 0.08)'};
+          color: ${isLight ? 'rgba(0,0,0,0.45)' : 'rgba(148, 163, 184, 0.95)'};
           font-size: 0.88rem;
           font-weight: 600;
           line-height: 1.5;
@@ -636,7 +640,7 @@ const Calendar: React.FC = () => {
           z-index: 1;
           max-height: min(88vh, 620px);
           border-radius: 22px 22px 0 0;
-          background: rgba(10, 12, 20, 0.82);
+          background: ${isLight ? 'rgba(248, 248, 248, 0.97)' : 'rgba(10, 12, 20, 0.82)'};
           backdrop-filter: blur(24px) saturate(160%);
           border: 1px solid rgba(52, 211, 153, 0.12);
           border-bottom: none;
@@ -671,7 +675,7 @@ const Calendar: React.FC = () => {
           font-family: 'Bebas Neue', Impact, sans-serif;
           font-size: 1.65rem;
           letter-spacing: 0.06em;
-          color: #f8fafc;
+          color: ${isLight ? '#0A0A0A' : '#f8fafc'};
           text-align: center;
           margin: 0.25rem 0 0.85rem;
         }
@@ -686,28 +690,28 @@ const Calendar: React.FC = () => {
           justify-content: space-between;
           gap: 0.5rem;
           padding: 0.5rem 0;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          border-bottom: 1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255, 255, 255, 0.06)'};
           font-size: 0.85rem;
           font-weight: 700;
-          color: #e2e8f0;
+          color: ${isLight ? '#0A0A0A' : '#e2e8f0'};
         }
         .cal-sheet-input {
           width: 100%;
           box-sizing: border-box;
           border-radius: 14px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          background: rgba(0, 0, 0, 0.35);
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255, 255, 255, 0.1)'};
+          background: ${isLight ? '#ffffff' : 'rgba(0, 0, 0, 0.35)'};
           padding: 1rem 1.1rem;
           font-size: 1rem;
           font-weight: 700;
-          color: #fff;
+          color: ${isLight ? '#0A0A0A' : '#fff'};
           outline: none;
           margin-bottom: 1rem;
           font-family: inherit;
           transition: border-color 0.2s, box-shadow 0.2s;
         }
         .cal-sheet-input::placeholder {
-          color: rgba(148, 163, 184, 0.75);
+          color: ${isLight ? 'rgba(0,0,0,0.35)' : 'rgba(148, 163, 184, 0.75)'};
           font-weight: 600;
         }
         .cal-sheet-input:focus {
@@ -719,7 +723,7 @@ const Calendar: React.FC = () => {
           font-size: 9px;
           font-weight: 800;
           letter-spacing: 0.16em;
-          color: rgba(148, 163, 184, 0.9);
+          color: ${isLight ? 'rgba(0,0,0,0.45)' : 'rgba(148, 163, 184, 0.9)'};
           margin-bottom: 0.45rem;
         }
         .cal-time-row {
@@ -730,9 +734,9 @@ const Calendar: React.FC = () => {
         .cal-time-select {
           flex: 1;
           border-radius: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          background: rgba(0, 0, 0, 0.4);
-          color: #e2e8f0;
+          border: 1px solid ${isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255, 255, 255, 0.1)'};
+          background: ${isLight ? '#ffffff' : 'rgba(0, 0, 0, 0.4)'};
+          color: ${isLight ? '#0A0A0A' : '#e2e8f0'};
           padding: 0.65rem 0.75rem;
           font-family: 'JetBrains Mono', monospace;
           font-size: 0.85rem;

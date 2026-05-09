@@ -113,7 +113,6 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       if (error) {
         console.error('[SubscriptionContext] Failed to sync is_pro=true to Supabase:', error);
       } else {
-        console.log(`[SubscriptionContext] is_pro=true plan=${plan} expires=${expiresAt} written to Supabase`);
       }
       void syncRoleCache(true);
     } else {
@@ -199,7 +198,6 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const initRC = async () => {
       try {
-        console.log('=== STAGE 1: CONFIGURE REVENUECAT ===');
         await RevenueCatService.configure(user.id);
         if (!cancelled) {
           setRcReady(true); // Signal that RC is ready
@@ -223,7 +221,6 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const setupRC = async () => {
       try {
-        console.log('=== STAGE 2: SETUP REVENUECAT DATA ===');
         if (!Capacitor.isNativePlatform()) {
           setLoading(false);
           return;

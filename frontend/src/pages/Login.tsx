@@ -133,12 +133,6 @@ const Login: React.FC = () => {
         password: padPinForAuth(pin),
       });
 
-      console.log('[Login] Error:', JSON.stringify(authError));
-      console.log('[Login] Error msg:', authError?.message);
-      console.log('[Login] Error code:', (authError as any)?.code);
-      console.log('[Login] Error status:', authError?.status);
-      console.log('[Login] User:', authData?.user?.id);
-
       // ─── HANDLE ERRORS ────────────────────
       if (authError) {
         setIsLoading(false);
@@ -189,7 +183,6 @@ const Login: React.FC = () => {
         return;
       }
 
-      console.log('[Login] Success ✅', authData.user.email);
       const cleanEmail = email.trim().toLowerCase();
 
       // PART 1: OPTIMISTIC CONTEXT & NAV
@@ -222,7 +215,6 @@ const Login: React.FC = () => {
           if (userRecord && !userRecord.pin) {
             const hashedPin = await hashPin(pin);
             await supabase.from('users').update({ pin: hashedPin }).eq('id', userRecord.id);
-            console.log('[Login] Fixed NULL pin silently ✅');
           }
 
           // 3. Create missing profile
@@ -235,7 +227,6 @@ const Login: React.FC = () => {
               pin: hashedPin,
               created_at: new Date().toISOString(),
             });
-            console.log('[Login] Created missing profile ✅');
           }
 
           // 4. Update context with definitive database data

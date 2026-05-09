@@ -9,6 +9,8 @@ import UserAvatar from './UserAvatar';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
+import { useTheme } from '../context/ThemeContext';
+import { getTheme } from '../utils/theme';
 import { supabase } from '../supabase';
 import { storage } from '../utils/storage';
 
@@ -76,9 +78,9 @@ const getMembershipBadge = (
       fontWeight: '800',
       letterSpacing: '0.12em',
       textTransform: 'uppercase' as const,
-      border: '1px solid rgba(255,255,255,0.1)',
-      background: 'rgba(255,255,255,0.05)',
-      color: 'rgba(255,255,255,0.4)',
+      border: '1px solid rgba(128,128,128,0.25)',
+      background: 'rgba(128,128,128,0.1)',
+      color: 'rgba(100,100,100,0.8)',
     },
   };
 };
@@ -88,6 +90,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const { user } = useAuth();
   const { isPro } = useSubscription();
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
 
   const [userRole, setUserRole] = useState<'admin' | 'pro' | 'basic'>('basic');
 
@@ -157,7 +161,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
 
   const handleLogout = async () => {
     try {
-      console.log('[Logout] Starting logout...');
       onClose();
 
       const { error } = await supabase.auth.signOut();
@@ -237,8 +240,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
 
       <div className={`fixed top-0 left-0 h-full w-[300px] z-[99999] transition-transform duration-300 ease-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{
-          background: 'linear-gradient(180deg, #0D0D0D 0%, #080808 100%)',
-          boxShadow: isOpen ? '20px 0 60px rgba(0,0,0,0.8)' : 'none',
+          background: theme === 'light' ? '#FFFFFF' : 'linear-gradient(180deg, #0D0D0D 0%, #080808 100%)',
+          boxShadow: isOpen ? (theme === 'light' ? '20px 0 40px rgba(0,0,0,0.12)' : '20px 0 60px rgba(0,0,0,0.8)') : 'none',
           willChange: 'transform',
         }}
       >
@@ -256,7 +259,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                 Stay Hardy
               </p>
               <p style={{
-                color: '#FFFFFF',
+                color: tc.textSecondary,
                 opacity: 1,
                 fontWeight: '600',
                 fontSize: '10px',
@@ -271,11 +274,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
               onClick={onClose}
               className="w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-150 active:scale-90"
               style={{
-                background: 'rgba(255,255,255,0.05)',
+                background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)',
                 boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.05)',
               }}
             >
-              <X size={14} className="text-white/40" />
+              <X size={14} style={{ color: theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)' }} />
             </button>
           </div>
 
@@ -303,15 +306,14 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                   gap: '12px',
                   padding: '12px',
                   borderRadius: '16px',
-                  background: '#0A0A0A',
+                  background: theme === 'light' ? '#F0F0F0' : '#0A0A0A',
 
                   outline: 'none',
                   cursor: 'pointer',
-                  boxShadow: `
-                    0 8px 16px rgba(0,0,0,0.6),
-                    inset 0 1px 1px rgba(255,255,255,0.05)
-                  `,
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: theme === 'light'
+                    ? '0 2px 8px rgba(0,0,0,0.08), inset 0 1px 1px rgba(255,255,255,0.8)'
+                    : '0 8px 16px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.05)',
+                  border: theme === 'light' ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.1)',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                   WebkitTapHighlightColor: 'transparent',
                 }}
@@ -350,7 +352,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                   <span style={{
                     fontSize: '13px',
                     fontWeight: '700',
-                    color: '#FFFFFF',
+                    color: tc.text,
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -368,7 +370,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                 <div style={{ flexShrink: 0, marginLeft: 'auto', position: 'relative', display: 'flex', alignItems: 'center' }}>
                   {notifCount > 0 ? (
                     <>
-                      <Bell size={17} color="rgba(255,255,255,0.5)" />
+                      <Bell size={17} color={tc.textSecondary} />
                       <span style={{
                         position: 'absolute',
                         top: '-6px',
@@ -390,7 +392,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                       </span>
                     </>
                   ) : (
-                    <ChevronRight size={18} color="rgba(255,255,255,0.25)" />
+                    <ChevronRight size={18} color={tc.textTertiary} />
                   )}
                 </div>
               </button>
@@ -404,8 +406,10 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
             <div
               onClick={() => { navigate('/leaderboard'); onClose(); }}
               style={{
-                background: 'linear-gradient(135deg, rgba(255,215,0,0.12) 0%, rgba(255,165,0,0.06) 60%, rgba(0,0,0,0) 100%)',
-                border: '1px solid rgba(255,215,0,0.25)',
+                background: theme === 'light'
+                  ? 'linear-gradient(135deg, rgba(0,168,70,0.10) 0%, rgba(0,200,83,0.05) 60%, rgba(0,0,0,0) 100%)'
+                  : 'linear-gradient(135deg, rgba(255,215,0,0.12) 0%, rgba(255,165,0,0.06) 60%, rgba(0,0,0,0) 100%)',
+                border: theme === 'light' ? '1px solid rgba(0,168,70,0.30)' : '1px solid rgba(255,215,0,0.25)',
                 borderRadius: '16px',
                 padding: '14px 16px',
                 cursor: 'pointer',
@@ -414,7 +418,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                 gap: '12px',
                 WebkitTapHighlightColor: 'transparent',
                 transition: 'transform 0.15s ease',
-                boxShadow: '0 4px 20px rgba(255,215,0,0.08)',
+                boxShadow: theme === 'light' ? '0 4px 20px rgba(0,168,70,0.08)' : '0 4px 20px rgba(255,215,0,0.08)',
               }}
               onMouseDown={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(0.97)'; }}
               onMouseUp={(e) => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)'; }}
@@ -423,28 +427,28 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
             >
               <div style={{
                 width: '40px', height: '40px', borderRadius: '12px',
-                background: 'rgba(255,215,0,0.14)',
-                border: '1px solid rgba(255,215,0,0.3)',
+                background: theme === 'light' ? 'rgba(0,168,70,0.12)' : 'rgba(255,215,0,0.14)',
+                border: theme === 'light' ? '1px solid rgba(0,168,70,0.30)' : '1px solid rgba(255,215,0,0.3)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, color: '#FFD700',
+                flexShrink: 0, color: theme === 'light' ? '#00A846' : '#FFD700',
               }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                   <path d="M8 21h8M12 17v4M7 3H5C4.4 3 4 3.4 4 4v3c0 3.3 2.7 6 6 6M17 3h2c.6 0 1 .4 1 1v3c0 3.3-2.7 6-6 6M7 3h10v6c0 2.8-2.2 5-5 5s-5-2.2-5-5V3z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ color: '#FFD700', fontWeight: 800, fontSize: '15px', margin: 0, letterSpacing: '0.02em' }}>
+                <p style={{ color: theme === 'light' ? '#00A846' : '#FFD700', fontWeight: 800, fontSize: '15px', margin: 0, letterSpacing: '0.02em' }}>
                   Hardy Board
                 </p>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', margin: '2px 0 0', letterSpacing: '0.01em' }}>
+                <p style={{ color: tc.textSecondary, fontSize: '11px', margin: '2px 0 0', letterSpacing: '0.01em' }}>
                   Track your rank in leaderboard
                 </p>
               </div>
               <span style={{
                 padding: '3px 8px', borderRadius: '6px',
-                background: 'rgba(255,215,0,0.15)',
-                border: '1px solid rgba(255,215,0,0.35)',
-                color: '#FFD700', fontSize: '9px', fontWeight: 800,
+                background: theme === 'light' ? 'rgba(0,168,70,0.12)' : 'rgba(255,215,0,0.15)',
+                border: theme === 'light' ? '1px solid rgba(0,168,70,0.35)' : '1px solid rgba(255,215,0,0.35)',
+                color: theme === 'light' ? '#00A846' : '#FFD700', fontSize: '9px', fontWeight: 800,
                 letterSpacing: '0.15em', flexShrink: 0,
               }}>
                 LIVE
@@ -456,7 +460,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
         <div className="h-px w-full bg-gradient-to-r from-transparent via-white/8 to-transparent mb-2" />
 
         <p className="px-6 text-[9px] font-bold tracking-[0.25em] uppercase mb-1"
-          style={{ color: 'rgba(255,255,255,0.2)' }}>
+          style={{ color: tc.textTertiary }}>
           Navigate
         </p>
 
@@ -483,11 +487,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                     style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
                   />
                 )}
-                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : {}} className={!active ? "text-white/30 group-hover:text-white/60 transition-colors" : ""}>
+                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : { color: tc.textTertiary }}>
                   <Icon size={18} strokeWidth={active ? 1.8 : 1.5} />
                 </div>
-                <span className={`text-sm flex-1 text-left tracking-wide transition-colors ${active ? "text-white font-semibold" : "text-white/40 font-medium group-hover:text-white/70"}`}
-                  style={active ? { textShadow: '0 0 20px rgba(0,230,118,0.3)' } : {}}
+                <span className="text-sm flex-1 text-left tracking-wide transition-colors"
+                  style={active ? { color: tc.text, fontWeight: 600, textShadow: '0 0 20px rgba(0,230,118,0.3)' } : { color: tc.textSecondary, fontWeight: 500 }}
                 >
                   {item.label}
                 </span>
@@ -510,16 +514,16 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                     style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
                   />
                 )}
-                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : { color: 'rgba(255,255,255,0.35)' }}>
+                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : { color: tc.textTertiary }}>
                   <RefreshCw size={18} strokeWidth={active ? 1.8 : 1.5} />
                 </div>
                 <span className="text-sm flex-1 text-left"
-                  style={active ? { color: '#FFFFFF', fontWeight: 600, textShadow: '0 0 20px rgba(0,230,118,0.3)' } : { color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}
+                  style={active ? { color: tc.text, fontWeight: 600, textShadow: '0 0 20px rgba(0,230,118,0.3)' } : { color: tc.textSecondary, fontWeight: 500 }}
                 >
                   Habits
                 </span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#FFD700" stroke="#FFD700" strokeWidth="1"
-                  style={{ filter: 'drop-shadow(0 0 4px rgba(255,215,0,0.6))', flexShrink: 0 }}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill={theme === 'light' ? '#00A846' : '#FFD700'} stroke={theme === 'light' ? '#00A846' : '#FFD700'} strokeWidth="1"
+                  style={{ filter: theme === 'light' ? 'drop-shadow(0 0 4px rgba(0,168,70,0.5))' : 'drop-shadow(0 0 4px rgba(255,215,0,0.6))', flexShrink: 0 }}
                 >
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                 </svg>
@@ -541,16 +545,16 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
                     style={{ background: '#00E676', boxShadow: '0 0 8px rgba(0,230,118,0.8), 0 0 16px rgba(0,230,118,0.4)' }}
                   />
                 )}
-                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : { color: 'rgba(255,255,255,0.35)' }}>
+                <div style={active ? { color: '#00E676', filter: 'drop-shadow(0 0 6px rgba(0,230,118,0.5))' } : { color: tc.textTertiary }}>
                   <BarChart2 size={18} strokeWidth={active ? 1.8 : 1.5} />
                 </div>
                 <span className="text-sm flex-1 text-left"
-                  style={active ? { color: '#FFFFFF', fontWeight: 600, textShadow: '0 0 20px rgba(0,230,118,0.3)' } : { color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}
+                  style={active ? { color: tc.text, fontWeight: 600, textShadow: '0 0 20px rgba(0,230,118,0.3)' } : { color: tc.textSecondary, fontWeight: 500 }}
                 >
                   Stats
                 </span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="#FFD700" stroke="#FFD700" strokeWidth="1"
-                  style={{ filter: 'drop-shadow(0 0 4px rgba(255,215,0,0.6))', flexShrink: 0 }}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill={theme === 'light' ? '#00A846' : '#FFD700'} stroke={theme === 'light' ? '#00A846' : '#FFD700'} strokeWidth="1"
+                  style={{ filter: theme === 'light' ? 'drop-shadow(0 0 4px rgba(0,168,70,0.5))' : 'drop-shadow(0 0 4px rgba(255,215,0,0.6))', flexShrink: 0 }}
                 >
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                 </svg>
@@ -697,9 +701,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 px-4 pb-10 pt-4"
-          style={{ 
-            background: 'linear-gradient(0deg, #080808 60%, transparent 100%)',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
+          style={{
+            background: theme === 'light'
+              ? `linear-gradient(0deg, ${tc.bg} 60%, transparent 100%)`
+              : 'linear-gradient(0deg, #080808 60%, transparent 100%)',
+            borderTop: theme === 'light' ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.06)',
             paddingTop: '16px',
             marginTop: '8px'
           }}
@@ -707,8 +713,8 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
           <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center gap-[10px] py-3.5 rounded-2xl group active:scale-95 transition-all duration-150"
-            style={{ 
-              background: 'rgba(255,255,255,0.02)',
+            style={{
+              background: theme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.02)',
               color: '#FF4444'
             }}
           >

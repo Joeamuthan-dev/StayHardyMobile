@@ -17,7 +17,6 @@ function notify() {
 
 export const ProSuccessManager = {
   show() {
-    console.log('ProSuccessManager.show()');
     show = true;
     try {
       localStorage.setItem(PRO_SUCCESS_KEY, 'true');
@@ -47,7 +46,6 @@ export const ProSuccessManager = {
   restoreFromStorage() {
     try {
       if (localStorage.getItem(PRO_SUCCESS_KEY) === 'true') {
-        console.log('Restoring pro success screen');
         show = true;
         notify();
         return true;

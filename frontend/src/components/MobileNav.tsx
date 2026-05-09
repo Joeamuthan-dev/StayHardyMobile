@@ -7,6 +7,7 @@ import { LIFETIME_PRICE_INR } from '../config/lifetimePricing';
 import { isAdminHubUser } from '../config/adminOwner';
 import { useAppSettings } from '../hooks/useAppSettings';
 import SupportModal from './SupportModal';
+import WhyStayHardyModal from './WhyStayHardyModal';
 
 import pkg from '../../package.json';
 
@@ -122,6 +123,7 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
     return Number.isFinite(p) && p > 0 ? p : LIFETIME_PRICE_INR;
   }, [appSettings.pro_price]);
   const [showSupportModal, setShowSupportModal] = useState(false);
+  const [showWhyModal, setShowWhyModal] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   const isActive = (path: string) => location.pathname === path;
@@ -426,11 +428,11 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
               Support
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <button type="button" onClick={() => { handleNavigate('/welcome'); setIsOpen(false); }}
+              <button type="button" onClick={() => { setIsOpen(false); setShowWhyModal(true); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '13px', padding: '11px 14px', borderRadius: '12px', width: '100%', textAlign: 'left', background: 'transparent', border: '1px solid transparent', cursor: 'pointer', color: 'rgba(255,255,255,0.45)' }}
               >
                 <IconHelp />
-                <span style={{ flex: 1, fontSize: '14px', fontWeight: '500', color: 'rgba(255,255,255,0.65)' }}>Expert Intelligence</span>
+                <span style={{ flex: 1, fontSize: '14px', fontWeight: '500', color: 'rgba(255,255,255,0.65)' }}>Why Stay Hardy?</span>
               </button>
 
               {!isAdmin && (
@@ -514,6 +516,7 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, setIsOpen }) => {
       {createPortal(drawerPanel, document.body)}
 
       <SupportModal isOpen={showSupportModal} onClose={() => setShowSupportModal(false)} />
+      <WhyStayHardyModal isOpen={showWhyModal} onClose={() => setShowWhyModal(false)} />
     </>
   );
 };

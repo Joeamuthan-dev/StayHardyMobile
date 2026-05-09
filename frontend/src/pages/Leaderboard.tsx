@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Zap, Info } from 'lucide-react';
 import { supabase } from '../supabase';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ const Avatar: React.FC<AvatarProps> = ({ avatar_url, display_name, size }) => {
       <img
         src={avatar_url}
         alt={display_name}
+        loading="lazy"
         style={{
           width: size,
           height: size,
@@ -171,42 +173,54 @@ const CrownSVG: React.FC<{ size?: number; color?: string }> = ({ size = 20, colo
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
 
-const SkeletonRow: React.FC<{ index: number }> = ({ index }) => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      padding: '14px 16px',
-      borderRadius: '14px',
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px solid rgba(255,255,255,0.05)',
-      marginBottom: '8px',
-      animation: `pulse 1.5s ease-in-out ${index * 0.15}s infinite`,
-    }}
-  >
-    <div style={{ width: '28px', height: '14px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)' }} />
-    <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
-    <div style={{ flex: 1, height: '14px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)' }} />
-    <div style={{ width: '48px', height: '14px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)' }} />
-  </div>
-);
+const SkeletonRow: React.FC<{ index: number }> = ({ index }) => {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '14px 16px',
+        borderRadius: '14px',
+        background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)'}`,
+        marginBottom: '8px',
+        animation: `pulse 1.5s ease-in-out ${index * 0.15}s infinite`,
+      }}
+    >
+      <div style={{ width: '28px', height: '14px', borderRadius: '4px', background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }} />
+      <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }} />
+      <div style={{ flex: 1, height: '14px', borderRadius: '4px', background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }} />
+      <div style={{ width: '48px', height: '14px', borderRadius: '4px', background: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)' }} />
+    </div>
+  );
+};
 
 
 // ─── Gold Coin Points display ──────────────────────────────────────────────────
 
-const GoldCoin: React.FC<{ size?: number }> = ({ size = 14 }) => (
-  <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-    <circle cx="8" cy="8" r="7.5" fill="#FFD700" fillOpacity="0.9" />
-    <circle cx="8" cy="8" r="5.5" fill="#FFA500" fillOpacity="0.6" />
-    <circle cx="8" cy="8" r="3.5" fill="#FFD700" />
-    <circle cx="6" cy="6" r="1.2" fill="white" fillOpacity="0.35" />
-  </svg>
-);
+const GoldCoin: React.FC<{ size?: number }> = ({ size = 14 }) => {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+  const c1 = isLight ? '#00E87A' : '#FFD700';
+  const c2 = isLight ? '#00C060' : '#FFA500';
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="7.5" fill={c1} fillOpacity="0.9" />
+      <circle cx="8" cy="8" r="5.5" fill={c2} fillOpacity="0.6" />
+      <circle cx="8" cy="8" r="3.5" fill={c1} />
+      <circle cx="6" cy="6" r="1.2" fill="white" fillOpacity="0.35" />
+    </svg>
+  );
+};
 
 const PointsDisplay: React.FC<{ points: number; size?: 'sm' | 'md' | 'lg'; isMe?: boolean }> = ({
   points, size = 'md', isMe = false,
 }) => {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const fontSize = size === 'lg' ? 20 : size === 'md' ? 15 : 13;
   const coinSize = size === 'lg' ? 15 : size === 'md' ? 13 : 11;
   return (
@@ -216,12 +230,12 @@ const PointsDisplay: React.FC<{ points: number; size?: 'sm' | 'md' | 'lg'; isMe?
         fontFamily: 'system-ui, -apple-system, sans-serif',
         fontWeight: 700,
         fontSize,
-        color: isMe ? '#00E87A' : '#FFD700',
+        color: isLight ? '#00B86B' : (isMe ? '#00E87A' : '#FFD700'),
         letterSpacing: '-0.01em',
       }}>
         {points}
       </span>
-      <span style={{ fontSize: fontSize * 0.7, color: 'rgba(255,255,255,0.35)', fontWeight: 500 }}>pts</span>
+      <span style={{ fontSize: fontSize * 0.7, color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)', fontWeight: 500 }}>pts</span>
     </span>
   );
 };
@@ -237,6 +251,8 @@ interface JoinedViewProps {
 }
 
 const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error, onRetry }) => {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const [showMore, setShowMore] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const now = new Date();
@@ -287,7 +303,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
           borderRadius: '50%',
           background: rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : '#CD7F32',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '2px solid #000',
+          border: isLight ? '2px solid #F2F2F7' : '2px solid #000',
           boxShadow: rank === 1 ? '0 0 10px rgba(255,215,0,0.5)' : 'none',
         }}>
           <span style={{
@@ -312,7 +328,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#040404',
+      background: isLight ? '#F2F2F7' : '#040404',
       paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)',
       paddingBottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))',
       overflowY: 'auto',
@@ -322,28 +338,28 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
       <div style={{
         margin: 'calc(env(safe-area-inset-top, 0px) + 12px) 16px 16px',
         borderRadius: '14px', padding: '10px 14px',
-        background: 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(10,10,10,0.95))',
-        border: '1px solid rgba(255,215,0,0.15)',
+        background: isLight ? 'linear-gradient(135deg, rgba(0,232,122,0.08), #FFFFFF)' : 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(10,10,10,0.95))',
+        border: `1px solid ${isLight ? 'rgba(0,232,122,0.25)' : 'rgba(255,215,0,0.15)'}`,
         display: 'flex', alignItems: 'center', gap: '10px',
       }}>
-        <TrophySVG size={18} color="#FFD700" />
+        <TrophySVG size={18} color={isLight ? '#00E87A' : '#FFD700'} />
         <div style={{ flex: 1 }}>
           <span style={{
             fontFamily: 'system-ui, -apple-system, sans-serif',
             fontWeight: 700, fontSize: '14px',
-            color: '#FFD700', letterSpacing: '0.02em',
+            color: isLight ? '#00B86B' : '#FFD700', letterSpacing: '0.02em',
           }}>Hardy Board</span>
-          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '12px', marginLeft: '8px' }}>
+          <span style={{ color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.3)', fontSize: '12px', marginLeft: '8px' }}>
             {monthLabel}
           </span>
         </div>
         <button onClick={() => setShowInfo(true)} style={{
           width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
-          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+          background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
         }}>
-          <Info size={15} color="rgba(255,255,255,0.5)" />
+          <Info size={15} color={isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.5)'} />
         </button>
       </div>
 
@@ -356,56 +372,56 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
         }} onClick={() => setShowInfo(false)}>
           <div style={{
             width: '100%', maxWidth: '360px',
-            background: 'linear-gradient(145deg, #0D0D0D, #0A0A0A)',
-            border: '1px solid rgba(255,215,0,0.2)',
+            background: isLight ? '#FFFFFF' : 'linear-gradient(145deg, #0D0D0D, #0A0A0A)',
+            border: `1px solid ${isLight ? 'rgba(0,232,122,0.25)' : 'rgba(255,215,0,0.2)'}`,
             borderRadius: '24px', padding: '24px',
-            boxShadow: '0 0 60px rgba(255,215,0,0.08), 0 24px 48px rgba(0,0,0,0.6)',
+            boxShadow: isLight ? '0 0 60px rgba(0,232,122,0.08), 0 24px 48px rgba(0,0,0,0.1)' : '0 0 60px rgba(255,215,0,0.08), 0 24px 48px rgba(0,0,0,0.6)',
           }} onClick={(e) => e.stopPropagation()}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-              <TrophySVG size={16} color="#FFD700" />
+              <TrophySVG size={16} color={isLight ? '#00E87A' : '#FFD700'} />
               <span style={{
                 fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '12px',
-                color: '#FFD700', letterSpacing: '0.1em', textTransform: 'uppercase', flex: 1,
+                color: isLight ? '#00B86B' : '#FFD700', letterSpacing: '0.1em', textTransform: 'uppercase', flex: 1,
               }}>What is Hardy Board?</span>
               <button onClick={() => setShowInfo(false)} style={{
                 width: '28px', height: '28px', borderRadius: '50%',
-                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                background: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.06)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
               }}>
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '16px', lineHeight: 1 }}>×</span>
+                <span style={{ color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.5)', fontSize: '16px', lineHeight: 1 }}>×</span>
               </button>
             </div>
-            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '13px', lineHeight: 1.6, margin: '0 0 16px' }}>
-              Hardy Board is a <span style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>monthly habit competition</span> for Pro warriors.
+            <p style={{ color: isLight ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.55)', fontSize: '13px', lineHeight: 1.6, margin: '0 0 16px' }}>
+              Hardy Board is a <span style={{ color: isLight ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.85)', fontWeight: 600 }}>monthly habit competition</span> for Pro warriors.
               Complete your daily habits, earn points, and climb the ranks.
               The most consistent warrior wins — <span style={{ color: '#00E87A', fontWeight: 600 }}>stay hard, stay on top.</span>
             </p>
             {/* How Points Work */}
             <div style={{
               borderRadius: '14px', padding: '14px',
-              background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.1)',
+              background: isLight ? 'rgba(0,232,122,0.05)' : 'rgba(255,215,0,0.05)', border: `1px solid ${isLight ? 'rgba(0,232,122,0.15)' : 'rgba(255,215,0,0.1)'}`,
               marginBottom: '12px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                <Zap size={12} color="#FFD700" fill="#FFD700" />
+                <Zap size={12} color={isLight ? '#00E87A' : '#FFD700'} fill={isLight ? '#00E87A' : '#FFD700'} />
                 <span style={{
                   fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '10px',
-                  color: '#FFD700', letterSpacing: '0.1em', textTransform: 'uppercase',
+                  color: isLight ? '#00B86B' : '#FFD700', letterSpacing: '0.1em', textTransform: 'uppercase',
                 }}>How Points Work</span>
               </div>
               {[
                 { pct: '100%', pts: '10 pts', color: '#00E87A', fill: 1 },
-                { pct: '50%',  pts: '5 pts',  color: '#FFD700', fill: 0.5 },
+                { pct: '50%',  pts: '5 pts',  color: isLight ? '#00E87A' : '#FFD700', fill: 0.5 },
                 { pct: '0%',   pts: '0 pts',  color: 'rgba(255,255,255,0.25)', fill: 0.05 },
               ].map(({ pct, pts, color, fill }, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: i < 2 ? '8px' : 0 }}>
                   <div style={{ width: '32px', height: '4px', borderRadius: '3px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden', flexShrink: 0 }}>
                     <div style={{ width: `${fill * 100}%`, height: '100%', background: color, borderRadius: '3px' }} />
                   </div>
-                  <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', flex: 1 }}>
-                    Complete <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{pct}</span> of habits
+                  <span style={{ color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)', fontSize: '11px', flex: 1 }}>
+                    Complete <span style={{ color: isLight ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{pct}</span> of habits
                   </span>
                   <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '11px', color }}>{pts}</span>
                 </div>
@@ -415,15 +431,15 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
             <div style={{ display: 'flex', gap: '8px' }}>
               <div style={{ flex: 1, padding: '8px', borderRadius: '10px', background: 'rgba(0,232,122,0.06)', border: '1px solid rgba(0,232,122,0.15)', textAlign: 'center' }}>
                 <p style={{ color: '#00E87A', fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '13px', margin: 0 }}>10</p>
-                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', margin: '2px 0 0' }}>max pts/day</p>
+                <p style={{ color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)', fontSize: '10px', margin: '2px 0 0' }}>max pts/day</p>
               </div>
               <div style={{ flex: 1, padding: '8px', borderRadius: '10px', background: 'rgba(126,179,255,0.06)', border: '1px solid rgba(126,179,255,0.15)', textAlign: 'center' }}>
                 <p style={{ color: '#7EB3FF', fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '13px', margin: 0 }}>↺</p>
-                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', margin: '2px 0 0' }}>monthly reset</p>
+                <p style={{ color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)', fontSize: '10px', margin: '2px 0 0' }}>monthly reset</p>
               </div>
-              <div style={{ flex: 1, padding: '8px', borderRadius: '10px', background: 'rgba(255,215,0,0.06)', border: '1px solid rgba(255,215,0,0.15)', textAlign: 'center' }}>
-                <p style={{ color: '#FFD700', fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '13px', margin: 0 }}>Pro</p>
-                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '10px', margin: '2px 0 0' }}>members only</p>
+              <div style={{ flex: 1, padding: '8px', borderRadius: '10px', background: isLight ? 'rgba(0,232,122,0.06)' : 'rgba(255,215,0,0.06)', border: `1px solid ${isLight ? 'rgba(0,232,122,0.2)' : 'rgba(255,215,0,0.15)'}`, textAlign: 'center' }}>
+                <p style={{ color: isLight ? '#00B86B' : '#FFD700', fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '13px', margin: 0 }}>Pro</p>
+                <p style={{ color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.35)', fontSize: '10px', margin: '2px 0 0' }}>members only</p>
               </div>
             </div>
           </div>
@@ -457,11 +473,11 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
       {/* Empty state */}
       {!loading && !error && entries.length === 0 && (
         <div style={{ padding: '60px 20px', textAlign: 'center' }}>
-          <TrophySVG size={52} color="#FFD700" />
-          <p style={{ color: '#FFD700', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '18px', marginTop: '16px', marginBottom: '8px' }}>
+          <TrophySVG size={52} color={isLight ? '#00E87A' : '#FFD700'} />
+          <p style={{ color: isLight ? '#00B86B' : '#FFD700', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '18px', marginTop: '16px', marginBottom: '8px' }}>
             Be the first warrior!
           </p>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '13px' }}>No one on the board yet. Lead the charge!</p>
+          <p style={{ color: isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)', fontSize: '13px' }}>No one on the board yet. Lead the charge!</p>
         </div>
       )}
 
@@ -470,7 +486,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
           {/* ── TOP 3 PODIUM ── */}
           <div style={{
             padding: '0 16px 4px',
-            background: 'linear-gradient(180deg, rgba(255,215,0,0.05) 0%, transparent 100%)',
+            background: isLight ? 'linear-gradient(180deg, rgba(0,232,122,0.08) 0%, transparent 100%)' : 'linear-gradient(180deg, rgba(255,215,0,0.05) 0%, transparent 100%)',
           }}>
             {/* Rank 1 — center, elevated, fire animated */}
             {rank1 && (
@@ -486,13 +502,13 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
                   animation: 'fireGlow 2s ease-in-out infinite',
                   pointerEvents: 'none',
                 }} />
-                <CrownSVG size={30} color="#FFD700" />
+                <CrownSVG size={30} color={isLight ? '#00E87A' : '#FFD700'} />
                 <div style={{ marginTop: '4px' }}>
                   <PodiumAvatar entry={rank1} rank={1} avatarSize={90} />
                 </div>
                 <p style={{
                   fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: '16px',
-                  color: '#FFFFFF', margin: '12px 0 4px', textAlign: 'center',
+                  color: isLight ? '#0A0A0A' : '#FFFFFF', margin: '12px 0 4px', textAlign: 'center',
                   maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
                   {rank1.user_id === userId ? 'You' : rank1.display_name}
@@ -511,8 +527,8 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
                   <div key={entry.user_id} style={{
                     flex: 1, borderRadius: '18px', padding: '14px 12px',
                     background: rank === 2
-                      ? 'linear-gradient(145deg, rgba(192,192,192,0.08), rgba(10,10,10,0.9))'
-                      : 'linear-gradient(145deg, rgba(205,127,50,0.08), rgba(10,10,10,0.9))',
+                      ? (isLight ? 'linear-gradient(145deg, rgba(192,192,192,0.12), #FFFFFF)' : 'linear-gradient(145deg, rgba(192,192,192,0.08), rgba(10,10,10,0.9))')
+                      : (isLight ? 'linear-gradient(145deg, rgba(205,127,50,0.12), #FFFFFF)' : 'linear-gradient(145deg, rgba(205,127,50,0.08), rgba(10,10,10,0.9))'),
                     border: rank === 2
                       ? '1px solid rgba(192,192,192,0.18)'
                       : '1px solid rgba(205,127,50,0.18)',
@@ -521,7 +537,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
                     <PodiumAvatar entry={entry} rank={rank} avatarSize={64} />
                     <p style={{
                       fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '13px',
-                      color: '#FFFFFF', margin: '6px 0 0', textAlign: 'center',
+                      color: isLight ? '#0A0A0A' : '#FFFFFF', margin: '6px 0 0', textAlign: 'center',
                       maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {isMe ? 'You' : entry.display_name}
@@ -539,7 +555,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
               borderRadius: '16px',
               background: myEntry
                 ? 'linear-gradient(90deg, rgba(0,232,122,0.15) 0%, rgba(0,232,122,0.04) 100%)'
-                : 'rgba(255,255,255,0.04)',
+                : (isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)'),
               border: '1px solid rgba(0,232,122,0.22)',
               padding: '13px 16px',
               display: 'flex', alignItems: 'center', gap: '12px',
@@ -551,7 +567,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
                     <p style={{ color: '#00E87A', fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', margin: 0 }}>
                       YOUR RANK
                     </p>
-                    <p style={{ color: '#FFFFFF', fontSize: '13px', fontWeight: 600, margin: '2px 0 0' }}>
+                    <p style={{ color: isLight ? '#0A0A0A' : '#FFFFFF', fontSize: '13px', fontWeight: 600, margin: '2px 0 0' }}>
                       {myEntry.display_name}
                     </p>
                   </div>
@@ -566,7 +582,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
                   </div>
                 </>
               ) : (
-                <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', textAlign: 'center', flex: 1 }}>
+                <p style={{ color: isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.35)', fontSize: '12px', textAlign: 'center', flex: 1 }}>
                   No habits logged yet this month
                 </p>
               )}
@@ -577,7 +593,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
           {top10rest.length > 0 && (
             <div style={{ padding: '16px 16px 0' }}>
               <p style={{
-                color: 'rgba(255,255,255,0.2)', fontSize: '9px', fontWeight: 700,
+                color: isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)', fontSize: '9px', fontWeight: 700,
                 letterSpacing: '0.2em', textTransform: 'uppercase', margin: '0 0 10px',
               }}>Top 10</p>
               {top10rest.map((entry) => {
@@ -587,23 +603,23 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
                     padding: '12px 14px', borderRadius: '16px', marginBottom: '8px',
                     background: isMe
                       ? 'linear-gradient(90deg, rgba(0,232,122,0.1), rgba(0,232,122,0.02))'
-                      : 'rgba(255,255,255,0.035)',
+                      : (isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.035)'),
                     border: isMe
                       ? '1px solid rgba(0,232,122,0.22)'
-                      : '1px solid rgba(255,255,255,0.06)',
+                      : `1px solid ${isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.06)'}`,
                     display: 'flex', alignItems: 'center', gap: '12px',
                   }}>
                     <span style={{
                       minWidth: '32px', textAlign: 'center',
                       display: 'inline-flex', alignItems: 'baseline', justifyContent: 'center', gap: '1px',
                     }}>
-                      <span style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: 500, fontSize: '10px', color: isMe ? '#00E87A' : 'rgba(255,255,255,0.25)', opacity: 0.8 }}>#</span>
-                      <span style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: 800, fontSize: '18px', color: isMe ? '#00E87A' : 'rgba(255,255,255,0.5)' }}>{entry.rank}</span>
+                      <span style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: 500, fontSize: '10px', color: isMe ? '#00E87A' : (isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)'), opacity: 0.8 }}>#</span>
+                      <span style={{ fontFamily: 'system-ui, -apple-system, sans-serif', fontWeight: 800, fontSize: '18px', color: isMe ? '#00E87A' : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)') }}>{entry.rank}</span>
                     </span>
                     <Avatar avatar_url={entry.avatar_url} display_name={entry.display_name} size={44} />
                     <span style={{
                       flex: 1, fontSize: '14px', fontWeight: isMe ? 700 : 500,
-                      color: isMe ? '#FFFFFF' : 'rgba(255,255,255,0.75)',
+                      color: isMe ? (isLight ? '#0A0A0A' : '#FFFFFF') : (isLight ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.75)'),
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {isMe ? 'You' : entry.display_name}
@@ -619,7 +635,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
           {beyond10.length > 0 && (
             <div style={{ padding: '16px 16px 0' }}>
               <p style={{
-                color: 'rgba(255,255,255,0.2)', fontSize: '9px', fontWeight: 700,
+                color: isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.2)', fontSize: '9px', fontWeight: 700,
                 letterSpacing: '0.2em', textTransform: 'uppercase', margin: '0 0 8px',
               }}>Rankings</p>
               {visibleBeyond.map((entry) => {
@@ -627,26 +643,26 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
                 return (
                   <div key={entry.user_id} style={{
                     padding: '8px 12px', borderRadius: '12px', marginBottom: '5px',
-                    background: isMe ? 'rgba(0,232,122,0.06)' : 'rgba(255,255,255,0.02)',
-                    border: isMe ? '1px solid rgba(0,232,122,0.15)' : '1px solid rgba(255,255,255,0.04)',
+                    background: isMe ? 'rgba(0,232,122,0.06)' : (isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.02)'),
+                    border: isMe ? '1px solid rgba(0,232,122,0.15)' : `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)'}`,
                     display: 'flex', alignItems: 'center', gap: '10px',
                   }}>
                     <span style={{
                       minWidth: '26px', textAlign: 'center',
                       fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '11px',
-                      color: isMe ? '#00E87A' : 'rgba(255,255,255,0.25)',
+                      color: isMe ? '#00E87A' : (isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.25)'),
                     }}>{entry.rank}</span>
                     <Avatar avatar_url={entry.avatar_url} display_name={entry.display_name} size={32} />
                     <span style={{
                       flex: 1, fontSize: '12px', fontWeight: isMe ? 600 : 400,
-                      color: isMe ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)',
+                      color: isMe ? (isLight ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.9)') : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)'),
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {isMe ? 'You' : entry.display_name}
                     </span>
                     <span style={{
                       fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '11px',
-                      color: isMe ? '#00E87A' : 'rgba(255,215,0,0.6)',
+                      color: isMe ? '#00E87A' : isLight ? '#00B86B' : 'rgba(255,215,0,0.6)',
                     }}>{entry.points}pts</span>
                   </div>
                 );
@@ -654,8 +670,8 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
               {beyond10.length > 20 && !showMore && (
                 <button onClick={() => setShowMore(true)} style={{
                   width: '100%', padding: '11px', borderRadius: '12px', marginTop: '4px',
-                  background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
-                  color: 'rgba(255,255,255,0.35)', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                  background: isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.07)'}`,
+                  color: isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.35)', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                 }}>
                   Show More ({beyond10.length - 20} more)
                 </button>
@@ -664,7 +680,7 @@ const JoinedView: React.FC<JoinedViewProps> = ({ userId, entries, loading, error
           )}
 
           <p style={{
-            textAlign: 'center', color: 'rgba(255,255,255,0.1)',
+            textAlign: 'center', color: isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.1)',
             fontSize: '10px', margin: '20px 16px 0',
           }}>
             Scores update when members visit Hardy Board

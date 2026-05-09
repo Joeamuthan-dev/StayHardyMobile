@@ -7,6 +7,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useLoading } from '../context/LoadingContext';
+import { useTheme } from '../context/ThemeContext';
+import { getTheme } from '../utils/theme';
 import { storage } from '../utils/storage';
 // import { canAccessStats and Routine } from '../lib/lifetimeAccess';
 import { supabase } from '../supabase';
@@ -31,8 +33,6 @@ type HomeRoutineRow = { id: string; title: string; days: string[] };
 import SupportModal from '../components/SupportModal';
 import {
   ensureFirstOpenDate,
-  shouldShowAutomaticSupportPopup,
-  markSupportPopupShown,
   isCompletedTaskToday,
 } from '../lib/supportPopup';
 
@@ -70,6 +70,8 @@ interface Goal {
 
 const HomeDashboard: React.FC = () => {
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
   const { language } = useLanguage();
   const _getTimeGreeting = () => {
     const hour = new Date().getHours();
@@ -155,7 +157,6 @@ const HomeDashboard: React.FC = () => {
   const [completedHabitsTodayFresh, setCompletedHabitsTodayFresh] = useState(0); void completedHabitsTodayFresh;
 
   const [showSupportModal, setShowSupportModal] = useState(false);
-  const [supportGateReady, setSupportGateReady] = useState(false);
   const [scoreData, setScoreData] = useState<ProductivityScoreData | null>(null);
   const [myLeaderboardRank, setMyLeaderboardRank] = useState<number | null>(null);
   const [rankDelta, setRankDelta] = useState<'up' | 'down' | 'same' | null>(null);
@@ -176,7 +177,6 @@ const HomeDashboard: React.FC = () => {
         await supabase.auth.getSession();
 
       if (!session) {
-        console.log('[Home] No session — redirecting to login');
 
         // Also check local storage
         const savedLogin =
@@ -196,8 +196,6 @@ const HomeDashboard: React.FC = () => {
     const { data: { subscription } } =
       supabase.auth.onAuthStateChange(
         (event, session) => {
-          console.log('[Home] Auth event:', event);
-
           if (event === 'SIGNED_OUT' || !session) {
             navigate('/login', { replace: true });
           }
@@ -446,7 +444,6 @@ const HomeDashboard: React.FC = () => {
 
   useEffect(() => {
     const handler = () => {
-      console.log('Home refreshing from global event...');
       void fetchPendingHabits();
       void fetchHabitActivityFresh();
       void fetchData();
@@ -505,7 +502,6 @@ const HomeDashboard: React.FC = () => {
       const lastCheck = localStorage.getItem('last_dashboard_reset_date');
       const today = new Date().toLocaleDateString();
       if (lastCheck && lastCheck !== today) {
-        console.log('Midnight detected. Resetting dashboard data.');
         fetchData();
       }
       localStorage.setItem('last_dashboard_reset_date', today);
@@ -688,46 +684,7 @@ const HomeDashboard: React.FC = () => {
     ensureFirstOpenDate();
   }, []);
 
-  useEffect(() => {
-    if (!user?.id) {
-      setSupportGateReady(false);
-      return;
-    }
-    setSupportGateReady(false);
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (cancelled) return;
-      const seen = !!data.user?.user_metadata?.has_seen_stay_hardy_intro;
-      if (!seen) {
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-      if (cancelled) return;
-      setSupportGateReady(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
 
-  useEffect(() => {
-    if (!user?.id || !supportGateReady) return;
-    const tasksToday = tasks.filter(
-      (t) => t.status === 'completed' && isCompletedTaskToday(t.updatedAt)
-    ).length;
-    if (
-      !shouldShowAutomaticSupportPopup({
-        tasksCompletedToday: tasksToday,
-        routineStreak: currentStreak,
-        goalCount: goals.length,
-      })
-    ) {
-      return;
-    }
-    markSupportPopupShown();
-    const t = window.setTimeout(() => setShowSupportModal(true), 1200);
-    return () => window.clearTimeout(t);
-  }, [user?.id, supportGateReady, tasks, goals.length, currentStreak]);
 
   const [habitRange, setHabitRange] = useState<7 | 30>(7);
 
@@ -775,7 +732,7 @@ const HomeDashboard: React.FC = () => {
   const pendingHabitsToday = pendingHabitsCount;
 
   return (
-    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: '#080C0A', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 72px)', paddingBottom: '140px', overflowY: 'auto' }}>
+    <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: tc.bgPage, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 72px)', paddingBottom: '140px', overflowY: 'auto' }}>
       <style>{`
         .light-card::before {
           content: '';
@@ -791,9 +748,11 @@ const HomeDashboard: React.FC = () => {
         margin: '0 16px 8px 16px',
         borderRadius: '28px',
         padding: '16px 20px',
-        background: 'linear-gradient(135deg, #0C1812 0%, #111F18 60%, #0A1510 100%)',
-        border: '1px solid rgba(0,232,122,0.12)',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+        background: theme === 'light'
+          ? 'linear-gradient(135deg, #E6F9EE 0%, #F0FAF4 60%, #E2F5EC 100%)'
+          : 'linear-gradient(135deg, #0C1812 0%, #111F18 60%, #0A1510 100%)',
+        border: theme === 'light' ? '1px solid rgba(0,200,83,0.20)' : '1px solid rgba(0,232,122,0.12)',
+        boxShadow: theme === 'light' ? '0 4px 24px rgba(0,168,70,0.10)' : '0 4px 24px rgba(0,0,0,0.4)',
         position: 'relative',
         minHeight: 'fit-content'
       }}>
@@ -804,7 +763,7 @@ const HomeDashboard: React.FC = () => {
           <span style={{
             fontSize: '28px',
             fontWeight: '900',
-            color: '#FFFFFF',
+            color: tc.text,
             lineHeight: 1.1,
           }}>
             Hello
@@ -852,7 +811,7 @@ const HomeDashboard: React.FC = () => {
           </span>
         </div>
 
-        <div style={{ fontSize: '22px', fontWeight: 700, color: '#FFFFFF', lineHeight: 1.3, marginBottom: '10px', letterSpacing: '-0.5px' }}>
+        <div style={{ fontSize: '22px', fontWeight: 700, color: tc.text, lineHeight: 1.3, marginBottom: '10px', letterSpacing: '-0.5px' }}>
           <span>
             {pendingHabitsToday > 0 ? (
               <>
@@ -889,20 +848,22 @@ const HomeDashboard: React.FC = () => {
       {/* SECTION 2 — PRODUCTIVITY SCORE CARD */}
       <section style={{
         margin: '0 16px 8px 16px',
-        background: 'linear-gradient(135deg, #0D0D0D 0%, #141414 100%)',
+        background: theme === 'light' ? '#FFFFFF' : 'linear-gradient(135deg, #0D0D0D 0%, #141414 100%)',
         borderRadius: '24px',
         padding: '14px 16px',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0,232,122,0.12), 0 2px 8px rgba(0,0,0,0.6)',
-        border: '1px solid rgba(0,232,122,0.18)'
+        boxShadow: theme === 'light'
+          ? '0 4px 16px rgba(0,168,70,0.10), 0 2px 8px rgba(0,0,0,0.06)'
+          : '0 8px 32px rgba(0,232,122,0.12), 0 2px 8px rgba(0,0,0,0.6)',
+        border: theme === 'light' ? '1px solid rgba(0,200,83,0.20)' : '1px solid rgba(0,232,122,0.18)'
       }}>
         {/* Top row: label + stats icon */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
           <span style={{
             fontSize: '13px',
             fontWeight: '600',
-            color: 'rgba(255,255,255,0.45)',
+            color: tc.textSecondary,
             fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
@@ -967,7 +928,7 @@ const HomeDashboard: React.FC = () => {
                     <line
                       key={i}
                       x1={x1} y1={y1} x2={x2} y2={y2}
-                      stroke={inFilled ? 'transparent' : 'rgba(255,255,255,0.18)'}
+                      stroke={inFilled ? 'transparent' : (theme === 'light' ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.18)')}
                       strokeWidth="2"
                       strokeLinecap="round"
                     />
@@ -990,7 +951,7 @@ const HomeDashboard: React.FC = () => {
                 <circle
                   cx={cx} cy={cy} r={r}
                   fill="none"
-                  stroke="rgba(255,255,255,0.15)"
+                  stroke={theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.15)'}
                   strokeWidth="3"
                   strokeLinecap="round"
                   strokeDasharray={circ}
@@ -1017,7 +978,7 @@ const HomeDashboard: React.FC = () => {
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Arial Black", sans-serif',
                     fontWeight: '900',
                     fontSize: '52px',
-                    color: '#FFFFFF',
+                    color: tc.text,
                     letterSpacing: '-2px',
                     lineHeight: '1',
                   }}>
@@ -1027,7 +988,7 @@ const HomeDashboard: React.FC = () => {
                     fontFamily: '-apple-system, BlinkMacSystemFont, "Helvetica Neue", "Arial Black", sans-serif',
                     fontWeight: '900',
                     fontSize: '20px',
-                    color: 'rgba(255,255,255,0.55)',
+                    color: tc.textSecondary,
                     lineHeight: '1',
                     marginTop: '8px',
                   }}>
@@ -1036,14 +997,14 @@ const HomeDashboard: React.FC = () => {
                 </div>
                 {animatedScore > 0 && scoreDelta !== null && (
                   <span style={{
-                    background: scoreDelta > 0 ? 'rgba(0,232,122,0.15)' : scoreDelta < 0 ? 'rgba(255,59,48,0.15)' : 'rgba(255,255,255,0.1)',
-                    color: scoreDelta > 0 ? '#00E87A' : scoreDelta < 0 ? '#FF3B30' : 'rgba(255,255,255,0.55)',
+                    background: scoreDelta > 0 ? 'rgba(0,232,122,0.15)' : scoreDelta < 0 ? 'rgba(255,59,48,0.15)' : (theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)'),
+                    color: scoreDelta > 0 ? '#00E87A' : scoreDelta < 0 ? '#FF3B30' : tc.textSecondary,
                     padding: '4px 10px',
                     borderRadius: '10px',
                     fontSize: '11px',
                     fontWeight: '700',
                     fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    border: `1px solid ${tc.border}`,
                   }}>
                     {scoreDelta > 0 ? `+${scoreDelta}%` : `${scoreDelta}%`}
                   </span>
@@ -1103,10 +1064,10 @@ const HomeDashboard: React.FC = () => {
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div>
-                    <div style={{ fontSize: '15px', fontWeight: '800', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', lineHeight: 1.2 }}>
+                    <div style={{ fontSize: '15px', fontWeight: '800', color: tc.text, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', lineHeight: 1.2 }}>
                       {activeGoalsCount === 0 ? 'Add Goal' : 'Goals'}
                     </div>
-                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', marginTop: '4px', fontWeight: 500 }}>
+                    <div style={{ fontSize: '11px', color: tc.textSecondary, marginTop: '4px', fontWeight: 500 }}>
                       {activeGoalsCount === 0 ? 'No goals yet' : `${activeGoalsCount} active`}
                     </div>
                   </div>
@@ -1119,10 +1080,12 @@ const HomeDashboard: React.FC = () => {
                 onClick={() => navigate('/dashboard')}
                 style={{
                   flex: 1,
-                  background: 'linear-gradient(135deg, rgba(196,255,60,0.18) 0%, rgba(150,220,0,0.10) 100%)',
+                  background: theme === 'light'
+                    ? 'linear-gradient(135deg, rgba(0,232,122,0.18) 0%, rgba(0,180,80,0.12) 100%)'
+                    : 'linear-gradient(135deg, rgba(196,255,60,0.18) 0%, rgba(150,220,0,0.10) 100%)',
                   borderRadius: '16px',
                   padding: '14px',
-                  border: '1px solid rgba(196,255,60,0.25)',
+                  border: theme === 'light' ? '1px solid rgba(0,232,122,0.25)' : '1px solid rgba(196,255,60,0.25)',
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
@@ -1133,14 +1096,14 @@ const HomeDashboard: React.FC = () => {
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <div>
-                    <div style={{ fontSize: '15px', fontWeight: '800', color: '#FFFFFF', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', lineHeight: 1.2 }}>
+                    <div style={{ fontSize: '15px', fontWeight: '800', color: tc.text, fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', lineHeight: 1.2 }}>
                       {pendingTasks.length === 0 ? 'Add Task' : 'Tasks'}
                     </div>
-                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', marginTop: '4px', fontWeight: 500 }}>
+                    <div style={{ fontSize: '11px', color: tc.textSecondary, marginTop: '4px', fontWeight: 500 }}>
                       {pendingTasks.length === 0 ? 'All clear!' : `${pendingTasks.length} tasks`}
                     </div>
                   </div>
-                  <MiniRing pct={tasksPct} color="#C4FF3C" />
+                  <MiniRing pct={tasksPct} color={theme === 'light' ? '#00E87A' : '#C4FF3C'} />
                 </div>
               </div>
             </div>
@@ -1161,7 +1124,7 @@ const HomeDashboard: React.FC = () => {
 
         // Return hex color interpolated from red→yellow→green based on ratio 0→1
         const barColor = (count: number): string => {
-          if (count === 0) return 'rgba(255,255,255,0.1)';
+          if (count === 0) return theme === 'light' ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.1)';
           const t = count / maxVal; // 0 to 1
           if (t < 0.5) {
             // red (#FF3B30) → yellow (#FFD60A)

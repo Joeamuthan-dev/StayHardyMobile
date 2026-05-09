@@ -217,7 +217,7 @@ const AdminDashboard: React.FC = () => {
   const [resetPinModal, setResetPinModal] = useState<{ show: boolean, userId: string, userName: string }>({ show: false, userId: '', userName: '' });
   const [deleteUserModal, setDeleteUserModal] = useState<{ show: boolean, userId: string, userName: string }>({ show: false, userId: '', userName: '' });
   const [newPinInput, setNewPinInput] = useState(['', '', '', '']);
-  const [timeRange, setTimeRange] = useState<7 | 30>(7);
+  const [timeRange, setTimeRange] = useState<7 | 30>(30);
   const [chartData, setChartData] = useState<any[]>([]);
   const [feedbackActiveFilter, setFeedbackActiveFilter] = useState<'all' | 'feature' | 'support' | 'pro'>('all');
   const [feedbackSortOrder, setFeedbackSortOrder] = useState<'newest' | 'oldest'>('newest');
@@ -376,7 +376,8 @@ const AdminDashboard: React.FC = () => {
     setTipsLoadErr('');
     setTipsLoading(true);
     try {
-      const { data, error, response } = await invokeEdgeFunctionWithUserJwt('admin-tips', {});
+      // Only show tips from public launch date onward
+      const { data, error, response } = await invokeEdgeFunctionWithUserJwt('admin-tips', { since: '2026-04-17T00:00:00.000Z' });
       if (error) {
         console.error('Admin tips Edge Function error:', error, { data, response });
         setTipsLoadErr(
@@ -451,30 +452,37 @@ const AdminDashboard: React.FC = () => {
       setProPrevWeek(proOverviewCacheRef.current.prevWeek);
       return proOverviewCacheRef.current.data;
     }
+    // Only count real purchases from public launch — excludes all pre-launch test users
+    const REVENUE_LIVE_DATE = '2026-04-20T00:00:00.000Z';
     const d30 = new Date();
     d30.setDate(d30.getDate() - 30);
     const d7 = new Date();
     d7.setDate(d7.getDate() - 7);
     const d14 = new Date();
     d14.setDate(d14.getDate() - 14);
+    // Rolling windows cannot go before launch date
+    const last30Start = new Date(Math.max(d30.getTime(), new Date(REVENUE_LIVE_DATE).getTime())).toISOString();
+    const last7Start = new Date(Math.max(d7.getTime(), new Date(REVENUE_LIVE_DATE).getTime())).toISOString();
+    const prevWeekStart = new Date(Math.max(d14.getTime(), new Date(REVENUE_LIVE_DATE).getTime())).toISOString();
+    const prevWeekEnd = new Date(Math.max(d7.getTime(), new Date(REVENUE_LIVE_DATE).getTime())).toISOString();
     const [totalR, last30R, last7R, prevWeekR] = await Promise.all([
-      supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_pro', true),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_pro', true).gte('pro_purchase_date', REVENUE_LIVE_DATE),
       supabase
         .from('users')
         .select('id', { count: 'exact', head: true })
         .eq('is_pro', true)
-        .gte('pro_purchase_date', d30.toISOString()),
+        .gte('pro_purchase_date', last30Start),
       supabase
         .from('users')
         .select('id', { count: 'exact', head: true })
         .eq('is_pro', true)
-        .gte('pro_purchase_date', d7.toISOString()),
+        .gte('pro_purchase_date', last7Start),
       supabase
         .from('users')
         .select('id', { count: 'exact', head: true })
         .eq('is_pro', true)
-        .gte('pro_purchase_date', d14.toISOString())
-        .lt('pro_purchase_date', d7.toISOString()),
+        .gte('pro_purchase_date', prevWeekStart)
+        .lt('pro_purchase_date', prevWeekEnd),
     ]);
     const data: ProMembershipCounts = {
       total: totalR.count ?? 0,
@@ -500,15 +508,22 @@ const AdminDashboard: React.FC = () => {
       return;
     }
 
+    // Only count real revenue from public launch date — excludes all pre-launch test purchases
+    const REVENUE_LIVE_DATE = '2026-04-20T00:00:00.000Z';
+
     const d30 = new Date();
     d30.setDate(d30.getDate() - 30);
+    // last-30 window still cannot go before launch
+    const last30Start = new Date(Math.max(d30.getTime(), new Date(REVENUE_LIVE_DATE).getTime())).toISOString();
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    // month start also cannot go before launch
+    const monthStart = new Date(Math.max(startOfMonth.getTime(), new Date(REVENUE_LIVE_DATE).getTime())).toISOString();
 
-    // Fetch all pro users with actual payment amounts
+    // Fetch only real (post-launch) pro purchases
     const [allProRows, pro30Rows, monthC] = await Promise.all([
-      supabase.from('users').select('payment_amount, pro_purchase_date').eq('is_pro', true),
-      supabase.from('users').select('payment_amount').eq('is_pro', true).gte('pro_purchase_date', d30.toISOString()),
-      supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_pro', true).gte('pro_purchase_date', startOfMonth.toISOString()),
+      supabase.from('users').select('payment_amount, pro_purchase_date').eq('is_pro', true).gte('pro_purchase_date', REVENUE_LIVE_DATE),
+      supabase.from('users').select('payment_amount').eq('is_pro', true).gte('pro_purchase_date', last30Start),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('is_pro', true).gte('pro_purchase_date', monthStart),
     ]);
 
     // Sum actual payment_amount — skip nulls (RevenueCat purchases without stored amount)
@@ -522,24 +537,25 @@ const AdminDashboard: React.FC = () => {
     };
     setRevenueSummary(summary);
 
-    // Transactions — show ALL pro members, not just Razorpay
+    // Transactions — only show post-launch purchases
     const { data: txRows } = await supabase
       .from('users')
       .select('id, name, email, payment_id, payment_amount, pro_purchase_date')
       .eq('is_pro', true)
       .not('pro_purchase_date', 'is', null)
+      .gte('pro_purchase_date', REVENUE_LIVE_DATE)
       .order('pro_purchase_date', { ascending: false })
       .limit(20);
 
     setRevenueTransactions(txRows ?? []);
 
-    // Bar chart — use actual payment_amount per day
+    // Bar chart — use actual payment_amount per day (post-launch only)
     const { data: dayRows } = await supabase
       .from('users')
       .select('pro_purchase_date, payment_amount')
       .eq('is_pro', true)
       .not('pro_purchase_date', 'is', null)
-      .gte('pro_purchase_date', d30.toISOString());
+      .gte('pro_purchase_date', last30Start);
 
     const barRows = (dayRows ?? []).map((r) => ({
       date: r.pro_purchase_date as string,
@@ -1643,7 +1659,7 @@ const AdminDashboard: React.FC = () => {
               {[
                 {
                   label: 'TOTAL REVENUE',
-                  sub: 'All time Pro lifetime',
+                  sub: 'Since launch (Apr 17, 2026)',
                   value: `₹${revenueSummary.totalRevenue.toLocaleString('en-IN')}`,
                   icon: 'payments',
                 },

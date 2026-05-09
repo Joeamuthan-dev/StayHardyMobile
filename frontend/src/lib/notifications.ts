@@ -23,8 +23,6 @@ export async function cancelRoutineReminder(): Promise<void> {
 }
 
 export async function scheduleRoutineReminder(time: string): Promise<void> {
-  console.log('=== SCHEDULING REMINDER ===');
-  console.log('Scheduling for time:', time);
   try {
     await cancelRoutineReminder();
   } catch {
@@ -32,15 +30,11 @@ export async function scheduleRoutineReminder(time: string): Promise<void> {
   }
 
   const [hours, minutes] = time.split(':').map(Number);
-  console.log('Hours:', hours, 'Minutes:', minutes);
   const scheduledDate = new Date();
   scheduledDate.setHours(Number.isFinite(hours) ? hours : 20, Number.isFinite(minutes) ? minutes : 0, 0, 0);
   if (scheduledDate <= new Date()) {
     scheduledDate.setDate(scheduledDate.getDate() + 1);
-    console.log('Time passed today, scheduling tomorrow');
   }
-  console.log('Scheduled for:', scheduledDate.toISOString());
-  console.log('Scheduling at:', scheduledDate.toString());
 
   await LocalNotifications.schedule({
     notifications: [
@@ -65,10 +59,6 @@ export async function scheduleRoutineReminder(time: string): Promise<void> {
     ],
   });
 
-  console.log('Notification scheduled ✅', scheduledDate.toString());
-  const { notifications: pending } = await LocalNotifications.getPending();
-  console.log('Pending count:', pending.length);
-  console.log('Pending notifications:', JSON.stringify(pending));
 }
 
 export function formatRoutineReminderTime(time: string): string {

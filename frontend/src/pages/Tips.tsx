@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const RAZORPAY_KEY = 'rzp_test_YourKeyHere'; // Replace with actual Razorpay key
 
 const PRESET_AMOUNTS = [10, 20, 50, 100, 200, 500];
 
@@ -37,7 +36,7 @@ const Tips: React.FC = () => {
 
     // Razorpay Checkout
     const options: any = {
-      key: RAZORPAY_KEY,
+      key: import.meta.env.VITE_RAZORPAY_KEY ?? '',
       amount: finalAmount * 100, // in paise
       currency: 'INR',
       name: 'StayHardy App',
@@ -45,8 +44,7 @@ const Tips: React.FC = () => {
       image: '/logo.png',
       theme: { color: '#10b981' },
       prefill: { name: '', email: '', contact: '' },
-      handler: (response: any) => {
-        console.log('Payment success', response);
+      handler: (_response: any) => {
         setLoading(false);
         navigate('/settings', { state: { tipSuccess: true } });
       },

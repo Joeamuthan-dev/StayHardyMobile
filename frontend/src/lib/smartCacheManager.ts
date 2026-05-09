@@ -108,7 +108,6 @@ export const CacheManager = {
       const lastReset = await storage.get(DAILY_RESET_KEY);
       const today = new Date().toDateString();
       if (lastReset !== today) {
-        console.log('Daily cache reset ✅');
         await CacheManager.clearAll();
         await storage.set(DAILY_RESET_KEY, today);
       }

@@ -206,8 +206,6 @@ const AppCore: React.FC = () => {
     // Listen for auth changes
     const { data: { subscription } } = 
       supabase.auth.onAuthStateChange((event) => {
-        console.log('[Auth] Event:', event);
-        
         // ONLY redirect on explicit sign out
         // NOT on initial load or token refresh
         if (event === 'SIGNED_OUT') {
@@ -263,7 +261,10 @@ const AppCore: React.FC = () => {
           <Route path="/auth/callback" element={<Navigate to="/login" replace />} />
           <Route path="/paywall" element={<Paywall />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
-          
+
+          {/* Public pages — accessible without login */}
+          <Route path="/welcome" element={<WhyStayHardy />} />
+
           {/* Protected Hubs */}
           <Route element={<ProtectedRoute />}>
             <Route path="/home" element={<HomeDashboard />} />
@@ -278,7 +279,6 @@ const AppCore: React.FC = () => {
             <Route path="/tips" element={<Tips />} />
             <Route path="/feedback" element={<Feedback />} />
             <Route path="/feedback-list" element={<FeedbackList />} />
-            <Route path="/welcome" element={<WhyStayHardy />} />
             <Route path="/leaderboard" element={<ProRoute><Leaderboard /></ProRoute>} />
             <Route path="/admin" element={<AdminRoute />} />
           </Route>

@@ -6,6 +6,8 @@ const localDateStr = (d: Date = new Date()) =>
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
+import { useTheme } from '../context/ThemeContext';
+import { getTheme } from '../utils/theme';
 import { useLanguage } from '../context/LanguageContext';
 import { isWeb } from '../utils/platform';
 import { supabase } from '../supabase';
@@ -172,8 +174,8 @@ const getCategoryColor = (category: string) => {
   return colors[category] || randoms[Math.floor(Math.random() * randoms.length)];
 };
 
-const getCategoryIcon = (category: string): React.ReactNode => {
-  const c = 'rgba(255,255,255,0.72)';
+const getCategoryIcon = (category: string, iconColor = 'rgba(255,255,255,0.72)'): React.ReactNode => {
+  const c = iconColor;
   switch (category) {
     case 'General':
       return (
@@ -468,19 +470,21 @@ const StreakCard = ({
 }) => {
   const days = ['MON', 'TUE', 'WED',
     'THU', 'FRI', 'SAT', 'SUN']
+  const { theme: scTheme } = useTheme();
+  const scTc = getTheme(scTheme);
 
   return (
     <div style={{
       margin: '0 16px 12px 16px',
-      background: '#0A0F0D',
+      background: scTheme === 'light' ? '#FFFFFF' : '#0A0F0D',
       border: '1px solid ' +
         'rgba(0,232,122,0.2)',
       borderRadius: '20px',
       padding: '16px',
-      boxShadow:
-        '0 0 20px rgba(0,0,0,0.5),' +
-        'inset 0 1px 0 ' +
-        'rgba(255,255,255,0.05)'
+      boxShadow: scTheme === 'light'
+        ? '0 2px 12px rgba(0,0,0,0.08)'
+        : '0 0 20px rgba(0,0,0,0.5),' +
+          'inset 0 1px 0 rgba(255,255,255,0.05)'
     }}>
 
       {/* Top row */}
@@ -536,7 +540,7 @@ const StreakCard = ({
           <p style={{
             fontSize: '18px',
             fontWeight: '900',
-            color: '#FFFFFF',
+            color: scTc.text,
             margin: '0 0 2px 0',
             letterSpacing: '-0.5px'
           }}>
@@ -544,7 +548,7 @@ const StreakCard = ({
           </p>
           <p style={{
             fontSize: '12px',
-            color: 'rgba(255,255,255,0.4)',
+            color: scTc.textSecondary,
             margin: 0
           }}>
             {streak === 0
@@ -608,13 +612,12 @@ const StreakCard = ({
                     '#00E87A,#00C563)'
                     : isToday
                       ? 'rgba(0,232,122,0.1)'
-                      : '#0A0F0D',
+                      : (scTheme === 'light' ? '#F0F0F0' : '#0A0F0D'),
                 border: isCompleted
                   ? 'none'
                   : isToday
                     ? '1.5px solid #00E87A'
-                    : '1px solid ' +
-                    'rgba(255,255,255,0.1)',
+                    : `1px solid ${scTc.border}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -655,7 +658,7 @@ const StreakCard = ({
                   ? '#00E87A'
                   : isToday
                     ? 'rgba(0,232,122,0.7)'
-                    : 'rgba(255,255,255,0.2)',
+                    : scTc.textTertiary,
                 letterSpacing: '0.04em'
               }}>
                 {day}
@@ -677,6 +680,8 @@ const HabitCard = ({
   isCompleted: boolean;
   onToggle: (id: string) => void;
 }) => {
+  const { theme: hcTheme } = useTheme();
+  const hcTc = getTheme(hcTheme);
 
   return (
     <div style={{
@@ -685,7 +690,7 @@ const HabitCard = ({
         ? 'linear-gradient(135deg,' +
         'rgba(0,230,118,0.12) 0%,' +
         'rgba(0,77,64,0.25) 100%)'
-        : '#121212',
+        : hcTc.surface,
       border: '1px solid ' +
         (isCompleted
           ? 'rgba(0,232,122,0.5)'
@@ -718,18 +723,17 @@ const HabitCard = ({
           borderRadius: '12px',
           background: isCompleted
             ? 'rgba(0,232,122,0.15)'
-            : 'rgba(255,255,255,0.05)',
+            : (hcTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)'),
           border: '1px solid ' +
             (isCompleted
               ? 'rgba(0,232,122,0.3)'
-              : 'rgba(255,255,255,0.08)'),
+              : hcTc.border),
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '18px'
         }}>
-          {getCategoryIcon(
-            habit.category)}
+          {getCategoryIcon(habit.category, hcTheme === 'light' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.72)')}
         </div>
 
         {/* Neumorphic checkmark
@@ -745,9 +749,9 @@ const HabitCard = ({
               ? 'linear-gradient(' +
               '135deg,' +
               '#00E87A,#00C563)'
-              : 'linear-gradient(' +
-              '145deg,' +
-              '#1a1a1a,#0d0d0d)',
+              : (hcTheme === 'light'
+                  ? 'linear-gradient(145deg,#F0F0F0,#E8E8E8)'
+                  : 'linear-gradient(145deg,#1a1a1a,#0d0d0d)'),
             boxShadow: isCompleted
               ? '0 0 16px ' +
               'rgba(0,232,122,0.6),' +
@@ -755,12 +759,9 @@ const HabitCard = ({
               'rgba(0,232,122,0.2),' +
               'inset 0 1px 0 ' +
               'rgba(255,255,255,0.2)'
-              : 'inset 3px 3px 8px ' +
-              'rgba(0,0,0,0.6),' +
-              'inset -2px -2px 6px ' +
-              'rgba(255,255,255,0.04),' +
-              '0 0 0 1px ' +
-              'rgba(0,232,122,0.2)',
+              : (hcTheme === 'light'
+                  ? 'inset 2px 2px 5px rgba(0,0,0,0.08),inset -1px -1px 3px rgba(255,255,255,0.9),0 0 0 1px rgba(0,232,122,0.2)'
+                  : 'inset 3px 3px 8px rgba(0,0,0,0.6),inset -2px -2px 6px rgba(255,255,255,0.04),0 0 0 1px rgba(0,232,122,0.2)'),
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -803,7 +804,7 @@ const HabitCard = ({
           fontWeight: '800',
           color: isCompleted
             ? '#00E87A'
-            : '#FFFFFF',
+            : hcTc.text,
           margin: '0 0 2px 0',
           letterSpacing: '-0.2px',
           transition: 'color 0.3s ease',
@@ -815,7 +816,7 @@ const HabitCard = ({
 
         <p style={{
           fontSize: '11px',
-          color: 'rgba(255,255,255,0.35)',
+          color: hcTc.textSecondary,
           margin: 0,
           fontWeight: '500'
         }}>
@@ -834,13 +835,14 @@ const HabitCard = ({
 
 const triggerGlobalRefresh = () => {
   window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
-  console.log('Global refresh triggered');
 };
 
 const Routine: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const { isPro } = useSubscription();
   const { setLoading: setGlobalLoading, setLoadingText } = useLoading();
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
   useLanguage();
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
   const [routines, setRoutines] = useState<RoutineData[]>([]);
@@ -873,16 +875,6 @@ const Routine: React.FC = () => {
 
   const [consistencyIntro, setConsistencyIntro] = useState(false);
 
-  console.log('=== ROUTINES PAGE RENDER ===');
-  console.log('User:', user?.id);
-  console.log('Auth loading:', authLoading);
-  console.log('Routines state:', routines);
-  console.log('Component mounted at:', new Date().toISOString());
-
-  useEffect(() => {
-    console.log('=== ROUTINES useEffect FIRED ===');
-    console.log('User in effect:', user?.id);
-  }, []);
 
 
 
@@ -941,7 +933,6 @@ const Routine: React.FC = () => {
   const fetchRoutinesAndLogs = useCallback(
     async (options?: { force?: boolean }) => {
       if (isTogglingRef.current) {
-        console.log('fetch blocked — toggle in progress');
         return;
       }
       if (authLoading) {
@@ -1044,7 +1035,6 @@ const Routine: React.FC = () => {
       const lastCheck = localStorage.getItem('last_routine_reset_date');
       const today = new Date().toLocaleDateString();
       if (lastCheck && lastCheck !== today) {
-        console.log('Midnight detected. Resetting daily routines UI.');
         fetchRoutinesAndLogs();
       }
       localStorage.setItem('last_routine_reset_date', today);
@@ -1369,7 +1359,7 @@ const Routine: React.FC = () => {
   return (
       <div className={`page-shell routine-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{
         minHeight: '100vh',
-        background: '#080C0A',
+        background: tc.bgPage,
         paddingBottom: '120px'
       }}>
         <div className="aurora-bg">
@@ -1381,10 +1371,10 @@ const Routine: React.FC = () => {
           position: 'sticky',
           top: 0,
           zIndex: 100,
-          background: 'rgba(8,12,10,0.85)',
+          background: theme === 'light' ? 'rgba(242,242,247,0.92)' : 'rgba(8,12,10,0.85)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '0.5px solid rgba(255,255,255,0.05)',
+          borderBottom: `0.5px solid ${tc.borderSubtle}`,
           paddingTop: 'env(safe-area-inset-top, 20px)'
         }}>
           {streakBannerMounted && (
@@ -1411,8 +1401,8 @@ const Routine: React.FC = () => {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px 8px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '900', color: '#FFFFFF', letterSpacing: '0.04em', margin: 0, textTransform: 'uppercase' }}>DAILY ACTIONS</h2>
-              <p style={{ fontSize: '11px', fontWeight: '600', color: 'rgba(255,255,255,0.3)', margin: 0 }}>{todayDoneCount}/{todayTotalCount}</p>
+              <h2 style={{ fontSize: '16px', fontWeight: '900', color: tc.text, letterSpacing: '0.04em', margin: 0, textTransform: 'uppercase' }}>DAILY ACTIONS</h2>
+              <p style={{ fontSize: '11px', fontWeight: '600', color: tc.textTertiary, margin: 0 }}>{todayDoneCount}/{todayTotalCount}</p>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               {isWeb && (
@@ -1435,10 +1425,10 @@ const Routine: React.FC = () => {
                   key={cat}
                   onClick={() => setFilterChip((cat === 'All' ? 'ALL' : cat.toUpperCase()) as RoutineFilterChip)}
                   style={{
-                    background: isSelected ? 'rgba(0,232,122,0.12)' : 'rgba(255,255,255,0.05)',
-                    border: isSelected ? '1px solid rgba(0,232,122,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                    background: isSelected ? 'rgba(0,232,122,0.12)' : (theme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)'),
+                    border: isSelected ? '1px solid rgba(0,232,122,0.3)' : `1px solid ${tc.border}`,
                     borderRadius: '20px', padding: '6px 14px', fontSize: '10px', fontWeight: 600,
-                    color: isSelected ? '#00E87A' : 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px'
+                    color: isSelected ? '#00E87A' : tc.textSecondary, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px'
                   }}
                 >
                   {getCategoryTabIcon(cat)}
@@ -1449,7 +1439,7 @@ const Routine: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }} className="bouncing-scroll">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }} className="bouncing-scroll habit-cards-container">
           {routines.length === 0 ? (
             <button type="button" className="routine-empty-tile" onClick={() => checkAndGate('habits', () => setShowModal(true))}>Add your first habit.</button>
           ) : orderedForToday.length === 0 ? (
@@ -1480,10 +1470,10 @@ const Routine: React.FC = () => {
               style={{
                 position: 'relative',
                 width: '100%',
-                background: 'rgba(5,5,5,0.97)',
+                background: theme === 'light' ? '#FFFFFF' : 'rgba(5,5,5,0.97)',
                 backdropFilter: 'blur(40px)',
                 WebkitBackdropFilter: 'blur(40px)',
-                borderRadius: '32px', // CHANGED
+                borderRadius: '32px',
                 border: '1px solid rgba(0,232,122,0.35)',
                 // borderBottom: 'none', // REMOVED
                 paddingBottom: '32px', // CHANGED
@@ -1492,14 +1482,14 @@ const Routine: React.FC = () => {
                 overflowY: 'auto'
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0 0' }}><div style={{ width: '40px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.15)' }} /></div>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0 0' }}><div style={{ width: '40px', height: '4px', borderRadius: '2px', background: theme === 'light' ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.15)' }} /></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 20px 20px' }}>
                 <div>
                   <p style={{ fontSize: '10px', fontWeight: '800', color: '#00E87A', letterSpacing: '0.15em', margin: '0 0 4px 0' }}>ACTIVATION SEQUENCE</p>
-                  <h2 style={{ fontSize: '22px', fontWeight: '900', color: '#FFFFFF', margin: 0, letterSpacing: '-0.5px' }}>New Habit</h2>
+                  <h2 style={{ fontSize: '22px', fontWeight: '900', color: tc.text, margin: 0, letterSpacing: '-0.5px' }}>New Habit</h2>
                 </div>
-                <div onClick={() => setShowModal(false)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round">
+                <div onClick={() => setShowModal(false)} style={{ width: '40px', height: '40px', borderRadius: '50%', background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)', border: `1px solid ${tc.border}`, backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke={tc.textSecondary} strokeWidth="2" strokeLinecap="round">
                     <line x1="1" y1="1" x2="13" y2="13" /><line x1="13" y1="1" x2="1" y2="13" />
                   </svg>
                 </div>
@@ -1511,15 +1501,15 @@ const Routine: React.FC = () => {
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round">
                       <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                     </svg>
-                    <label style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em' }}>HABIT NAME</label>
+                    <label style={{ fontSize: '10px', fontWeight: '800', color: tc.textSecondary, letterSpacing: '0.12em' }}>HABIT NAME</label>
                   </div>
                   <div style={{
                     borderRadius: '16px',
-                    background: 'linear-gradient(145deg,#080808,#0f0f0f)',
-                    border: `1px solid ${focusedField === 'name' ? 'rgba(0,232,122,0.6)' : 'rgba(255,255,255,0.08)'}`,
+                    background: theme === 'light' ? '#F5F5F5' : 'linear-gradient(145deg,#080808,#0f0f0f)',
+                    border: `1px solid ${focusedField === 'name' ? 'rgba(0,232,122,0.6)' : tc.inputBorder}`,
                     boxShadow: focusedField === 'name'
-                      ? '0 0 0 1px rgba(0,232,122,0.3), 0 0 20px rgba(0,232,122,0.15), inset 3px 3px 8px rgba(0,0,0,0.6)'
-                      : 'inset 3px 3px 8px rgba(0,0,0,0.6), inset -1px -1px 4px rgba(255,255,255,0.02)',
+                      ? '0 0 0 1px rgba(0,232,122,0.3), 0 0 20px rgba(0,232,122,0.15)'
+                      : (theme === 'light' ? 'none' : 'inset 3px 3px 8px rgba(0,0,0,0.6), inset -1px -1px 4px rgba(255,255,255,0.02)'),
                     transition: 'all 0.2s ease'
                   }}>
                     <input
@@ -1529,7 +1519,7 @@ const Routine: React.FC = () => {
                       onChange={e => setTitle(e.target.value)}
                       onFocus={() => { setFocusedField('name'); setShowSuggestions(true); }}
                       onBlur={() => { setFocusedField(''); setTimeout(() => setShowSuggestions(false), 200); }}
-                      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '15px', fontWeight: '600', color: '#FFFFFF', caretColor: '#00E87A', boxSizing: 'border-box' }}
+                      style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 16px', fontSize: '15px', fontWeight: '600', color: tc.text, caretColor: '#00E87A', boxSizing: 'border-box' }}
                     />
                   </div>
                 </div>
@@ -1537,7 +1527,7 @@ const Routine: React.FC = () => {
                 {/* Smart Habit Finder — shown only when input is focused */}
                 {showSuggestions && (
                 <div onMouseDown={e => e.preventDefault()}>
-                  <p style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.12em', margin: '0 0 10px 0' }}>⚡ SUGGESTIONS</p>
+                  <p style={{ fontSize: '10px', fontWeight: '800', color: tc.textSecondary, letterSpacing: '0.12em', margin: '0 0 10px 0' }}>⚡ SUGGESTIONS</p>
 
                   <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                     {Object.keys(HABIT_SUGGESTION_CATEGORIES).map(cat => {
@@ -1550,8 +1540,8 @@ const Routine: React.FC = () => {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '6px',
-                            background: isSelected ? 'rgba(0,232,122,0.12)' : 'rgba(255,255,255,0.04)',
-                            border: '1px solid ' + (isSelected ? 'rgba(0,232,122,0.5)' : 'rgba(255,255,255,0.1)'),
+                            background: isSelected ? 'rgba(0,232,122,0.12)' : (theme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)'),
+                            border: '1px solid ' + (isSelected ? 'rgba(0,232,122,0.5)' : tc.border),
                             borderRadius: '20px',
                             padding: '8px 14px',
                             cursor: 'pointer',
@@ -1562,7 +1552,7 @@ const Routine: React.FC = () => {
                           }}
                         >
                           <span style={{ fontSize: '14px' }}>{HABIT_SUGGESTION_CATEGORIES[cat].emoji}</span>
-                          <span style={{ fontSize: '12px', fontWeight: '700', color: isSelected ? '#00E87A' : 'rgba(255,255,255,0.6)' }}>{cat}</span>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: isSelected ? '#00E87A' : tc.textSecondary }}>{cat}</span>
                         </div>
                       );
                     })}
@@ -1586,7 +1576,7 @@ const Routine: React.FC = () => {
                             cursor: 'pointer',
                             fontSize: '12px',
                             fontWeight: '600',
-                            color: 'rgba(255,255,255,0.75)',
+                            color: tc.text,
                             transition: 'all 0.15s ease',
                             whiteSpace: 'nowrap'
                           }}
@@ -1611,8 +1601,8 @@ const Routine: React.FC = () => {
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00E87A" strokeWidth="2" strokeLinecap="round">
                       <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
                     </svg>
-                    <label style={{ fontSize: '10px', fontWeight: '800', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.12em' }}>REPEAT ON</label>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', marginLeft: 'auto' }}>{selectedDays.length} days selected</span>
+                    <label style={{ fontSize: '10px', fontWeight: '800', color: tc.textSecondary, letterSpacing: '0.12em' }}>REPEAT ON</label>
+                    <span style={{ fontSize: '10px', color: tc.textTertiary, marginLeft: 'auto' }}>{selectedDays.length} days selected</span>
                   </div>
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
                     <div style={{ position: 'absolute', top: '20px', left: '20px', right: '20px', height: '1px', background: 'linear-gradient(90deg, rgba(0,232,122,0.15), rgba(0,232,122,0.05))', zIndex: 0 }} />
@@ -1621,8 +1611,8 @@ const Routine: React.FC = () => {
                       const label = ['M', 'T', 'W', 'T', 'F', 'S', 'S'][i];
                       return (
                         <div key={i} onClick={() => setSelectedDays(prev => prev.includes(day) ? prev.filter(x => x !== day) : [...prev, day])} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', position: 'relative', zIndex: 1, cursor: 'pointer' }}>
-                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: isSelected ? 'linear-gradient(135deg, #00E87A, #00C563)' : 'linear-gradient(145deg, #0d0d0d, #151515)', border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isSelected ? '0 0 16px rgba(0,232,122,0.7), 0 0 32px rgba(0,232,122,0.3), inset 0 1px 0 rgba(255,255,255,0.2)' : 'inset 3px 3px 6px rgba(0,0,0,0.6), inset -1px -1px 3px rgba(255,255,255,0.02)', transition: 'all 0.25s ease', animation: isSelected ? 'dayGlow 2s ease-in-out infinite' : 'none' }}>
-                            <span style={{ fontSize: '11px', fontWeight: '900', color: isSelected ? '#000000' : 'rgba(255,255,255,0.25)' }}>{label}</span>
+                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: isSelected ? 'linear-gradient(135deg, #00E87A, #00C563)' : (theme === 'light' ? '#F0F0F0' : 'linear-gradient(145deg, #0d0d0d, #151515)'), border: isSelected ? 'none' : `1px solid ${tc.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: isSelected ? '0 0 16px rgba(0,232,122,0.7), 0 0 32px rgba(0,232,122,0.3)' : 'none', transition: 'all 0.25s ease', animation: isSelected ? 'dayGlow 2s ease-in-out infinite' : 'none' }}>
+                            <span style={{ fontSize: '11px', fontWeight: '900', color: isSelected ? '#000000' : tc.textSecondary }}>{label}</span>
                           </div>
                           <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: isSelected ? '#00E87A' : 'transparent', boxShadow: isSelected ? '0 0 6px rgba(0,232,122,0.8)' : 'none', transition: 'all 0.2s ease' }} />
                         </div>
@@ -1631,7 +1621,7 @@ const Routine: React.FC = () => {
                   </div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                     {[{ label: 'Every Day', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] }, { label: 'Weekdays', days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] }, { label: 'Weekends', days: ['Sat', 'Sun'] }].map((preset, i) => (
-                      <div key={i} onClick={() => setSelectedDays(preset.days)} style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '7px 4px', textAlign: 'center', cursor: 'pointer', fontSize: '10px', fontWeight: '700', color: 'rgba(255,255,255,0.4)', transition: 'all 0.2s ease' }}>{preset.label}</div>
+                      <div key={i} onClick={() => setSelectedDays(preset.days)} style={{ flex: 1, background: theme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)', border: `1px solid ${tc.border}`, borderRadius: '10px', padding: '7px 4px', textAlign: 'center', cursor: 'pointer', fontSize: '10px', fontWeight: '700', color: tc.textSecondary, transition: 'all 0.2s ease' }}>{preset.label}</div>
                     ))}
                   </div>
                 </div>
@@ -1675,7 +1665,7 @@ const Routine: React.FC = () => {
               style={{
                 position: 'relative',
                 width: '100%',
-                background: '#0D0D0D',
+                background: tc.surface,
                 borderRadius: '32px', // CHANGED
                 border: '1px solid #00E676', // CHANGED
                 paddingBottom: '24px', // CHANGED
@@ -1687,7 +1677,7 @@ const Routine: React.FC = () => {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0' }}>
-                <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.1)' }} />
+                <div style={{ width: '40px', height: '4px', borderRadius: '2px', background: theme === 'light' ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)' }} />
               </div>
 
               <div style={{
@@ -1696,16 +1686,16 @@ const Routine: React.FC = () => {
                 justifyContent: 'space-between',
                 alignItems: 'center'
               }}>
-                <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#FFFFFF', margin: 0 }}>Edit Habits</h3>
+                <h3 style={{ fontSize: '20px', fontWeight: '900', color: tc.text, margin: 0 }}>Edit Habits</h3>
                 <button
                   onClick={() => setShowAllModal(false)}
                   style={{
                     width: '32px',
                     height: '32px',
                     borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.06)',
+                    background: theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
                     border: 'none',
-                    color: 'white',
+                    color: tc.text,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1731,14 +1721,14 @@ const Routine: React.FC = () => {
                     <div
                       key={r.id}
                       style={{
-                        background: 'linear-gradient(145deg, #111411, #0d0f0d)',
+                        background: theme === 'light' ? '#F8F8F8' : 'linear-gradient(145deg, #111411, #0d0f0d)',
                         border: '1px solid rgba(0,232,122,0.15)',
                         borderRadius: '18px',
                         padding: '14px 16px',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '14px',
-                        boxShadow: 'inset 2px 2px 6px rgba(0,0,0,0.5), inset -1px -1px 3px rgba(255,255,255,0.03), 0 2px 8px rgba(0,0,0,0.4)',
+                        boxShadow: theme === 'light' ? '0 1px 4px rgba(0,0,0,0.08)' : 'inset 2px 2px 6px rgba(0,0,0,0.5), inset -1px -1px 3px rgba(255,255,255,0.03), 0 2px 8px rgba(0,0,0,0.4)',
                         transition: 'all 0.2s ease'
                       }}
                     >
@@ -1755,7 +1745,7 @@ const Routine: React.FC = () => {
                         fontSize: '18px',
                         flexShrink: 0
                       }}>
-                        {getCategoryIcon(r.category)}
+                        {getCategoryIcon(r.category, theme === 'light' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.72)')}
                       </div>
 
                       {/* Title + category */}
@@ -1764,7 +1754,7 @@ const Routine: React.FC = () => {
                           margin: 0,
                           fontSize: '14px',
                           fontWeight: '800',
-                          color: '#FFFFFF',
+                          color: tc.text,
                           letterSpacing: '-0.2px',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -1776,7 +1766,7 @@ const Routine: React.FC = () => {
                           margin: '2px 0 0 0',
                           fontSize: '10px',
                           fontWeight: '600',
-                          color: 'rgba(255,255,255,0.3)',
+                          color: tc.textTertiary,
                           letterSpacing: '0.04em',
                           textTransform: 'uppercase'
                         }}>
@@ -1799,7 +1789,7 @@ const Routine: React.FC = () => {
                           cursor: 'pointer',
                           flexShrink: 0,
                           transition: 'all 0.2s ease',
-                          boxShadow: 'inset 2px 2px 5px rgba(0,0,0,0.4)'
+                          boxShadow: theme === 'light' ? 'none' : 'inset 2px 2px 5px rgba(0,0,0,0.4)'
                         }}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -1821,16 +1811,16 @@ const Routine: React.FC = () => {
 
 
         <style>{`
-            .streak-glass-banner { position: relative; display: flex; align-items: center; gap: 0.75rem; padding: 1rem; border-radius: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); }
+            .streak-glass-banner { position: relative; display: flex; align-items: center; gap: 0.75rem; padding: 1rem; border-radius: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid ${theme === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}; backdrop-filter: blur(16px); }
             .streak-glass-banner__sparkle { color: #6ee7b7; font-size: 20px !important; }
             .streak-glass-banner__copy { flex: 1; }
-            .streak-glass-banner__head { margin: 0; font-size: 0.9rem; font-weight: 900; color: #fff; }
-            .streak-glass-banner__sub { margin: 0; font-size: 0.7rem; color: rgba(255,255,255,0.6); }
-            .streak-glass-banner__close { background: none; border: none; padding: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(255,255,255,0.4); transition: color 0.2s; }
-            .streak-glass-banner__close:hover { color: #fff; }
-            .routine-syncing { text-align: center; font-size: 13px; color: rgba(255,255,255,0.4); }
-            .routine-empty-tile { width: 100%; padding: 30px; border: 1px dashed rgba(255,255,255,0.1); background: rgba(255,255,255,0.02); color: rgba(255,255,255,0.4); border-radius: 16px; cursor: pointer; }
-            .routine-filter-empty { text-align: center; padding: 40px; color: rgba(255,255,255,0.3); font-size: 13px; }
+            .streak-glass-banner__head { margin: 0; font-size: 0.9rem; font-weight: 900; color: ${theme === 'light' ? '#0A0A0A' : '#fff'}; }
+            .streak-glass-banner__sub { margin: 0; font-size: 0.7rem; color: ${theme === 'light' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.6)'}; }
+            .streak-glass-banner__close { background: none; border: none; padding: 4px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: ${theme === 'light' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.4)'}; transition: color 0.2s; }
+            .streak-glass-banner__close:hover { color: ${theme === 'light' ? '#0A0A0A' : '#fff'}; }
+            .routine-syncing { text-align: center; font-size: 13px; color: ${theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)'}; }
+            .routine-empty-tile { width: 100%; padding: 30px; border: 1px dashed ${theme === 'light' ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)'}; background: ${theme === 'light' ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)'}; color: ${theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)'}; border-radius: 16px; cursor: pointer; }
+            .routine-filter-empty { text-align: center; padding: 40px; color: ${theme === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)'}; font-size: 13px; }
           `}</style>
       <ProGateModal open={gateOpen} resource={gateResource} onClose={closeGate} />
       </div>

@@ -1,8 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../context/ThemeContext';
 
 const WhyStayHardy: React.FC = () => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
 
   const onClose = () => {
     if (window.history.length > 1) {
@@ -16,12 +19,12 @@ const WhyStayHardy: React.FC = () => {
     <div style={{
       position: 'fixed',
       inset: 0,
-      background: '#000000',
+      background: isLight ? '#F2F2F7' : '#000000',
       display: 'flex',
       flexDirection: 'column',
       overflowX: 'hidden',
       overflowY: 'auto',
-      color: '#FFFFFF',
+      color: isLight ? '#0A0A0A' : '#FFFFFF',
       fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
 
@@ -39,14 +42,14 @@ const WhyStayHardy: React.FC = () => {
             width: '32px',
             height: '32px',
             borderRadius: '8px',
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+            border: isLight ? '1px solid rgba(0,0,0,0.1)' : '1px solid rgba(255,255,255,0.1)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
           }}>
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke={isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)'} strokeWidth="2" strokeLinecap="round">
             <line x1="1" y1="1" x2="9" y2="9"/>
             <line x1="9" y1="1" x2="1" y2="9"/>
           </svg>
@@ -56,11 +59,11 @@ const WhyStayHardy: React.FC = () => {
       {/* CARD 1 — WHY THIS APP */}
       <div style={{
         margin: '8px 16px 0 16px',
-        background: 'linear-gradient(135deg, rgba(0,232,122,0.07) 0%, rgba(0,100,60,0.05) 100%)',
+        background: isLight ? 'linear-gradient(135deg, rgba(0,232,122,0.10) 0%, rgba(0,100,60,0.06) 100%)' : 'linear-gradient(135deg, rgba(0,232,122,0.07) 0%, rgba(0,100,60,0.05) 100%)',
         border: '1px solid rgba(0,232,122,0.2)',
         borderRadius: '24px',
         padding: '24px 20px',
-        boxShadow: '0 0 24px rgba(0,232,122,0.06)'
+        boxShadow: isLight ? '0 0 24px rgba(0,232,122,0.08)' : '0 0 24px rgba(0,232,122,0.06)'
       }}>
         <p style={{
           fontSize: '10px',
@@ -71,11 +74,11 @@ const WhyStayHardy: React.FC = () => {
           fontFamily: 'monospace'
         }}>WHY STAY HARDY?</p>
 
-        <p style={{ fontSize: '15px', fontWeight: '800', color: '#FFFFFF', margin: '0 0 12px 0', lineHeight: 1.4, letterSpacing: '-0.2px' }}>
+        <p style={{ fontSize: '15px', fontWeight: '800', color: isLight ? '#0A0A0A' : '#FFFFFF', margin: '0 0 12px 0', lineHeight: 1.4, letterSpacing: '-0.2px' }}>
           Built for people who want to stay disciplined, consistent, and in control.
         </p>
 
-        <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', margin: '0 0 16px 0', lineHeight: 1.65 }}>
+        <p style={{ fontSize: '13px', color: isLight ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)', margin: '0 0 16px 0', lineHeight: 1.65 }}>
           Tracking productivity, habits, and routines shouldn't be complicated. Most apps are cluttered, overpriced, or lock your own data behind paywalls. StayHardy was built to fix exactly that.
         </p>
 
@@ -125,7 +128,7 @@ const WhyStayHardy: React.FC = () => {
           ].map((item, i) => (
             <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
               <div style={{ flexShrink: 0, marginTop: '1px', width: '16px', height: '16px' }}>{item.icon}</div>
-              <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)', margin: 0, lineHeight: 1.5, fontWeight: '500' }}>{item.text}</p>
+              <p style={{ fontSize: '12px', color: isLight ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.65)', margin: 0, lineHeight: 1.5, fontWeight: '500' }}>{item.text}</p>
             </div>
           ))}
         </div>
@@ -134,19 +137,19 @@ const WhyStayHardy: React.FC = () => {
       {/* CARD 2 — MEET THE CREATOR */}
       <div style={{
         margin: '12px 16px 40px 16px',
-        background: 'rgba(255,255,255,0.04)',
+        background: isLight ? '#FFFFFF' : 'rgba(255,255,255,0.04)',
         backdropFilter: 'blur(40px)',
         WebkitBackdropFilter: 'blur(40px)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        borderTop: '1px solid rgba(255,255,255,0.15)',
+        border: isLight ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(255,255,255,0.08)',
+        borderTop: isLight ? '1px solid rgba(0,0,0,0.12)' : '1px solid rgba(255,255,255,0.15)',
         borderRadius: '24px',
         padding: '24px 20px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+        boxShadow: isLight ? '0 8px 32px rgba(0,0,0,0.08)' : '0 8px 32px rgba(0,0,0,0.4)'
       }}>
         <p style={{
           fontSize: '10px',
           fontWeight: '900',
-          color: 'rgba(255,255,255,0.3)',
+          color: isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)',
           letterSpacing: '0.2em',
           margin: '0 0 16px 0',
           fontFamily: 'monospace'
@@ -174,7 +177,7 @@ const WhyStayHardy: React.FC = () => {
 
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-              <p style={{ fontSize: '18px', fontWeight: '900', color: '#FFFFFF', margin: 0 }}>Joe Amuthan</p>
+              <p style={{ fontSize: '18px', fontWeight: '900', color: isLight ? '#0A0A0A' : '#FFFFFF', margin: 0 }}>Joe Amuthan</p>
               {/* LinkedIn icon only */}
               <div
                 onClick={() => window.open('https://linkedin.com/in/joeamuthan', '_blank')}
@@ -197,13 +200,13 @@ const WhyStayHardy: React.FC = () => {
                 </svg>
               </div>
             </div>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: '500', margin: 0 }}>Full-Stack Developer & Product Builder</p>
+            <p style={{ fontSize: '11px', color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)', fontWeight: '500', margin: 0 }}>Sr. Software Engineer & Product Builder</p>
           </div>
         </div>
 
         <p style={{
           fontSize: '13px',
-          color: 'rgba(255,255,255,0.7)',
+          color: isLight ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.7)',
           margin: 0,
           lineHeight: 1.7,
           fontWeight: '400'

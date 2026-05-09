@@ -18,7 +18,6 @@ export class RevenueCatService {
   static async configure(userId?: string): Promise<void> {
     if (!Capacitor.isNativePlatform()) return;
     if (this.isConfigured) {
-      console.log(`${LOGTAG} Already configured.`);
       return;
     }
 
@@ -44,7 +43,6 @@ export class RevenueCatService {
       });
 
       this.isConfigured = true;
-      console.log(`${LOGTAG} App configured successfully ${userId ? `for user: ${userId}` : ''}`);
     } catch (e) {
       // CRITICAL: Catch and continue. Do not allow RevenueCat failures to block the Splash Screen removal.
       console.error(`${LOGTAG} Configuration failed (Non-blocking):`, e);

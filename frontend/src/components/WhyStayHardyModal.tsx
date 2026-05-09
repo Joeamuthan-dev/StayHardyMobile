@@ -45,27 +45,38 @@ const WhyStayHardyModal: React.FC<WhyStayHardyModalProps> = ({ isOpen, onClose }
 
   return (
     <div
-      className={`why-modal-overlay ${isOpen ? 'open' : ''}`}
       onClick={handleDismiss}
       style={{
-        transition: 'opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s',
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        background: 'rgba(0,0,0,0.75)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: isOpen ? 1 : 0,
+        pointerEvents: isOpen ? 'auto' : 'none',
+        transition: 'opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+        padding: '16px',
       }}
     >
       <div
-        className="why-modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{
           background: '#080C0A',
           width: '100%',
-          maxWidth: '500px',
-          height: '100%',
-          maxHeight: '100vh',
+          maxWidth: '480px',
+          maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
           position: 'relative',
           padding: 0,
           overflow: 'hidden',
-          borderRadius: 0,
+          borderRadius: '24px',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.6)',
+          transform: isOpen ? 'translateY(0) scale(1)' : 'translateY(24px) scale(0.97)',
+          transition: 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
         <style>{`

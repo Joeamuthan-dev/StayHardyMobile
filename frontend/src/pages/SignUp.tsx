@@ -117,11 +117,6 @@ export default function SignUp() {
         }
       });
 
-      console.log('[SignUp] Error:', JSON.stringify(authError));
-      console.log('[SignUp] User:', authData?.user?.id);
-      console.log('[SignUp] Identities:', JSON.stringify(authData?.user?.identities));
-      console.log('[SignUp] Confirmed at:', authData?.user?.email_confirmed_at);
-
       // ─── HANDLE ERRORS ────────────────────
       if (authError) {
         setIsLoading(false);
@@ -200,7 +195,6 @@ export default function SignUp() {
           created_at: new Date().toISOString(),
         }).then(({ error }) => {
           if (error) console.error('[SignUp] Profile insert failed:', error.message);
-          else console.log('[SignUp] Profile created ✅');
         })
       ).catch((hashErr: any) => {
         console.error('[SignUp] Hash error:', hashErr?.message);

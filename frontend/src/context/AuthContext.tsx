@@ -130,7 +130,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const initAuth = useCallback(async () => {
     try {
-      console.log('=== INIT SUPABASE SESSION ===');
       setLoading(true);
 
       // Fix for boot hang: 5s max wait for session

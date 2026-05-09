@@ -1,10 +1,12 @@
 // src/pages/Goals.tsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useProGate } from '../hooks/useProGate';
 import ProGateModal from '../components/ProGateModal';
 import { isWeb } from '../utils/platform';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
+import { useTheme } from '../context/ThemeContext';
+import { getTheme } from '../utils/theme';
 import { supabase } from '../supabase';
 import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired, invalidateUserStatsCache } from '../lib/cacheManager';
@@ -41,7 +43,7 @@ const motivationalQuotes = [
   "The only way to do great work is to love what you do."
 ];
 
-const GoalCard = ({
+const GoalCard = memo(({
   goal,
   onComplete,
   onDelete
@@ -50,6 +52,8 @@ const GoalCard = ({
   onComplete: (id: string) => void;
   onDelete: (id: string) => void;
 }) => {
+  const { theme: gcTheme } = useTheme();
+  const gcTc = getTheme(gcTheme);
 
   // Calculate days left:
   const daysLeft = goal.targetDate
@@ -98,13 +102,11 @@ const GoalCard = ({
       <div style={{
         position: 'absolute',
         inset: 0,
-        background: isOverdue
-          ? 'linear-gradient(135deg,' +
-            '#4E0000 0%,' +
-            '#2E0000 100%)'
-          : 'linear-gradient(135deg,' +
-            '#2E004E 0%,' +
-            '#1A002E 100%)',
+        background: gcTheme === 'light'
+          ? (isOverdue ? 'linear-gradient(135deg,#FFE8E8 0%,#FFD5D5 100%)' : 'linear-gradient(135deg,#EDE0FF 0%,#E0D0FF 100%)')
+          : (isOverdue
+            ? 'linear-gradient(135deg,#4E0000 0%,#2E0000 100%)'
+            : 'linear-gradient(135deg,#2E004E 0%,#1A002E 100%)'),
         backgroundSize: '200% 200%',
         animation: 'meshMove 6s ease infinite',
         willChange: 'background-position',
@@ -213,7 +215,7 @@ const GoalCard = ({
             <p style={{
               fontSize: '18px',
               fontWeight: '900',
-              color: '#FFFFFF',
+              color: gcTc.text,
               margin: 0,
               letterSpacing: '-0.3px',
               lineHeight: 1.2,
@@ -231,15 +233,15 @@ const GoalCard = ({
                 width: '32px',
                 height: '32px',
                 borderRadius: '50%',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                background: gcTheme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${gcTc.border}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer'
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={gcTc.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
               </svg>
@@ -285,7 +287,7 @@ const GoalCard = ({
             <span style={{
               fontSize: '10px',
               fontWeight: '700',
-              color: 'rgba(255,255,255,0.4)',
+              color: gcTc.textTertiary,
               letterSpacing: '0.1em'
             }}>
               MISSION PROGRESS
@@ -304,8 +306,7 @@ const GoalCard = ({
           {/* Thick glowing progress bar */}
           <div style={{
             height: '8px',
-            background:
-              'rgba(255,255,255,0.06)',
+            background: gcTheme === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)',
             borderRadius: '8px',
             overflow: 'hidden'
           }}>
@@ -342,18 +343,16 @@ const GoalCard = ({
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            background:
-              'rgba(255,255,255,0.08)',
+            background: gcTheme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
             backdropFilter: 'blur(10px)',
-            border: '1px solid ' +
-              'rgba(255,255,255,0.12)',
+            border: `1px solid ${gcTc.border}`,
             borderRadius: '12px',
             padding: '7px 12px'
           }}>
             <svg width="12" height="12"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="rgba(255,255,255,0.5)"
+              stroke={gcTc.textSecondary}
               strokeWidth="2"
               strokeLinecap="round">
               <rect x="3" y="4"
@@ -373,7 +372,7 @@ const GoalCard = ({
                 ? '#EF4444'
                 : isUrgent
                   ? '#F97316'
-                  : 'rgba(255,255,255,0.7)'
+                  : gcTc.textSecondary
             }}>
               {daysLeft === null
                 ? 'No deadline'
@@ -435,11 +434,10 @@ const GoalCard = ({
         {goal.description && (
           <p style={{
             fontSize: '12px',
-            color: 'rgba(255,255,255,0.35)',
+            color: gcTc.textTertiary,
             margin: '12px 0 0 0',
             lineHeight: 1.5,
-            borderTop: '1px solid ' +
-              'rgba(255,255,255,0.06)',
+            borderTop: `1px solid ${gcTc.borderSubtle}`,
             paddingTop: '12px'
           }}>
             {goal.description}
@@ -448,16 +446,17 @@ const GoalCard = ({
       </div>
     </div>
   )
-}
+});
 
 const triggerGlobalRefresh = () => {
   window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
-  console.log('Global refresh triggered');
 };
 
 const Goals: React.FC = () => {
   const { user } = useAuth();
   const { setLoading: setGlobalLoading, setLoadingText } = useLoading();
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
   // const navigate = useNavigate();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [name, setName] = useState('');
@@ -786,8 +785,8 @@ const Goals: React.FC = () => {
   };
 
   return (
-    <div className="page-shell goals-page-layout" style={{ 
-      background: '#000', 
+    <div className="page-shell goals-page-layout" style={{
+      background: tc.bgPage,
       minHeight: '100vh',
       position: 'relative',
       display: 'flex',
@@ -860,10 +859,10 @@ const Goals: React.FC = () => {
         position: 'sticky',
         top: 0,
         zIndex: 100,
-        background: 'rgba(0, 0, 0, 0.65)',
+        background: theme === 'light' ? 'rgba(242,242,247,0.92)' : 'rgba(0,0,0,0.65)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+        borderBottom: `1px solid ${tc.border}`
       }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <p style={{
@@ -879,7 +878,7 @@ const Goals: React.FC = () => {
           <h2 style={{
             fontSize: '28px',
             fontWeight: '900',
-            color: '#FFFFFF',
+            color: tc.text,
             margin: 0,
             letterSpacing: '-1px',
             lineHeight: 1
@@ -1071,8 +1070,8 @@ const Goals: React.FC = () => {
               <h2 style={{
                 fontSize: '28px',
                 fontWeight: '900',
-                color: '#FFFFFF',
-                margin: '0 0 8px 0', // 8px spacing from headline to subtitle
+                color: tc.text,
+                margin: '0 0 8px 0',
                 letterSpacing: '0.02em',
                 textTransform: 'uppercase',
                 fontFamily: 'system-ui, -apple-system, sans-serif'
@@ -1081,7 +1080,7 @@ const Goals: React.FC = () => {
               </h2>
               <p style={{
                 fontSize: '15px',
-                color: '#A0A0A0',
+                color: tc.textSecondary,
                 lineHeight: 1.6,
                 margin: '0 0 20px 0', // 20px spacing from subtitle to button
                 maxWidth: '280px',
@@ -1159,8 +1158,8 @@ const Goals: React.FC = () => {
           <div style={{
             width: '100%',
             maxWidth: '440px',
-            background: 'rgba(18,18,18,0.97)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            background: theme === 'light' ? '#FFFFFF' : 'rgba(18,18,18,0.97)',
+            border: `1px solid ${tc.border}`,
             borderRadius: '28px',
             padding: '32px 24px',
             animation: 'modalSlideUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)',
@@ -1189,27 +1188,27 @@ const Goals: React.FC = () => {
                 <h3 style={{
                   fontSize: '26px',
                   fontWeight: '900',
-                  color: '#FFF',
+                  color: tc.text,
                   margin: 0,
                   letterSpacing: '-1px'
                 }}>
                   Define Your Goal
                 </h3>
               </div>
-              <div 
+              <div
                 onClick={() => setShowModal(false)}
                 style={{
                   width: '40px',
                   height: '40px',
                   borderRadius: '14px',
-                  background: 'rgba(255,255,255,0.05)',
+                  background: theme === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer'
                 }}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={tc.textSecondary} strokeWidth="2.5" strokeLinecap="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </div>
@@ -1221,7 +1220,7 @@ const Goals: React.FC = () => {
                 <label style={{
                   fontSize: '10px',
                   fontWeight: '800',
-                  color: 'rgba(255,255,255,0.35)',
+                  color: tc.textTertiary,
                   letterSpacing: '0.15em',
                   display: 'block',
                   marginBottom: '8px'
@@ -1229,16 +1228,16 @@ const Goals: React.FC = () => {
                   GOAL TITLE
                 </label>
                 <div style={{
-                  background: '#1A1A1A',
+                  background: theme === 'light' ? '#F5F5F5' : '#1A1A1A',
                   borderRadius: '14px',
-                  border: '1px solid ' + (focusedField === 'name' ? '#7C4DFF' : 'rgba(255,255,255,0.07)'),
+                  border: '1px solid ' + (focusedField === 'name' ? '#7C4DFF' : tc.border),
                   boxShadow: focusedField === 'name' ? '0 0 12px rgba(124,77,255,0.2)' : 'none',
                   transition: 'all 0.25s ease',
                   display: 'flex',
                   alignItems: 'center',
                   paddingLeft: '14px'
                 }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={focusedField === 'name' ? '#7C4DFF' : 'rgba(255,255,255,0.25)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transition: 'stroke 0.25s ease' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={focusedField === 'name' ? '#7C4DFF' : tc.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transition: 'stroke 0.25s ease' }}>
                     <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="9"/>
                   </svg>
                   <input
@@ -1253,7 +1252,7 @@ const Goals: React.FC = () => {
                       background: 'transparent',
                       border: 'none',
                       padding: '14px 14px',
-                      color: '#FFF',
+                      color: tc.text,
                       fontSize: '16px',
                       fontWeight: '600',
                       outline: 'none',
@@ -1268,7 +1267,7 @@ const Goals: React.FC = () => {
                 <label style={{
                   fontSize: '10px',
                   fontWeight: '800',
-                  color: 'rgba(255,255,255,0.35)',
+                  color: tc.textTertiary,
                   letterSpacing: '0.15em',
                   display: 'block',
                   marginBottom: '8px'
@@ -1277,12 +1276,12 @@ const Goals: React.FC = () => {
                 </label>
                 <div
                   style={{
-                    background: '#1A1A1A',
+                    background: theme === 'light' ? '#F5F5F5' : '#1A1A1A',
                     borderRadius: '14px',
                     border: '1px solid ' + (
                       targetDate && new Date(targetDate) <= new Date()
                         ? '#FF3D00'
-                        : focusedField === 'date' ? '#00E87A' : 'rgba(255,255,255,0.07)'
+                        : focusedField === 'date' ? '#00E87A' : tc.border
                     ),
                     boxShadow: focusedField === 'date' ? '0 0 12px rgba(0,232,122,0.2)' : 'none',
                     transition: 'all 0.25s ease',
@@ -1318,7 +1317,7 @@ const Goals: React.FC = () => {
                     style={{
                       flex: 1,
                       padding: '14px 0',
-                      color: targetDate ? '#FFF' : 'rgba(255,255,255,0.3)',
+                      color: targetDate ? tc.text : tc.textTertiary,
                       fontSize: '16px',
                       fontWeight: '600',
                       pointerEvents: 'none',
@@ -1329,7 +1328,7 @@ const Goals: React.FC = () => {
                       ? new Date(targetDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                       : 'Select target date...'}
                   </span>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={targetDate ? '#00E87A' : 'rgba(255,255,255,0.25)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ pointerEvents: 'none', flexShrink: 0, transition: 'stroke 0.25s ease' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={targetDate ? '#00E87A' : tc.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ pointerEvents: 'none', flexShrink: 0, transition: 'stroke 0.25s ease' }}>
                     <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
                   </svg>
                 </div>
@@ -1351,7 +1350,7 @@ const Goals: React.FC = () => {
                 <label style={{
                   fontSize: '10px',
                   fontWeight: '800',
-                  color: 'rgba(255,255,255,0.35)',
+                  color: tc.textTertiary,
                   letterSpacing: '0.1em',
                   display: 'block',
                   marginBottom: '8px'
@@ -1359,9 +1358,9 @@ const Goals: React.FC = () => {
                   STRATEGY (OPTIONAL)
                 </label>
                 <div style={{
-                  background: '#1A1A1A',
+                  background: theme === 'light' ? '#F5F5F5' : '#1A1A1A',
                   borderRadius: '14px',
-                  border: '1px solid ' + (focusedField === 'desc' ? '#00E87A' : 'rgba(255,255,255,0.07)'),
+                  border: '1px solid ' + (focusedField === 'desc' ? '#00E87A' : tc.border),
                   boxShadow: focusedField === 'desc' ? '0 0 12px rgba(0,232,122,0.15)' : 'none',
                   transition: 'all 0.25s ease',
                   display: 'flex',
@@ -1369,7 +1368,7 @@ const Goals: React.FC = () => {
                   paddingLeft: '14px',
                   paddingTop: '14px'
                 }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={focusedField === 'desc' ? '#00E87A' : 'rgba(255,255,255,0.25)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginRight: '10px', transition: 'stroke 0.25s ease', marginTop: '2px' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={focusedField === 'desc' ? '#00E87A' : tc.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginRight: '10px', transition: 'stroke 0.25s ease', marginTop: '2px' }}>
                     <circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
                   </svg>
                   <textarea
@@ -1383,7 +1382,7 @@ const Goals: React.FC = () => {
                       background: 'transparent',
                       border: 'none',
                       padding: '0 14px 14px 0',
-                      color: '#FFF',
+                      color: tc.text,
                       fontSize: '15px',
                       minHeight: '90px',
                       outline: 'none',
@@ -1407,11 +1406,11 @@ const Goals: React.FC = () => {
                   width: '100%',
                   height: '58px',
                   background: (loading || !name.trim() || !targetDate || new Date(targetDate) <= new Date())
-                    ? 'rgba(255,255,255,0.05)'
+                    ? (theme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)')
                     : '#00E87A',
                   borderRadius: '18px',
                   border: 'none',
-                  color: (loading || !name.trim() || !targetDate || new Date(targetDate) <= new Date()) ? 'rgba(255,255,255,0.2)' : '#000',
+                  color: (loading || !name.trim() || !targetDate || new Date(targetDate) <= new Date()) ? tc.textTertiary : '#000',
                   fontSize: '15px',
                   fontWeight: '900',
                   letterSpacing: '0.1em',

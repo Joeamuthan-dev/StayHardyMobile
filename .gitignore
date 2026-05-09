@@ -20,6 +20,7 @@ dist-ssr
 .env.production
 .env.staging
 .env*.local
+**/.env.save
 
 # Capacitor native folders — not needed in git
 android/

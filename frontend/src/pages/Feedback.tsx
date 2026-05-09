@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { getTheme } from '../utils/theme';
 import { supabase } from '../supabase';
 
 
@@ -45,6 +47,9 @@ const StatusBadge = ({ status }: { status?: string }) => {
 const Feedback: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { theme } = useTheme();
+  const tc = getTheme(theme);
+  const isLight = theme === 'light';
   const [message, setMessage] = useState('');
   const [type, setType] = useState<'feedback' | 'support'>('feedback');
   const [category, setCategory] = useState('');
@@ -165,16 +170,11 @@ const Feedback: React.FC = () => {
         updated_at: new Date().toISOString(),
       };
 
-      console.log('Feedback payload:', JSON.stringify(payload));
-
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('feedback')
         .insert(payload)
         .select()
         .single();
-
-      console.log('Error:', JSON.stringify(error));
-      console.log('Data:', JSON.stringify(data));
 
       if (error) {
         console.error('Failed:', error.message);
@@ -182,8 +182,6 @@ const Feedback: React.FC = () => {
         setIsSubmitting(false);
         return;
       }
-
-      console.log('Sent ✅:', ticketId);
 
       if (type === 'support') {
         setSubmittedTicket({ id: ticketId, category, message: trimmed });
@@ -222,7 +220,7 @@ const Feedback: React.FC = () => {
         <div style={{
           position: 'fixed',
           inset: 0,
-          background: '#080C0A',
+          background: tc.bgPage,
           zIndex: 1000,
           display: 'flex',
           flexDirection: 'column',
@@ -247,7 +245,7 @@ const Feedback: React.FC = () => {
           </div>
           
           <div style={{
-            color: '#fff',
+            color: isLight ? '#0A0A0A' : '#fff',
             fontSize: '22px',
             fontWeight: '800',
             marginBottom: '8px',
@@ -255,9 +253,9 @@ const Feedback: React.FC = () => {
           }}>
             Ticket Created!
           </div>
-          
+
           <div style={{
-            color: '#666',
+            color: isLight ? 'rgba(0,0,0,0.5)' : '#666',
             fontSize: '14px',
             textAlign: 'center',
             marginBottom: '24px',
@@ -265,10 +263,10 @@ const Feedback: React.FC = () => {
           }}>
             We'll review your issue and get back to you soon.
           </div>
-          
+
           {/* Ticket ID box */}
           <div style={{
-            background: '#1A1A1A',
+            background: isLight ? '#F5F5F5' : '#1A1A1A',
             border: '1px solid #FF9500',
             borderRadius: '12px',
             padding: '16px 24px',
@@ -285,7 +283,7 @@ const Feedback: React.FC = () => {
               YOUR TICKET ID
             </div>
             <div style={{
-              color: '#fff',
+              color: isLight ? '#0A0A0A' : '#fff',
               fontSize: '24px',
               fontWeight: '800',
               letterSpacing: '2px'
@@ -293,10 +291,10 @@ const Feedback: React.FC = () => {
               {submittedTicket.id}
             </div>
           </div>
-          
+
           {/* Category */}
           <div style={{
-            color: '#666',
+            color: isLight ? 'rgba(0,0,0,0.5)' : '#666',
             fontSize: '13px',
             marginBottom: '32px'
           }}>
@@ -335,8 +333,8 @@ const Feedback: React.FC = () => {
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        background: 'transparent',
-        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        background: tc.bgPage,
+        borderBottom: `1px solid ${tc.border}`,
       }}>
         <button
           onClick={() => navigate('/settings')}
@@ -344,8 +342,8 @@ const Feedback: React.FC = () => {
             width: '40px',
             height: '40px',
             borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${tc.border}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -354,7 +352,7 @@ const Feedback: React.FC = () => {
           }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24"
-            fill="none" stroke="white" strokeWidth="2.5"
+            fill="none" stroke={tc.text} strokeWidth="2.5"
             strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
@@ -363,7 +361,7 @@ const Feedback: React.FC = () => {
         <span style={{
           fontSize: '16px',
           fontWeight: '700',
-          color: '#FFFFFF',
+          color: tc.text,
           fontFamily: 'Syne, sans-serif'
         }}>
           SEND FEEDBACK
@@ -382,7 +380,7 @@ const Feedback: React.FC = () => {
                 display: 'flex',
                 gap: '10px',
                 padding: '4px',
-                background: '#1A1A1A',
+                background: isLight ? 'rgba(0,0,0,0.08)' : '#1A1A1A',
                 borderRadius: '14px',
                 marginBottom: '20px'
               }}>
@@ -452,10 +450,10 @@ const Feedback: React.FC = () => {
                     style={{
                       width: '100%',
                       padding: '14px 16px',
-                      background: '#1A1A1A',
-                      border: `1px solid ${!category && showError ? '#FF3B30' : category ? '#FF9500' : '#333'}`,
+                      background: isLight ? 'rgba(0,0,0,0.04)' : '#1A1A1A',
+                      border: `1px solid ${!category && showError ? '#FF3B30' : category ? '#FF9500' : tc.border}`,
                       borderRadius: '12px',
-                      color: category ? '#fff' : '#555',
+                      color: category ? tc.text : tc.textSecondary,
                       fontSize: '14px',
                       cursor: 'pointer',
                       display: 'flex',
@@ -475,7 +473,7 @@ const Feedback: React.FC = () => {
                           </span>
                         </>
                       ) : (
-                        <span style={{ color: '#555' }}>Select issue category...</span>
+                        <span style={{ color: tc.textSecondary }}>Select issue category...</span>
                       )}
                     </span>
                     
@@ -592,8 +590,8 @@ const Feedback: React.FC = () => {
             <div className="fb-recent-list">
               {myTickets.map(ticket => (
                 <div key={ticket.id} style={{
-                  background: '#0F0F0F',
-                  border: '1px solid #1A1A1A',
+                  background: isLight ? '#FFFFFF' : '#0F0F0F',
+                  border: `1px solid ${tc.border}`,
                   borderRadius: '14px',
                   padding: '14px',
                   marginBottom: '10px'
@@ -609,15 +607,15 @@ const Feedback: React.FC = () => {
                     </span>
                     <StatusBadge status={ticket.status} />
                   </div>
-                  
-                  <div style={{ color: '#888', fontSize: '11px', marginBottom: '6px' }}>
+
+                  <div style={{ color: tc.textSecondary, fontSize: '11px', marginBottom: '6px' }}>
                     {supportCategories.find(c => c.value === ticket.subcategory)?.label || ticket.subcategory}
                   </div>
-                  
-                  <div style={{ color: '#CCC', fontSize: '13px', lineHeight: '1.4', marginBottom: '8px' }}>
+
+                  <div style={{ color: tc.text, fontSize: '13px', lineHeight: '1.4', marginBottom: '8px' }}>
                     {ticket.message}
                   </div>
-                  
+
                   {ticket.admin_note && (
                     <div style={{
                       background: '#00E87A11',
@@ -629,13 +627,13 @@ const Feedback: React.FC = () => {
                       <div style={{ color: '#00E87A', fontSize: '11px', fontWeight: '700', marginBottom: '4px' }}>
                         🛡️ Admin Response:
                       </div>
-                      <div style={{ color: '#CCC', fontSize: '13px' }}>
+                      <div style={{ color: tc.text, fontSize: '13px' }}>
                         {ticket.admin_note}
                       </div>
                     </div>
                   )}
-                  
-                  <div style={{ color: '#444', fontSize: '11px', marginTop: '8px' }}>
+
+                  <div style={{ color: tc.textSecondary, fontSize: '11px', marginTop: '8px' }}>
                     {new Date(ticket.created_at).toLocaleDateString('en-IN', {
                         day: 'numeric',
                         month: 'short',
@@ -673,20 +671,20 @@ const Feedback: React.FC = () => {
             bottom: 0,
             left: 0,
             right: 0,
-            background: '#111111',
+            background: isLight ? '#FFFFFF' : '#111111',
             borderRadius: '20px 20px 0 0',
             zIndex: 999,
             maxHeight: '75vh',
             overflowY: 'auto',
             paddingBottom: '32px',
-            border: '1px solid #222'
+            border: `1px solid ${tc.border}`
           }}>
             
             {/* Handle bar */}
             <div style={{
               width: '40px',
               height: '4px',
-              background: '#333',
+              background: isLight ? 'rgba(0,0,0,0.15)' : '#333',
               borderRadius: '2px',
               margin: '12px auto 0'
             }} />
@@ -694,21 +692,21 @@ const Feedback: React.FC = () => {
             {/* Header */}
             <div style={{
               padding: '16px 20px',
-              borderBottom: '1px solid #1A1A1A',
+              borderBottom: `1px solid ${tc.border}`,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
               <div>
                 <div style={{
-                  color: '#fff',
+                  color: tc.text,
                   fontWeight: '700',
                   fontSize: '16px'
                 }}>
                   Issue Category
                 </div>
                 <div style={{
-                  color: '#555',
+                  color: tc.textSecondary,
                   fontSize: '12px',
                   marginTop: '2px'
                 }}>
@@ -719,12 +717,12 @@ const Feedback: React.FC = () => {
                 type="button"
                 onClick={() => setShowCategoryPicker(false)}
                 style={{
-                  background: '#1A1A1A',
+                  background: isLight ? 'rgba(0,0,0,0.06)' : '#1A1A1A',
                   border: 'none',
                   borderRadius: '50%',
                   width: '32px',
                   height: '32px',
-                  color: '#666',
+                  color: tc.textSecondary,
                   fontSize: '16px',
                   cursor: 'pointer',
                   display: 'flex',
@@ -751,7 +749,7 @@ const Feedback: React.FC = () => {
                     padding: '14px 20px',
                     background: category === cat.value ? '#FF950015' : 'transparent',
                     border: 'none',
-                    borderBottom: index < supportCategories.length - 1 ? '1px solid #1A1A1A' : 'none',
+                    borderBottom: index < supportCategories.length - 1 ? `1px solid ${tc.border}` : 'none',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -764,21 +762,21 @@ const Feedback: React.FC = () => {
                     width: '42px',
                     height: '42px',
                     borderRadius: '12px',
-                    background: category === cat.value ? '#FF950022' : '#1A1A1A',
+                    background: category === cat.value ? '#FF950022' : isLight ? 'rgba(0,0,0,0.06)' : '#1A1A1A',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '20px',
                     flexShrink: 0,
-                    border: category === cat.value ? '1px solid #FF9500' : '1px solid #222'
+                    border: category === cat.value ? '1px solid #FF9500' : `1px solid ${tc.border}`
                   }}>
                     {cat.icon}
                   </div>
-                  
+
                   {/* Label + desc */}
                   <div style={{ flex: 1 }}>
                     <div style={{
-                      color: category === cat.value ? '#FF9500' : '#fff',
+                      color: category === cat.value ? '#FF9500' : tc.text,
                       fontWeight: '600',
                       fontSize: '14px',
                       marginBottom: '2px'
@@ -786,7 +784,7 @@ const Feedback: React.FC = () => {
                       {cat.label}
                     </div>
                     <div style={{
-                      color: '#555',
+                      color: tc.textSecondary,
                       fontSize: '12px'
                     }}>
                       {cat.desc}
@@ -821,8 +819,8 @@ const Feedback: React.FC = () => {
       <style>{`
         .fb-page {
           min-height: 100dvh;
-          background: #0D1410;
-          color: #fff;
+          background: ${tc.bgPage};
+          color: ${tc.text};
           font-family: 'DM Sans', system-ui, sans-serif;
           padding: 20px 24px calc(120px + env(safe-area-inset-bottom, 0));
           box-sizing: border-box;
@@ -889,8 +887,8 @@ const Feedback: React.FC = () => {
 
         .fb-card {
           margin-top: 20px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.07);
+          background: ${isLight ? '#FFFFFF' : 'rgba(255, 255, 255, 0.03)'};
+          border: 1px solid ${tc.border};
           border-radius: 20px;
           padding: 20px;
           animation: fbFadeUp 0.45s ease-out 0.2s both;
@@ -910,7 +908,7 @@ const Feedback: React.FC = () => {
           font-size: 10px;
           letter-spacing: 1.5px;
           text-transform: uppercase;
-          color: rgba(255, 255, 255, 0.4);
+          color: ${isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255, 255, 255, 0.4)'};
           margin: 0 0 10px;
           font-weight: 600;
         }
@@ -930,19 +928,19 @@ const Feedback: React.FC = () => {
           min-height: 130px;
           max-height: 200px;
           resize: none;
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: ${isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255, 255, 255, 0.04)'};
+          border: 1px solid ${tc.border};
           border-radius: 16px;
           padding: 16px;
           padding-bottom: 28px;
           font-family: 'DM Sans', system-ui, sans-serif;
           font-size: 14px;
-          color: rgba(255, 255, 255, 0.8);
+          color: ${tc.text};
           line-height: 1.45;
           transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
         .fb-textarea::placeholder {
-          color: rgba(255, 255, 255, 0.25);
+          color: ${isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255, 255, 255, 0.25)'};
         }
         .fb-textarea:focus {
           outline: none;
@@ -955,7 +953,7 @@ const Feedback: React.FC = () => {
           bottom: 10px;
           right: 12px;
           font-size: 10px;
-          color: rgba(255, 255, 255, 0.3);
+          color: ${isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255, 255, 255, 0.3)'};
           pointer-events: none;
         }
         .fb-counter--ok {
@@ -988,8 +986,8 @@ const Feedback: React.FC = () => {
           filter: brightness(1.03);
         }
         .fb-submit:disabled {
-          background: rgba(255, 255, 255, 0.08);
-          color: rgba(255, 255, 255, 0.3);
+          background: ${isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255, 255, 255, 0.08)'};
+          color: ${isLight ? 'rgba(0,0,0,0.3)' : 'rgba(255, 255, 255, 0.3)'};
           box-shadow: none;
           cursor: not-allowed;
         }
@@ -1055,7 +1053,7 @@ const Feedback: React.FC = () => {
           font-family: 'Syne', system-ui, sans-serif;
           font-weight: 700;
           font-size: 26px;
-          color: #fff;
+          color: ${isLight ? '#0A0A0A' : '#fff'};
           margin: 20px 0 0;
         }
 
@@ -1063,14 +1061,14 @@ const Feedback: React.FC = () => {
           font-family: 'DM Sans', system-ui, sans-serif;
           font-size: 13px;
           line-height: 1.7;
-          color: rgba(255, 255, 255, 0.6);
+          color: ${isLight ? 'rgba(0,0,0,0.55)' : 'rgba(255, 255, 255, 0.6)'};
           max-width: 260px;
           margin: 10px auto 0;
         }
 
         .fb-success-countdown {
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.3);
+          color: ${isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255, 255, 255, 0.3)'};
           margin: 16px 0 0;
         }
 
@@ -1090,7 +1088,7 @@ const Feedback: React.FC = () => {
           font-size: 10px;
           letter-spacing: 1.5px;
           text-transform: uppercase;
-          color: rgba(255, 255, 255, 0.35);
+          color: ${isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255, 255, 255, 0.35)'};
           margin: 0 0 12px;
           font-weight: 600;
         }
