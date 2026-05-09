@@ -7,6 +7,7 @@ import { syncWidgetData } from '../lib/syncWidgetData';
 import { isCacheExpired } from '../lib/cacheManager';
 import { CACHE_KEYS, CACHE_EXPIRY_MINUTES } from '../lib/cacheKeys';
 import { loadStatsPageStale, persistStatsPageCache } from '../lib/statsPageCache';
+import { persistGoalsList } from '../lib/listCaches';
 import { ProductivityService, type ProductivityScoreData } from '../lib/ProductivityService';
 import { getScoreLabels } from '../utils/productivity';
 
@@ -606,6 +607,7 @@ const Stats: React.FC = () => {
     setRoutines(routinesArr);
     setRoutineLogs(logsArr);
     setGoals(goalsArr);
+    void persistGoalsList(user.id, goalsArr);
 
     const calculatedScore = await ProductivityService.recalculate(user.id);
     setScoreData(calculatedScore);
@@ -669,12 +671,20 @@ const Stats: React.FC = () => {
       })
       .subscribe();
 
+    const goalsChannel = supabase
+      .channel('stats_goals_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'goals', filter: `userId=eq.${user.id}` }, () => {
+        void fetchAllData({ force: true });
+      })
+      .subscribe();
+
     return () => {
       cancelled = true;
       supabase.removeChannel(tasksChannel);
       supabase.removeChannel(categoriesChannel);
       supabase.removeChannel(routinesChannel);
       supabase.removeChannel(routineLogsChannel);
+      supabase.removeChannel(goalsChannel);
     };
   }, [user, fetchAllData]);
 
