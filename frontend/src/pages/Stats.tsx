@@ -925,11 +925,21 @@ const Stats: React.FC = () => {
             {/* 1. Streak — personal milestone, unique opener */}
             <StreakMilestoneCard currentStreak={currentStreak} bestStreak={bestStreak} />
 
-            {/* 3. Weekly Pattern — deeply personal, not on home */}
-            <DayOfWeekChart data={dayOfWeekData} />
+            {/* 2. Habit Heatmap — most visual, most unique */}
+            <HabitHeatmap
+              heatmapData={getDaysArray(heatmapRange).map(d => {
+                const c = heatMap[d] || 0;
+                return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
+              })}
+              activeRange={heatmapRange}
+              setActiveRange={setHeatmapRange}
+            />
 
             {/* 5. Category Radar */}
             <CategoryRadarChart categories={categoryStats} />
+
+            {/* 3. Weekly Pattern — deeply personal, not on home */}
+            <DayOfWeekChart data={dayOfWeekData} />
 
             <InsightCard
               type="goals"
@@ -944,16 +954,6 @@ const Stats: React.FC = () => {
 
           {/* Right column */}
           <div className="stats-col-right">
-            {/* 2. Habit Heatmap — most visual, most unique */}
-            <HabitHeatmap
-              heatmapData={getDaysArray(heatmapRange).map(d => {
-                const c = heatMap[d] || 0;
-                return c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c >= 3 ? 4 : 3;
-              })}
-              activeRange={heatmapRange}
-              setActiveRange={setHeatmapRange}
-            />
-
             {/* 4. Historical Trend */}
             <InsightsTrend
               data={{

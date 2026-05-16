@@ -15,7 +15,7 @@ const Login: React.FC = () => {
   const deviceType = useDeviceType();
   const isTablet = deviceType !== 'phone';
   const isTablet10 = deviceType === 'tablet10';
-  const { setCurrentUser, markLoginComplete } = useAuth();
+  const { setCurrentUser, markLoginComplete, startLoginAnimation } = useAuth();
   const { setLoading: _setGlobalLoading } = useLoading(); void _setGlobalLoading;
   const navigate = useNavigate();
   
@@ -196,6 +196,7 @@ const Login: React.FC = () => {
         avatarUrl: null,
       } as any);
       markLoginComplete();
+      startLoginAnimation();
 
       // Navigate to home immediately
       setIsLoading(false);

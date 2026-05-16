@@ -28,6 +28,9 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   logout: () => Promise<void>;
+  logoutPhase: 'idle' | 'loading' | 'success';
+  loginPhase: 'idle' | 'loading' | 'success';
+  startLoginAnimation: () => void;
   setCurrentUser: (user: AuthUser | null) => void;
   markLoginComplete: () => void;
   updateUserMetadata: (metadata: Record<string, unknown>) => void;
@@ -64,7 +67,15 @@ function buildUserFromAuthUser(authUser: SupabaseAuthUser): AuthUser {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [logoutPhase, setLogoutPhase] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [loginPhase, setLoginPhase] = useState<'idle' | 'loading' | 'success'>('idle');
   const loginJustHappened = useRef(false);
+
+  const startLoginAnimation = useCallback(() => {
+    setLoginPhase('loading');
+    setTimeout(() => setLoginPhase('success'), 1100);
+    setTimeout(() => setLoginPhase('idle'), 2200);
+  }, []);
 
   const persistUser = useCallback((next: AuthUser | null) => {
     setUser(next);
@@ -188,15 +199,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [persistUser]);
 
   const logout = useCallback(async () => {
-    // 1. Instant UI response — clear user state and navigate immediately
+    setLogoutPhase('loading');
+    await new Promise(r => setTimeout(r, 1300));
+    setLogoutPhase('success');
+    await new Promise(r => setTimeout(r, 1100));
+
     loginJustHappened.current = false;
     persistUser(null);
-    window.location.hash = '/login';
 
-    // 2. Clean up everything in the background — user already sees login screen
     const userId = localStorage.getItem('cached_user_id') || '';
-
-    // Sync localStorage clears (instant, no await needed)
     localStorage.removeItem('cached_is_pro');
     localStorage.removeItem('cached_user_id');
     if (userId) {
@@ -205,7 +216,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.removeItem('ps_score_ts_' + userId);
     }
 
-    // Fire all async cleanup in parallel — don't block anything
     void Promise.allSettled([
       isNative
         ? RevenueCatService.logOut().catch(() => {})
@@ -224,6 +234,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       flushPendingListCacheWrites(),
       clearAllCache(),
     ]);
+
+    setLogoutPhase('idle');
+    window.location.hash = '/login';
   }, [persistUser]);
 
   useEffect(() => {
@@ -259,12 +272,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     user,
     loading,
     logout,
+    logoutPhase,
+    loginPhase,
+    startLoginAnimation,
     setCurrentUser,
     markLoginComplete,
     updateUserMetadata,
     refreshUserProfile,
     initAuth,
-  }), [user, loading, logout, setCurrentUser, markLoginComplete, updateUserMetadata, refreshUserProfile, initAuth]);
+  }), [user, loading, logout, logoutPhase, loginPhase, startLoginAnimation, setCurrentUser, markLoginComplete, updateUserMetadata, refreshUserProfile, initAuth]);
 
   return (
     <AuthContext.Provider value={contextValue}>

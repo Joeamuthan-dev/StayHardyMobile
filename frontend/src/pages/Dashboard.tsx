@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useProGate } from '../hooks/useProGate';
 import ProGateModal from '../components/ProGateModal';
+import CreatingSpinner from '../components/CreatingSpinner';
 import { useLocation } from 'react-router-dom';
 import { isWeb } from '../utils/platform';
 import { useAuth } from '../context/AuthContext';
@@ -1803,6 +1804,7 @@ const Dashboard: React.FC = () => {
           to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
       `}</style>
+      <CreatingSpinner visible={isLoading} />
       <ProGateModal open={gateOpen} resource={gateResource} onClose={closeGate} />
     </div>
   );

@@ -160,6 +160,28 @@ html.light-mode [style*="color: rgba(255,255,255,0.7"] {
   color: rgba(0,0,0,0.50) !important;
 }
 
+/* ── Onboarding / Splash: always dark — undo all light-mode overrides ── */
+html.light-mode .onboarding-dark,
+html.light-mode .onboarding-dark * {
+  --tw-text-opacity: 1;
+}
+html.light-mode .onboarding-dark .text-white        { color: #FFFFFF !important; }
+html.light-mode .onboarding-dark .text-white\/60    { color: rgba(255,255,255,0.60) !important; }
+html.light-mode .onboarding-dark .text-white\/50,
+html.light-mode .onboarding-dark .text-white\/45    { color: rgba(255,255,255,0.45) !important; }
+html.light-mode .onboarding-dark .text-white\/40,
+html.light-mode .onboarding-dark .text-white\/35,
+html.light-mode .onboarding-dark .text-white\/30    { color: rgba(255,255,255,0.30) !important; }
+html.light-mode .onboarding-dark .text-white\/25,
+html.light-mode .onboarding-dark .text-white\/20    { color: rgba(255,255,255,0.20) !important; }
+html.light-mode .onboarding-dark                    { background-color: #000000 !important; background: #000000 !important; }
+html.light-mode .onboarding-dark [style*="background-color: #000000"],
+html.light-mode .onboarding-dark [style*="background: #000000"] { background: #000000 !important; background-color: #000000 !important; }
+html.light-mode .onboarding-dark [style*="color: #FFFFFF"],
+html.light-mode .onboarding-dark [style*="color: #ffffff"],
+html.light-mode .onboarding-dark [style*="color: white"] { color: #FFFFFF !important; }
+html.light-mode .onboarding-dark [style*="color: rgba(255,255,255"] { color: inherit !important; }
+
 /* ── Inline border-color overrides ── */
 html.light-mode [style*="border: 1px solid rgba(255,255,255"],
 html.light-mode [style*="border: 2px solid rgba(255,255,255"],

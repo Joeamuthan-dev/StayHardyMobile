@@ -12,7 +12,6 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useTheme } from '../context/ThemeContext';
 import { getTheme } from '../utils/theme';
 import { supabase } from '../supabase';
-import { storage } from '../utils/storage';
 
 // Read cached profile synchronously before any useEffect
 const getCachedProfile = () => {
@@ -88,7 +87,7 @@ const getMembershipBadge = (
 export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { isPro } = useSubscription();
   const { theme } = useTheme();
   const tc = getTheme(theme);
@@ -159,33 +158,9 @@ export const SideMenu: React.FC<SideMenuProps> = ({ isOpen, onClose }) => {
   // Use localProfile for rendering (falls back to userProfile)
   const displayProfile = localProfile || userProfile;
 
-  const handleLogout = async () => {
-    try {
-      onClose();
-
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('[Logout] Supabase signOut error:', error.message);
-      }
-
-      await storage.remove('user_session');
-      await storage.remove('pending_verification_email');
-      await storage.remove('onboarding_complete');
-
-      try {
-        const { Preferences } = await import('@capacitor/preferences');
-        await Preferences.remove({ key: 'user_session' });
-        await Preferences.remove({ key: 'app_settings' });
-        await Preferences.remove({ key: 'pending_verification_email' });
-      } catch (prefErr) {
-        console.warn('[Logout] Preferences clear error:', prefErr);
-      }
-
-      navigate('/login', { replace: true });
-    } catch (err: any) {
-      console.error('[Logout] Error:', err?.message);
-      navigate('/login', { replace: true });
-    }
+  const handleLogout = () => {
+    onClose();
+    void logout();
   };
 
   useEffect(() => {

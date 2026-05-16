@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { useProGate } from '../hooks/useProGate';
 import ProGateModal from '../components/ProGateModal';
+import CreatingSpinner from '../components/CreatingSpinner';
 import { isWeb } from '../utils/platform';
 import { useAuth } from '../context/AuthContext';
 import { useLoading } from '../context/LoadingContext';
@@ -1466,6 +1467,7 @@ const Goals: React.FC = () => {
           {toast}
         </div>
       )}
+      <CreatingSpinner visible={loading} />
       <ProGateModal open={gateOpen} resource={gateResource} onClose={closeGate} />
     </div>
   );

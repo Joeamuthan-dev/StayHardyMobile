@@ -148,6 +148,7 @@ const HomeDashboard: React.FC = () => {
     void fetchRank();
   }, [user?.id, _isPro]);
 
+  const [isReady, setIsReady] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [routineLogs, setRoutineLogs] = useState<RoutineLog[]>([]);
@@ -324,6 +325,9 @@ const HomeDashboard: React.FC = () => {
         setRoutineLogs(stLogs.filter((l) => l.completed_at >= startDayStr));
       }
 
+      // Stale cache loaded — show UI immediately, network sync continues in background
+      setIsReady(true);
+
       const cachedScore = localStorage.getItem('ps_score_' + user.id);
       if (cachedScore) {
         setScoreData({ overall_score: Number(cachedScore) } as ProductivityScoreData);
@@ -392,6 +396,7 @@ const HomeDashboard: React.FC = () => {
       void syncWidgetData();
     } catch (err) {
       console.error('Error fetching data:', err);
+      setIsReady(true);
     } finally {
       setLoading(false);
     }
@@ -730,6 +735,44 @@ const HomeDashboard: React.FC = () => {
   );
 
   const pendingHabitsToday = pendingHabitsCount;
+
+  if (!isReady) return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      background: '#080A08',
+    }}>
+      <div style={{ position: 'relative', width: '80px', height: '80px', marginBottom: '28px' }}>
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '50%',
+          border: '3px solid rgba(0,232,122,0.12)',
+          borderTop: '3px solid #00E87A',
+          animation: 'hbSpin 0.9s linear infinite',
+        }} />
+        <div style={{
+          position: 'absolute', inset: '13px', borderRadius: '50%',
+          border: '2px solid rgba(0,232,122,0.06)',
+          borderBottom: '2px solid rgba(0,229,204,0.4)',
+          animation: 'hbSpin 1.5s linear infinite reverse',
+        }} />
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '26px', animation: 'hbPulse 1.6s ease-in-out infinite',
+        }}>⚡</div>
+      </div>
+      <p style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#FFFFFF', letterSpacing: '0.02em' }}>
+        HardyBoard
+      </p>
+      <p style={{ margin: '6px 0 0 0', fontSize: '13px', fontWeight: '500', color: 'rgba(255,255,255,0.35)' }}>
+        Syncing your data...
+      </p>
+      <style>{`
+        @keyframes hbSpin { to { transform: rotate(360deg); } }
+        @keyframes hbPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(0.85)} }
+      `}</style>
+    </div>
+  );
 
   return (
     <div className={`page-shell hub-daily-page ${isSidebarHidden ? 'sidebar-hidden' : ''}`} style={{ background: tc.bgPage, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 72px)', paddingBottom: '140px', overflowY: 'auto' }}>

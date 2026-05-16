@@ -186,10 +186,12 @@ const Settings: React.FC = () => {
   const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
   const isProUser = isPro || isAdmin;
 
-  const [userName, setUserName] = useState('');
-  const [userEmail, setUserEmail] = useState('');
+  const [userName, setUserName] = useState(() => user?.name || user?.email?.split('@')[0] || '');
+  const [userEmail, setUserEmail] = useState(() => user?.email || '');
   const [memberSince, setMemberSince] = useState('');
-  const [userRole, setUserRole] = useState<'admin' | 'pro' | 'basic'>('basic');
+  const [userRole, setUserRole] = useState<'admin' | 'pro' | 'basic'>(() =>
+    user?.email === import.meta.env.VITE_ADMIN_EMAIL ? 'admin' : 'basic'
+  );
   const [isSidebarHidden] = useState(() => localStorage.getItem('sidebarHidden') === 'true');
 
   // Subscription info from Supabase (source of truth for plan/amount/expiry)
@@ -273,13 +275,18 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Sync name/email if AuthContext user object updates (e.g. after profile edit)
   useEffect(() => {
-    const loadProfile = async () => {
+    if (user?.name) setUserName(user.name);
+    if (user?.email) setUserEmail(user.email);
+  }, [user?.name, user?.email]);
+
+  useEffect(() => {
+    const loadSlowProfileData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
       const email = session.user.email || '';
-      setUserEmail(email);
 
       const { data: userRecord } = await supabase
         .from('users')
@@ -287,13 +294,10 @@ const Settings: React.FC = () => {
         .eq('email', email)
         .maybeSingle();
 
-      if (userRecord?.name) {
-        setUserName(userRecord.name);
-      } else {
-        setUserName(email.split('@')[0]);
-      }
+      // Only update name if DB has one (AuthContext may have loaded a stale/empty value)
+      if (userRecord?.name) setUserName(userRecord.name);
 
-      // Subscription details
+      // Subscription details (not in AuthContext — must come from DB)
       setSubPlan(userRecord?.subscription_plan ?? null);
       setSubExpiresAt(userRecord?.pro_expires_at ?? null);
       setSubStatus(userRecord?.subscription_status ?? null);
@@ -301,8 +305,7 @@ const Settings: React.FC = () => {
       const createdAt = userRecord?.created_at || session.user.created_at;
       if (createdAt) {
         const date = new Date(createdAt);
-        const formatted = date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-        setMemberSince(formatted);
+        setMemberSince(date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }));
       }
 
       if (email === import.meta.env.VITE_ADMIN_EMAIL) {
@@ -312,7 +315,7 @@ const Settings: React.FC = () => {
         setUserRole(role as 'pro' | 'basic');
       }
     };
-    loadProfile();
+    void loadSlowProfileData();
   }, []);
 
   useEffect(() => { void checkAndAwardBadges(); }, [checkAndAwardBadges]);

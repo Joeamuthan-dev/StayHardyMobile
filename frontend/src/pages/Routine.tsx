@@ -22,6 +22,23 @@ import CategorySelector from '../components/CategorySelector';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useProGate } from '../hooks/useProGate';
 import ProGateModal from '../components/ProGateModal';
+import CreatingSpinner from '../components/CreatingSpinner';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 
 interface RoutineData {
@@ -837,6 +854,104 @@ const triggerGlobalRefresh = () => {
   window.dispatchEvent(new CustomEvent('stayhardy_refresh'));
 };
 
+interface SortableHabitItemProps {
+  routine: RoutineData;
+  theme: string;
+  tc: Record<string, string>;
+  getCategoryIcon: (category: string, color: string) => React.ReactNode;
+  onDelete: (id: string) => void;
+}
+
+const SortableHabitItem: React.FC<SortableHabitItemProps> = ({ routine: r, theme, tc, getCategoryIcon, onDelete }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: r.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    background: theme === 'light' ? '#F8F8F8' : 'linear-gradient(145deg, #111411, #0d0f0d)',
+    border: '1px solid rgba(0,232,122,0.15)',
+    borderRadius: '18px',
+    padding: '14px 16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    boxShadow: theme === 'light'
+      ? '0 1px 4px rgba(0,0,0,0.08)'
+      : 'inset 2px 2px 6px rgba(0,0,0,0.5), inset -1px -1px 3px rgba(255,255,255,0.03), 0 2px 8px rgba(0,0,0,0.4)',
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      {/* Drag handle */}
+      <div
+        {...listeners}
+        {...attributes}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '3px',
+          padding: '4px 6px',
+          cursor: 'grab',
+          flexShrink: 0,
+          touchAction: 'none',
+        }}
+      >
+        {[0,1,2].map(i => (
+          <div key={i} style={{
+            width: '16px',
+            height: '2px',
+            borderRadius: '2px',
+            background: theme === 'light' ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)',
+          }} />
+        ))}
+      </div>
+
+      {/* Category icon */}
+      <div style={{
+        width: '42px', height: '42px', borderRadius: '12px',
+        background: 'rgba(0,232,122,0.08)', border: '1px solid rgba(0,232,122,0.15)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '18px', flexShrink: 0,
+      }}>
+        {getCategoryIcon(r.category, theme === 'light' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.72)')}
+      </div>
+
+      {/* Title + category */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{
+          margin: 0, fontSize: '14px', fontWeight: '800', color: tc.text,
+          letterSpacing: '-0.2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{r.title}</p>
+        <p style={{
+          margin: '2px 0 0 0', fontSize: '10px', fontWeight: '600',
+          color: tc.textTertiary, letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>
+          {r.category || 'General'} · {r.days.length === 7 ? 'Every Day' : r.days.join(', ')}
+        </p>
+      </div>
+
+      {/* Delete */}
+      <button
+        onClick={() => onDelete(r.id)}
+        style={{
+          width: '38px', height: '38px', borderRadius: '12px',
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s ease',
+          boxShadow: theme === 'light' ? 'none' : 'inset 2px 2px 5px rgba(0,0,0,0.4)',
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6" /><path d="M14 11v6" />
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+        </svg>
+      </button>
+    </div>
+  );
+};
+
 const Routine: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const { isPro } = useSubscription();
@@ -850,6 +965,33 @@ const Routine: React.FC = () => {
   const { gateOpen, gateResource, closeGate, checkAndGate } = useProGate();
   const [showModal, setShowModal] = useState(false);
   const [showAllModal, setShowAllModal] = useState(false);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('stayhardy_modal_open', { detail: showAllModal }));
+    return () => {
+      if (showAllModal) window.dispatchEvent(new CustomEvent('stayhardy_modal_open', { detail: false }));
+    };
+  }, [showAllModal]);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
+
+  const handleReorder = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setRoutines((prev) => {
+      const oldIndex = prev.findIndex((r) => r.id === active.id);
+      const newIndex = prev.findIndex((r) => r.id === over.id);
+      const reordered = arrayMove(prev, oldIndex, newIndex);
+      if (user?.id) {
+        localStorage.setItem(`routine_order_${user.id}`, JSON.stringify(reordered.map((r) => r.id)));
+      }
+      return reordered;
+    });
+  }, [user?.id]);
+
   const isTogglingRef = useRef(false);
   const toggleTimeoutRef = useRef<any>(null);
 
@@ -887,7 +1029,7 @@ const Routine: React.FC = () => {
   const [title, setTitle] = useState('');
 
   const [selectedIcon, setSelectedIcon] = useState('fitness_center');
-  const [selectedCategory, setSelectedCategory] = useState('General');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedDays, setSelectedDays] = useState<string[]>(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   const [suggestionCategory, setSuggestionCategory] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1135,26 +1277,39 @@ const Routine: React.FC = () => {
 
   const handleCreateRoutine = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.id || !title) return;
+    if (!user?.id || !title || isCreating) return;
+
     const finalCategory = selectedCategory;
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const tempId = crypto.randomUUID();
+    const optimistic: RoutineData = {
+      id: tempId,
+      title,
+      days: selectedDays,
+      color: getCategoryColor(finalCategory),
+      icon: selectedIcon,
+      category: finalCategory,
+      completed: false,
+      missed: false,
+      isActiveToday: selectedDays.includes(dayNames[new Date().getDay()]),
+    };
+
+    // Optimistic: add to list and close modal immediately
+    setRoutines(prev => {
+      const merged = [...prev, optimistic];
+      void persistRoutineCaches(user.id, merged, logs);
+      return merged;
+    });
+    setShowModal(false);
+    setTitle('');
+    setSelectedIcon('fitness_center');
+    setSelectedCategory('');
+    setSuggestionCategory(null);
+    setShowSuggestions(false);
+    setError(null);
+
     const online = await isOnline();
     if (!online) {
-      const tempId = crypto.randomUUID();
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const optimistic: RoutineData = {
-        id: tempId,
-        title,
-        days: selectedDays,
-        color: getCategoryColor(finalCategory),
-        icon: '⭐',
-        category: finalCategory,
-        completed: false,
-        missed: false,
-        isActiveToday: selectedDays.includes(dayNames[new Date().getDay()]),
-      };
-      const mergedR = [...routines, optimistic];
-      setRoutines(mergedR);
-      persistRoutineCaches(user.id, mergedR, logs);
       await enqueueSync({
         action: 'create',
         entity: 'routine',
@@ -1164,24 +1319,19 @@ const Routine: React.FC = () => {
             title,
             days: selectedDays,
             color: getCategoryColor(finalCategory),
-            icon: '⭐',
+            icon: selectedIcon,
             category: finalCategory,
             time: null,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
           },
         },
         timestamp: Date.now(),
       });
       void invalidateUserStatsCache();
-      setShowModal(false);
-      setTitle('');
-      setSelectedIcon('fitness_center');
-      setSuggestionCategory(null);
-      setShowSuggestions(false);
       triggerGlobalRefresh();
       return;
     }
-    setError(null);
+
     setIsCreating(true);
     try {
       const payload = {
@@ -1192,20 +1342,28 @@ const Routine: React.FC = () => {
         icon: selectedIcon,
         category: finalCategory,
         time: null,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       };
-      const { data: _data, error: insertError } = await supabase.from('routines').insert([payload]).select();
+      const { data, error: insertError } = await supabase.from('routines').insert([payload]).select().single();
       if (insertError) throw insertError;
-      setShowModal(false);
-      setTitle('');
-      setSelectedIcon('fitness_center');
-      setSuggestionCategory(null);
-      setShowSuggestions(false);
-      void fetchRoutinesAndLogs({ force: true });
+      if (data) {
+        const created = { ...data, completed: false, missed: false, isActiveToday: optimistic.isActiveToday };
+        setRoutines(prev => {
+          const updated = prev.map(r => r.id === tempId ? created : r);
+          void persistRoutineCaches(user.id, updated, logs);
+          return updated;
+        });
+      }
+      void invalidateUserStatsCache();
       if (user?.id) void ProductivityService.recalculate(user.id);
       triggerGlobalRefresh();
-    } catch (err: any) {
-      setError(err.message || 'Failed to create habit');
+    } catch {
+      // Rollback optimistic entry
+      setRoutines(prev => {
+        const rolled = prev.filter(r => r.id !== tempId);
+        void persistRoutineCaches(user.id, rolled, logs);
+        return rolled;
+      });
     } finally {
       setIsCreating(false);
     }
@@ -1629,8 +1787,8 @@ const Routine: React.FC = () => {
                 {error && <p style={{ fontSize: '13px', color: '#EF4444', margin: 0, textAlign: 'center', fontWeight: '500' }}>{error}</p>}
                 <button
                   onClick={handleCreateRoutine}
-                  disabled={isCreating || !title.trim() || selectedDays.length === 0}
-                  style={{ width: '100%', height: '58px', borderRadius: '20px', border: 'none', cursor: isCreating || !title.trim() || selectedDays.length === 0 ? 'not-allowed' : 'pointer', fontSize: '15px', fontWeight: '900', color: '#000000', letterSpacing: '0.1em', background: isCreating || !title.trim() || selectedDays.length === 0 ? 'rgba(0,232,122,0.3)' : 'linear-gradient(90deg, #00E87A 0%, #00FF88 30%, #00E5CC 60%, #00E87A 100%)', backgroundSize: '200% auto', animation: !isCreating && title.trim() && selectedDays.length > 0 ? 'shimmerActivate 2s linear infinite' : 'none', boxShadow: !isCreating && title.trim() && selectedDays.length > 0 ? '0 0 24px rgba(0,232,122,0.4), 0 0 48px rgba(0,229,204,0.2)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.2s ease' }}
+                  disabled={isCreating || !title.trim() || selectedDays.length === 0 || !selectedCategory}
+                  style={{ width: '100%', height: '58px', borderRadius: '20px', border: 'none', cursor: isCreating || !title.trim() || selectedDays.length === 0 || !selectedCategory ? 'not-allowed' : 'pointer', fontSize: '15px', fontWeight: '900', color: '#000000', letterSpacing: '0.1em', background: isCreating || !title.trim() || selectedDays.length === 0 || !selectedCategory ? 'rgba(0,232,122,0.3)' : 'linear-gradient(90deg, #00E87A 0%, #00FF88 30%, #00E5CC 60%, #00E87A 100%)', backgroundSize: '200% auto', animation: !isCreating && title.trim() && selectedDays.length > 0 && selectedCategory ? 'shimmerActivate 2s linear infinite' : 'none', boxShadow: !isCreating && title.trim() && selectedDays.length > 0 && selectedCategory ? '0 0 24px rgba(0,232,122,0.4), 0 0 48px rgba(0,229,204,0.2)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', transition: 'all 0.2s ease' }}
                 >
                   {isCreating ? (
                     <>
@@ -1716,94 +1874,22 @@ const Routine: React.FC = () => {
                   flex: 1
                 }}
               >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {routines.map(r => (
-                    <div
-                      key={r.id}
-                      style={{
-                        background: theme === 'light' ? '#F8F8F8' : 'linear-gradient(145deg, #111411, #0d0f0d)',
-                        border: '1px solid rgba(0,232,122,0.15)',
-                        borderRadius: '18px',
-                        padding: '14px 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '14px',
-                        boxShadow: theme === 'light' ? '0 1px 4px rgba(0,0,0,0.08)' : 'inset 2px 2px 6px rgba(0,0,0,0.5), inset -1px -1px 3px rgba(255,255,255,0.03), 0 2px 8px rgba(0,0,0,0.4)',
-                        transition: 'all 0.2s ease'
-                      }}
-                    >
-                      {/* Category icon */}
-                      <div style={{
-                        width: '42px',
-                        height: '42px',
-                        borderRadius: '12px',
-                        background: 'rgba(0,232,122,0.08)',
-                        border: '1px solid rgba(0,232,122,0.15)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '18px',
-                        flexShrink: 0
-                      }}>
-                        {getCategoryIcon(r.category, theme === 'light' ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.72)')}
-                      </div>
-
-                      {/* Title + category */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{
-                          margin: 0,
-                          fontSize: '14px',
-                          fontWeight: '800',
-                          color: tc.text,
-                          letterSpacing: '-0.2px',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {r.title}
-                        </p>
-                        <p style={{
-                          margin: '2px 0 0 0',
-                          fontSize: '10px',
-                          fontWeight: '600',
-                          color: tc.textTertiary,
-                          letterSpacing: '0.04em',
-                          textTransform: 'uppercase'
-                        }}>
-                          {r.category || 'General'} · {r.days.length === 7 ? 'Every Day' : r.days.join(', ')}
-                        </p>
-                      </div>
-
-                      {/* Trash icon delete button */}
-                      <button
-                        onClick={() => handleDeleteRoutine(r.id)}
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '12px',
-                          background: 'rgba(239,68,68,0.08)',
-                          border: '1px solid rgba(239,68,68,0.2)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          flexShrink: 0,
-                          transition: 'all 0.2s ease',
-                          boxShadow: theme === 'light' ? 'none' : 'inset 2px 2px 5px rgba(0,0,0,0.4)'
-                        }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                          stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                        </svg>
-                      </button>
+                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleReorder}>
+                  <SortableContext items={routines.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {routines.map(r => (
+                        <SortableHabitItem
+                          key={r.id}
+                          routine={r}
+                          theme={theme}
+                          tc={tc}
+                          getCategoryIcon={getCategoryIcon}
+                          onDelete={handleDeleteRoutine}
+                        />
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </SortableContext>
+                </DndContext>
               </div>
             </div>
           </div>
@@ -1822,6 +1908,7 @@ const Routine: React.FC = () => {
             .routine-empty-tile { width: 100%; padding: 30px; border: 1px dashed ${theme === 'light' ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.1)'}; background: ${theme === 'light' ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.02)'}; color: ${theme === 'light' ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)'}; border-radius: 16px; cursor: pointer; }
             .routine-filter-empty { text-align: center; padding: 40px; color: ${theme === 'light' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)'}; font-size: 13px; }
           `}</style>
+      <CreatingSpinner visible={isCreating} />
       <ProGateModal open={gateOpen} resource={gateResource} onClose={closeGate} />
       </div>
   );

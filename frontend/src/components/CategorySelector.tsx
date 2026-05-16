@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CATEGORIES } from '../constants/categories';
+import { useTheme } from '../context/ThemeContext';
 
 function getCategorySVGIcon(name: string, color: string): React.ReactNode {
   switch (name) {
@@ -147,6 +148,8 @@ const CategorySelector = ({
   selected: string
   onSelect: (name: string) => void
 }) => {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customText, setCustomText] = useState('');
 
@@ -218,12 +221,12 @@ const CategorySelector = ({
                 borderRadius: '16px',
                 background: isActive
                   ? `rgba(${r},${g},${b},0.12)`
-                  : 'rgba(255,255,255,0.04)',
+                  : isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)',
                 backdropFilter: 'blur(10px)',
                 border: '1px solid ' +
                   (isActive
                     ? cat.color
-                    : 'rgba(255,255,255,0.08)'),
+                    : isLight ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)'),
                 boxShadow: isActive
                   ? `0 0 12px rgba(${r},${g},${b},0.3), inset 0 0 12px rgba(${r},${g},${b},0.05)`
                   : 'none',
@@ -242,7 +245,7 @@ const CategorySelector = ({
                   ? `drop-shadow(0 0 6px ${cat.color}80)`
                   : 'none'
               }}>
-                {getCategorySVGIcon(cat.name, isActive ? cat.color : 'rgba(255,255,255,0.5)')}
+                {getCategorySVGIcon(cat.name, isActive ? cat.color : isLight ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.5)')}
               </div>
 
               {/* Name */}
@@ -251,7 +254,7 @@ const CategorySelector = ({
                 fontWeight: '700',
                 color: isActive
                   ? cat.color
-                  : 'rgba(255,255,255,0.45)',
+                  : isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.45)',
                 whiteSpace: 'nowrap',
                 letterSpacing: '0.02em'
               }}>
@@ -290,17 +293,17 @@ const CategorySelector = ({
             }}
             style={{
               width: '100%',
-              background: 'linear-gradient(145deg, #080808, #0f0f0f)',
+              background: isLight ? '#F0F0F0' : 'linear-gradient(145deg, #080808, #0f0f0f)',
               border: '1px solid rgba(0,232,122,0.4)',
               borderRadius: '12px',
               padding: '12px 16px',
               fontSize: '14px',
               fontWeight: '600',
-              color: '#FFFFFF',
+              color: isLight ? '#0A0A0A' : '#FFFFFF',
               outline: 'none',
               caretColor: '#00E87A',
               boxSizing: 'border-box',
-              boxShadow: 'inset 3px 3px 8px rgba(0,0,0,0.6)',
+              boxShadow: isLight ? 'none' : 'inset 3px 3px 8px rgba(0,0,0,0.6)',
             }}
           />
         </div>
@@ -309,7 +312,7 @@ const CategorySelector = ({
       {/* Swipe hint */}
       <p style={{
         fontSize: '9px',
-        color: 'rgba(255,255,255,0.15)',
+        color: isLight ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.15)',
         margin: '4px 0 0 0',
         textAlign: 'right',
         fontStyle: 'italic'

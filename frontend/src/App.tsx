@@ -30,6 +30,8 @@ import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { SideMenu } from './components/SideMenu';
 import BottomNav from './components/BottomNav';
 import OfflineSyncBootstrap from './components/OfflineSyncBootstrap';
+import LogoutScreen from './components/LogoutScreen';
+import LoginLoadingScreen from './components/LoginLoadingScreen';
 
 // Pages — lazy loaded for code splitting (reduces initial bundle from 1.7MB)
 // Only LoadingScreen and Login are eager since they're shown immediately on startup
@@ -82,9 +84,16 @@ const BlackScreen = () => (
 );
 
 const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
+  const { user, logoutPhase, loginPhase } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => setModalOpen((e as CustomEvent<boolean>).detail);
+    window.addEventListener('stayhardy_modal_open', handler);
+    return () => window.removeEventListener('stayhardy_modal_open', handler);
+  }, []);
 
   // Hidden on onboarding or login pages
   const isAuthPage = ['/login', '/signup', '/verify-email', '/forgot-pin', '/reset-pin', '/auth/reset', '/auth/verify', '/paywall', '/loading', '/onboarding']
@@ -123,7 +132,9 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
         </div>
       )}
       {children}
-      {user && !isAuthPage && <BottomNav isHidden={sidebarOpen} />}
+      {user && !isAuthPage && <BottomNav isHidden={sidebarOpen || modalOpen} />}
+      <LogoutScreen phase={logoutPhase} />
+      <LoginLoadingScreen phase={loginPhase} />
     </>
   );
 };
