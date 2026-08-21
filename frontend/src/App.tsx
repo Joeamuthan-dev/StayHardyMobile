@@ -37,7 +37,7 @@ import LoginLoadingScreen from './components/LoginLoadingScreen';
 // Only LoadingScreen and Login are eager since they're shown immediately on startup
 import LoadingScreen from './pages/LoadingScreen';
 import Login from './pages/Login';
-import ComingSoon from './pages/ComingSoon';
+import Landing from './pages/Landing';
 
 const OnboardingScreen = React.lazy(() => import('./pages/OnboardingScreen'));
 const SignUp = React.lazy(() => import('./pages/SignUp'));
@@ -100,6 +100,21 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
     .some(p => location.pathname.toLowerCase().replace(/\/$/, '') === p);
   const showHamburger = user && !isAuthPage && !sidebarOpen && !isWeb;
 
+  // On the web the product is the marketing page plus the admin console, and
+  // nothing else. The side menu and bottom nav belong to the Capacitor build,
+  // and rendering them here is what put an app menu on top of the landing page:
+  // `SideMenu` mounted unconditionally, and `BottomNav` showed for any signed-in
+  // user on any path not in `isAuthPage` — which never included '/'.
+  if (isWeb) {
+    return (
+      <>
+        {children}
+        <LogoutScreen phase={logoutPhase} />
+        <LoginLoadingScreen phase={loginPhase} />
+      </>
+    );
+  }
+
   return (
     <>
       <SideMenu isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -140,9 +155,14 @@ const GlobalNavWrapper = ({ children }: { children: React.ReactNode }) => {
 };
 
 const RootRedirect = () => {
-  // Web visitors (stayhardi.com) see the Coming Soon page
-  // Native app (Android/iOS) proceeds normally
-  if (isWeb) return <ComingSoon />;
+  // Web visitors get the marketing site. The product is the Android app now, so
+  // the landing page sells it and deliberately links nowhere near /login — the
+  // web app's routes all still exist and still work, they are just unadvertised
+  // and used by the owner for admin.
+  //
+  // `pages/ComingSoon.tsx` is the page this replaced. It is kept on disk rather
+  // than deleted, so reverting is re-importing it and swapping this one line.
+  if (isWeb) return <Landing />;
   return <Navigate to="/loading" replace />;
 };
 
@@ -195,10 +215,54 @@ const ProRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 const AdminRoute = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  // Waiting for the session to resolve is important here: without it a page
+  // refresh on /admin bounces to /login for a frame before the session loads,
+  // which reads as being randomly signed out.
+  if (loading) return <AuthSplash />;
+
   if (!user?.id) return <Navigate to="/login" replace />;
-  if (!isAdminHubUser(user)) return <Navigate to="/home" replace />;
+  // A signed-in non-admin has nowhere to go on the web build — there is no user
+  // app here any more — so they land back on the marketing page.
+  if (!isAdminHubUser(user)) return <Navigate to={isWeb ? '/' : '/home'} replace />;
   return <AdminDashboard />;
+};
+
+/** Shared "resolving session" state, so guards don't each invent their own. */
+const AuthSplash = () => (
+  <div style={{
+    minHeight: '100vh',
+    background: '#0A0C09',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  }}>
+    <div style={{
+      width: 30,
+      height: 30,
+      borderRadius: '50%',
+      border: '3px solid rgba(200,255,61,0.18)',
+      borderTop: '3px solid #c8ff3d',
+      animation: 'spin 0.8s linear infinite',
+    }} />
+    <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+  </div>
+);
+
+/**
+ * Everything that used to be the web app.
+ *
+ * The pages still exist and still compile — Android users are on the native app
+ * now, so exposing a second, unmaintained copy of the product on the web is
+ * risk with no upside. On web these routes send you to the admin console if you
+ * are the admin, and to the marketing page otherwise.
+ */
+const RetiredWebRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (!isWeb) return <>{children}</>;
+  if (loading) return <AuthSplash />;
+  return <Navigate to={user && isAdminHubUser(user) ? '/admin' : '/'} replace />;
 };
 
 const AppCore: React.FC = () => {
@@ -276,23 +340,29 @@ const AppCore: React.FC = () => {
           {/* Public pages — accessible without login */}
           <Route path="/welcome" element={<WhyStayHardy />} />
 
-          {/* Protected Hubs */}
+          {/* Protected Hubs.
+              On web every one of these redirects (see RetiredWebRoute) — the
+              product is the Android app, and /admin is the only signed-in
+              destination the website still serves. The routes and their pages
+              are left in place so the Capacitor build is unaffected. */}
           <Route element={<ProtectedRoute />}>
-            <Route path="/home" element={<HomeDashboard />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/routine" element={<Routine />} />
-            <Route path="/stats" element={<Stats />} />
-            <Route path="/goals" element={<Goals />} />
-            <Route path="/updates" element={<StayHardyUpdatesPage />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/planner" element={<Planner />} />
-            <Route path="/calendar" element={<Calendar />} />
-            <Route path="/tips" element={<Tips />} />
-            <Route path="/feedback" element={<Feedback />} />
-            <Route path="/feedback-list" element={<FeedbackList />} />
-            <Route path="/leaderboard" element={<ProRoute><Leaderboard /></ProRoute>} />
+            <Route path="/home" element={<RetiredWebRoute><HomeDashboard /></RetiredWebRoute>} />
+            <Route path="/dashboard" element={<RetiredWebRoute><Dashboard /></RetiredWebRoute>} />
+            <Route path="/routine" element={<RetiredWebRoute><Routine /></RetiredWebRoute>} />
+            <Route path="/stats" element={<RetiredWebRoute><Stats /></RetiredWebRoute>} />
+            <Route path="/goals" element={<RetiredWebRoute><Goals /></RetiredWebRoute>} />
+            <Route path="/updates" element={<RetiredWebRoute><StayHardyUpdatesPage /></RetiredWebRoute>} />
+            <Route path="/settings" element={<RetiredWebRoute><Settings /></RetiredWebRoute>} />
+            <Route path="/planner" element={<RetiredWebRoute><Planner /></RetiredWebRoute>} />
+            <Route path="/calendar" element={<RetiredWebRoute><Calendar /></RetiredWebRoute>} />
+            <Route path="/tips" element={<RetiredWebRoute><Tips /></RetiredWebRoute>} />
+            <Route path="/feedback" element={<RetiredWebRoute><Feedback /></RetiredWebRoute>} />
+            <Route path="/feedback-list" element={<RetiredWebRoute><FeedbackList /></RetiredWebRoute>} />
+            <Route path="/leaderboard" element={<RetiredWebRoute><ProRoute><Leaderboard /></ProRoute></RetiredWebRoute>} />
             <Route path="/admin" element={<AdminRoute />} />
           </Route>
+          {/* Anything else on the web is marketing. */}
+          <Route path="*" element={isWeb ? <Navigate to="/" replace /> : <Navigate to="/home" replace />} />
         </Routes>
       </Suspense>
     </GlobalNavWrapper>

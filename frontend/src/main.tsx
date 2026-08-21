@@ -25,3 +25,10 @@ const SentryApp = Sentry.withProfiler(Root);
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <SentryApp />
 );
+
+// One-time copy of WebView-only localStorage state into Capacitor Preferences so
+// the native rebuild can read it. Deferred past first paint and fully self-
+// contained — it cannot affect boot. Remove once the Flutter build has rolled out.
+void import('./lib/bridgeToNativeStorage')
+  .then(({ bridgeToNativeStorage }) => bridgeToNativeStorage())
+  .catch(() => {});

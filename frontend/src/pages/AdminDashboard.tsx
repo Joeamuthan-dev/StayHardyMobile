@@ -25,6 +25,8 @@ import { getEdgeFunctionErrorMessage } from '../lib/edgeFunctionError';
 import { invokeDeleteUserAccount } from '../lib/accountDeletion';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { CacheManager, CACHE_KEYS } from '../lib/smartCacheManager';
+import { useAdminIdleTimeout } from '../hooks/useAdminIdleTimeout';
+import { clearActivity, formatCountdown } from '../lib/adminSession';
 
 /** Yellow-green admin accent (distinct from user neon green) */
 const ADM = {
@@ -36,6 +38,48 @@ const ADM = {
 
 const ADMIN_USERS_PAGE_SIZE = 10;
 const TIPS_ADMIN_CACHE_MS = 10 * 60 * 1000;
+
+/** Ceiling on one feedback fetch. See `fetchFeedback`. */
+const FEEDBACK_FETCH_LIMIT = 100;
+
+type AdminTab = 'overview' | 'today' | 'revenue' | 'tips' | 'users' | 'feedback' | 'settings';
+
+/** Sidebar layout. Grouped so seven destinations read as three ideas. */
+const NAV_SECTIONS: { label: string; items: { tab: AdminTab; label: string; icon: string }[] }[] = [
+  {
+    label: 'Monitor',
+    items: [
+      { tab: 'overview', label: 'Overview', icon: 'monitoring' },
+      { tab: 'today', label: 'Today', icon: 'today' },
+    ],
+  },
+  {
+    label: 'Money',
+    items: [
+      { tab: 'revenue', label: 'Revenue', icon: 'payments' },
+      { tab: 'tips', label: 'Tips', icon: 'volunteer_activism' },
+    ],
+  },
+  {
+    label: 'People',
+    items: [
+      { tab: 'users', label: 'Users', icon: 'group' },
+      { tab: 'feedback', label: 'Support', icon: 'support_agent' },
+      { tab: 'settings', label: 'Announcements', icon: 'campaign' },
+    ],
+  },
+];
+
+/** Page heading per tab — the old chrome never said where you were. */
+const TAB_TITLES: Record<AdminTab, { title: string; sub: string }> = {
+  overview: { title: 'Overview', sub: 'Signups, Pro members and growth at a glance' },
+  today: { title: 'Today', sub: "Everything that has happened since midnight" },
+  revenue: { title: 'Revenue', sub: 'Pro purchases and what they earned' },
+  tips: { title: 'Tips', sub: 'One-off support from users' },
+  users: { title: 'Users', sub: 'Search, grant Pro, reset a PIN, purge an account' },
+  feedback: { title: 'Support', sub: 'Tickets and feature requests from the app' },
+  settings: { title: 'Announcements', sub: "Post to the app's What's New screen" },
+};
 
 const supportCategories = [
   { value: 'signup_issue', label: '📝 Signup Issue' },
@@ -214,6 +258,25 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     'overview' | 'today' | 'revenue' | 'tips' | 'users' | 'feedback' | 'settings'
   >('overview');
+
+  /** Signs out and returns to the login screen. */
+  const signOutAdmin = useCallback(async () => {
+    clearActivity();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('[admin] sign out failed', err);
+    }
+    navigate('/login', { replace: true });
+  }, [navigate]);
+
+  // A console that can grant Pro and purge accounts should not sit unlocked on
+  // an unattended laptop. Twenty idle minutes ends the session; the last minute
+  // is offered back as a prompt so nobody loses a half-typed announcement.
+  const { msLeft: idleMsLeft, extend: extendSession } = useAdminIdleTimeout(
+    Boolean(user),
+    signOutAdmin
+  );
   const [resetPinModal, setResetPinModal] = useState<{ show: boolean, userId: string, userName: string }>({ show: false, userId: '', userName: '' });
   const [deleteUserModal, setDeleteUserModal] = useState<{ show: boolean, userId: string, userName: string }>({ show: false, userId: '', userName: '' });
   const [newPinInput, setNewPinInput] = useState(['', '', '', '']);
@@ -301,6 +364,18 @@ const AdminDashboard: React.FC = () => {
     tx: typeof revenueTransactions;
     bar: { name: string; revenue: number }[];
   } | null>(null);
+
+  /**
+   * Drops the Pro-derived caches after an admin action that changes them.
+   *
+   * These caches exist so switching tabs is instant, but they were never
+   * invalidated on write — only by their 5-minute TTL. Any mutation touching
+   * `users.is_pro` must call this or the numbers lie until the TTL lapses.
+   */
+  const invalidateProCaches = useCallback(() => {
+    proOverviewCacheRef.current = null;
+    revenueCacheRef.current = null;
+  }, []);
 
   type TipsRecentRow = {
     id: string;
@@ -643,10 +718,17 @@ const AdminDashboard: React.FC = () => {
     [announcements]
   );
 
-  const deleteAnnouncement = useCallback(async (id: string) => {
+  const deleteAnnouncement = useCallback(async (id: string, title?: string) => {
+    // This is a permanent delete that every user's Updates screen reads, and it
+    // had no confirmation at all — one stray tap removed a published post.
+    const label = title ? `“${title}”` : 'this announcement';
+    if (!window.confirm(`Delete ${label} permanently?\n\nUsers will no longer see it in the app.`)) {
+      return;
+    }
     const { error } = await supabase.from('announcements').delete().eq('id', id);
     if (error) {
       console.error('[deleteAnnouncement]', error.message);
+      alert('Could not delete that announcement.');
       return;
     }
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
@@ -853,7 +935,8 @@ const AdminDashboard: React.FC = () => {
           .from('feedback')
           .select('id, user_name, user_email, message, type, ticket_id, status, admin_note, admin_note_date, created_at')
           .in('user_email', proEmails)
-          .order('created_at', { ascending: feedbackSortOrder === 'oldest' });
+          .order('created_at', { ascending: feedbackSortOrder === 'oldest' })
+          .limit(FEEDBACK_FETCH_LIMIT);
         if (error) { console.error('Error fetching pro feedback:', error); return; }
         setFeedbacks(data || []);
         setTotalFeedbackCount((data || []).length);
@@ -863,7 +946,11 @@ const AdminDashboard: React.FC = () => {
       let query = supabase
         .from('feedback')
         .select('id, user_name, user_email, message, type, ticket_id, status, admin_note, admin_note_date, created_at')
-        .order('created_at', { ascending: feedbackSortOrder === 'oldest' });
+        .order('created_at', { ascending: feedbackSortOrder === 'oldest' })
+        // Previously unbounded: every ticket ever written was fetched and
+        // rendered on each filter change. Capped so the tab stays fast as the
+        // table grows; `feedbackTruncated` tells the admin when there is more.
+        .limit(FEEDBACK_FETCH_LIMIT);
       if (feedbackActiveFilter === 'feature') {
         query = query.eq('type', 'feature');
       } else if (feedbackActiveFilter === 'support') {
@@ -1075,11 +1162,16 @@ const AdminDashboard: React.FC = () => {
       setGrantProModal({ show: false, user: null, plan: 'lifetime' });
       alert(`${targetUser.name || 'User'} is now Pro — ${plan.toUpperCase()} ⚡`);
       await fetchUserCounts();
+      // Overview and Revenue read from 5-minute caches that this write just
+      // invalidated. Without dropping them, an admin grants Pro and then sees
+      // the old member count and revenue for up to five minutes — and reasonably
+      // concludes the grant failed.
+      invalidateProCaches();
     } catch (err) {
       console.error('Failed to make pro:', err);
       alert('Failed to update ❌');
     }
-  }, [grantProModal, fetchUserCounts]);
+  }, [grantProModal, fetchUserCounts, invalidateProCaches]);
 
   const handleRevokePro = useCallback(async (targetUser: any) => {
     if (!window.confirm(`Revoke Pro from ${targetUser.name || targetUser.email}?`)) return;
@@ -1100,11 +1192,12 @@ const AdminDashboard: React.FC = () => {
         : u
       ));
       await fetchUserCounts();
+      invalidateProCaches();
     } catch (err) {
       console.error('Failed to revoke pro:', err);
       alert('Failed to update ❌');
     }
-  }, [fetchUserCounts]);
+  }, [fetchUserCounts, invalidateProCaches]);
 
   const deleteUser = (userId: string, userName: string) => {
     setDeleteUserModal({ show: true, userId, userName });
@@ -1313,9 +1406,59 @@ const AdminDashboard: React.FC = () => {
         <div className="aurora-gradient-2"></div>
       </div>
 
-      <header className="admin-hub-header">
-        <div className="admin-hub-header-top">
-          <div className="admin-hub-header-actions">
+      {/* A real dashboard chrome: persistent nav on the left, content on the
+          right. The old top tab strip meant seven destinations competing for a
+          scrolling row, with nothing telling you where you were. */}
+      <aside className="adm-side">
+        <div className="adm-side__brand">
+          <img src="/stayhardy-icon.svg" alt="" width={26} height={26} />
+          <div>
+            <strong>StayHardy</strong>
+            <span>Admin console</span>
+          </div>
+        </div>
+
+        <nav className="adm-nav" aria-label="Admin sections">
+          {NAV_SECTIONS.map((group) => (
+            <div className="adm-nav__group" key={group.label}>
+              <p className="adm-nav__glabel">{group.label}</p>
+              {group.items.map(({ tab, label, icon }) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`adm-nav__item ${activeTab === tab ? 'is-on' : ''}`}
+                  onClick={() => setActiveTab(tab)}
+                  aria-current={activeTab === tab ? 'page' : undefined}
+                >
+                  <span className="material-symbols-outlined">{icon}</span>
+                  <span className="adm-nav__t">{label}</span>
+                  {tab === 'feedback' && adminNotifCount > 0 && (
+                    <span className="adm-nav__badge">{adminNotifCount > 99 ? '99+' : adminNotifCount}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <div className="adm-side__foot">
+          <div className="adm-who" title={user?.email || ''}>
+            <span className="adm-who__dot" />
+            <span className="adm-who__mail">{user?.email}</span>
+          </div>
+          <button type="button" className="adm-signout" onClick={() => void signOutAdmin()}>
+            <span className="material-symbols-outlined">logout</span> Sign out
+          </button>
+        </div>
+      </aside>
+
+      <div className="adm-body">
+        <header className="adm-top">
+          <div className="adm-top__l">
+            <h1 className="adm-top__title">{TAB_TITLES[activeTab].title}</h1>
+            <p className="adm-top__sub">{TAB_TITLES[activeTab].sub}</p>
+          </div>
+          <div className="adm-top__r">
             <button
               type="button"
               className="admin-hub-bell"
@@ -1326,33 +1469,16 @@ const AdminDashboard: React.FC = () => {
               {adminNotifCount > 0 && <span className="admin-hub-bell-badge">{adminNotifCount > 99 ? '99+' : adminNotifCount}</span>}
             </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <div className="admin-hub-tabs-card">
-        <div className="admin-hub-tabs-scroll">
-          {(
-            [
-              ['overview', 'OVERVIEW'],
-              ['today', 'TODAY'],
-              ['revenue', 'REVENUE'],
-              ['tips', 'TIPS'],
-              ['users', 'USERS'],
-              ['feedback', 'SUPPORT'],
-              ['settings', '⚙️ SETTINGS'],
-            ] as const
-          ).map(([tab, label]) => (
-            <button
-              key={tab}
-              type="button"
-              className={`admin-hub-tab ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+        {/* Idle warning. Shown only in the final minute. */}
+        {idleMsLeft !== null && (
+          <div className="adm-idle" role="status">
+            <span className="material-symbols-outlined">lock_clock</span>
+            <span>Signing out in {formatCountdown(idleMsLeft)} for inactivity.</span>
+            <button type="button" onClick={extendSession}>Stay signed in</button>
+          </div>
+        )}
 
       <main className="admin-hub-main">
         {activeTab === 'overview' && (
@@ -2180,7 +2306,11 @@ const AdminDashboard: React.FC = () => {
                               </div>
                             </div>
                             <div>
-                              <div className="admin-v2-stat-lbl">LAST ACTIVE</div>
+                              {/* This value is `created_at`, so it is when they
+                                  joined — not last activity. The app tracks no
+                                  server-side "last seen", and a label that
+                                  claims one is worse than no column at all. */}
+                              <div className="admin-v2-stat-lbl">JOINED</div>
                               <div className="admin-v2-stat-val-la">{lastRel}</div>
                             </div>
                             <div>
@@ -2928,7 +3058,7 @@ const AdminDashboard: React.FC = () => {
                     <button
                       type="button"
                       title="Delete"
-                      onClick={() => void deleteAnnouncement(a.id)}
+                      onClick={() => void deleteAnnouncement(a.id, a.title)}
                       style={{
                         background: 'rgba(239,68,68,0.12)',
                         border: '1px solid rgba(239,68,68,0.25)',
@@ -2951,6 +3081,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
       </main>
+      </div>
 
       <style>{`
         .admin-settings-tab {
@@ -4863,6 +4994,336 @@ const AdminDashboard: React.FC = () => {
           color: ${ADM.gold};
           min-width: 2rem;
           text-align: right;
+        }
+
+        /* ==================================================================
+           2.0 REFRESH
+           Appended rather than woven in, so everything above stays the
+           working baseline and this layer can be removed in one cut.
+           ================================================================== */
+
+        .admin-hub-root {
+          --a-bg: #0A0C09;
+          --a-surface: #151812;
+          --a-surface-2: #1E221A;
+          --a-line: rgba(242, 245, 236, 0.08);
+          --a-line-2: rgba(242, 245, 236, 0.17);
+          --a-tx: #F2F5EC;
+          --a-tx-2: rgba(242, 245, 236, 0.70);
+          --a-tx-3: rgba(242, 245, 236, 0.50);
+          --a-accent: ${ADM.accent};
+          background: var(--a-bg);
+          min-height: 100vh;
+        }
+
+        /* --- the three modals ------------------------------------------------
+           .premium-modal-overlay and .glass-card were referenced by the Grant
+           Pro, Reset PIN and Delete modals but defined nowhere in the repo, so
+           those dialogs rendered unpositioned in the document flow. Defining
+           them here is a fix, not decoration. */
+        .premium-modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1000;
+          background: rgba(6, 7, 4, 0.72);
+          backdrop-filter: blur(6px);
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding: 5vh 1rem 2rem;
+          overflow-y: auto;
+          animation: adminFade 0.16s ease-out;
+        }
+        .premium-modal-overlay.centered {
+          align-items: center;
+          padding: 1rem;
+        }
+        .admin-hub-root ~ .premium-modal-overlay .glass-card,
+        .premium-modal-overlay .glass-card {
+          background: #151812;
+          border: 1px solid rgba(242, 245, 236, 0.14);
+          border-radius: 20px;
+          box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+          color: #F2F5EC;
+          animation: adminRise 0.2s cubic-bezier(0.2, 0.9, 0.25, 1);
+        }
+        @keyframes adminFade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes adminRise {
+          from { opacity: 0; transform: translateY(14px) scale(0.985) }
+          to   { opacity: 1; transform: none }
+        }
+
+        /* The primary action button in those modals, also previously undefined. */
+        .glow-btn-primary {
+          background: ${ADM.accent};
+          color: #0A0C09;
+          border: none;
+          border-radius: 999px;
+          padding: 0.8rem 1.4rem;
+          font-weight: 800;
+          font-size: 0.9rem;
+          cursor: pointer;
+          transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+        }
+        .glow-btn-primary:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 26px rgba(200, 255, 61, 0.26);
+        }
+        .glow-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* --- ambient background --------------------------------------------
+           .aurora-bg / .aurora-gradient-* were likewise undefined, so the
+           decorative divs rendered as nothing. Kept subtle: this is a data
+           screen and contrast matters more than atmosphere. */
+        .aurora-bg {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 0;
+          overflow: hidden;
+        }
+        .aurora-gradient-1,
+        .aurora-gradient-2 {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(80px);
+        }
+        .aurora-gradient-1 {
+          top: -220px;
+          left: 8%;
+          width: 620px;
+          height: 420px;
+          background: radial-gradient(circle, rgba(200, 255, 61, 0.10), transparent 70%);
+        }
+        .aurora-gradient-2 {
+          bottom: -260px;
+          right: 4%;
+          width: 560px;
+          height: 420px;
+          background: radial-gradient(circle, rgba(88, 183, 255, 0.07), transparent 70%);
+        }
+        .admin-hub-header,
+        .admin-hub-tabs-card,
+        .admin-hub-main { position: relative; z-index: 1; }
+
+        /* --- dashboard shell -------------------------------------------------- */
+        .admin-hub-root {
+          display: grid;
+          grid-template-columns: 244px minmax(0, 1fr);
+          align-items: start;
+          padding: 0;
+          max-width: none;
+        }
+
+        .adm-side {
+          position: sticky;
+          top: 0;
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          gap: 0.4rem;
+          padding: 1.1rem 0.85rem 1rem;
+          background: #0d100c;
+          border-right: 1px solid var(--a-line);
+          z-index: 5;
+        }
+        .adm-side__brand {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          padding: 0.25rem 0.5rem 1rem;
+        }
+        .adm-side__brand img { display: block; flex: none; }
+        .adm-side__brand div { display: flex; flex-direction: column; min-width: 0; }
+        .adm-side__brand strong {
+          font-size: 0.95rem;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+          color: var(--a-tx);
+          line-height: 1.15;
+        }
+        .adm-side__brand span { font-size: 0.68rem; color: var(--a-tx-3); }
+
+        .adm-nav { flex: 1; overflow-y: auto; scrollbar-width: none; }
+        .adm-nav::-webkit-scrollbar { display: none; }
+        .adm-nav__group { margin-bottom: 1.1rem; }
+        .adm-nav__glabel {
+          margin: 0 0 0.35rem 0.55rem;
+          font-size: 0.6rem;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          color: rgba(242, 245, 236, 0.32);
+          text-transform: uppercase;
+        }
+        .adm-nav__item {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 0.65rem;
+          padding: 0.58rem 0.6rem;
+          margin-bottom: 2px;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--a-tx-2);
+          font-size: 0.86rem;
+          font-weight: 600;
+          cursor: pointer;
+          text-align: left;
+          transition: background 0.14s ease, color 0.14s ease;
+        }
+        .adm-nav__item .material-symbols-outlined { font-size: 1.15rem; flex: none; }
+        .adm-nav__t { flex: 1; min-width: 0; }
+        .adm-nav__item:hover { background: rgba(242, 245, 236, 0.05); color: var(--a-tx); }
+        .adm-nav__item.is-on {
+          background: rgba(200, 255, 61, 0.13);
+          color: ${ADM.accent};
+          font-weight: 700;
+        }
+        .adm-nav__badge {
+          flex: none;
+          background: #FF6B6B;
+          color: #fff;
+          font-size: 0.62rem;
+          font-weight: 800;
+          padding: 2px 6px;
+          border-radius: 999px;
+        }
+
+        .adm-side__foot { border-top: 1px solid var(--a-line); padding-top: 0.7rem; }
+        .adm-who {
+          display: flex;
+          align-items: center;
+          gap: 0.45rem;
+          padding: 0 0.55rem 0.55rem;
+          min-width: 0;
+        }
+        .adm-who__dot {
+          width: 7px; height: 7px; border-radius: 50%;
+          background: #4ADE80; flex: none;
+          box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.15);
+        }
+        .adm-who__mail {
+          font-size: 0.7rem;
+          color: var(--a-tx-3);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .adm-signout {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.5rem 0.6rem;
+          border: 1px solid var(--a-line);
+          border-radius: 10px;
+          background: transparent;
+          color: var(--a-tx-2);
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: border-color 0.14s ease, color 0.14s ease;
+        }
+        .adm-signout:hover { border-color: rgba(255,107,107,.45); color: #FF6B6B; }
+        .adm-signout .material-symbols-outlined { font-size: 1.05rem; }
+
+        /* --- content column ---------------------------------------------------- */
+        .adm-body { min-width: 0; padding: 0 1.5rem 3rem; }
+        .adm-top {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 1rem;
+          padding: 1.5rem 0 1.15rem;
+        }
+        .adm-top__title {
+          margin: 0;
+          font-size: 1.5rem;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          color: var(--a-tx);
+          line-height: 1.1;
+        }
+        .adm-top__sub { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--a-tx-3); }
+        .admin-hub-bell { position: relative; }
+
+        /* the old strip is gone; neutralise anything still referencing it */
+        .admin-hub-tabs-card { display: none; }
+        .admin-hub-main { padding-left: 0; padding-right: 0; }
+
+        /* --- idle warning ------------------------------------------------------ */
+        .adm-idle {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          padding: 0.7rem 0.95rem;
+          margin-bottom: 1rem;
+          border-radius: 12px;
+          background: rgba(251, 191, 36, 0.1);
+          border: 1px solid rgba(251, 191, 36, 0.35);
+          color: #FBBF24;
+          font-size: 0.85rem;
+          font-weight: 600;
+        }
+        .adm-idle .material-symbols-outlined { font-size: 1.15rem; }
+        .adm-idle button {
+          margin-left: auto;
+          background: #FBBF24;
+          color: #0A0C09;
+          border: 0;
+          border-radius: 999px;
+          padding: 0.4rem 0.85rem;
+          font-weight: 800;
+          font-size: 0.78rem;
+          cursor: pointer;
+        }
+
+        /* --- responsive: sidebar becomes a top rail --------------------------- */
+        @media (max-width: 860px) {
+          .admin-hub-root { grid-template-columns: 1fr; }
+          .adm-side {
+            position: sticky;
+            top: 0;
+            height: auto;
+            flex-direction: row;
+            align-items: center;
+            gap: 0.5rem;
+            border-right: 0;
+            border-bottom: 1px solid var(--a-line);
+            padding: 0.6rem 0.75rem;
+            overflow-x: auto;
+            scrollbar-width: none;
+          }
+          .adm-side::-webkit-scrollbar { display: none; }
+          .adm-side__brand { padding: 0 0.5rem 0 0; flex: none; }
+          .adm-side__brand div { display: none; }
+          .adm-nav { display: flex; gap: 0.35rem; overflow: visible; flex: none; }
+          .adm-nav__group { display: flex; gap: 0.35rem; margin: 0; }
+          .adm-nav__glabel { display: none; }
+          .adm-nav__item {
+            width: auto;
+            margin: 0;
+            white-space: nowrap;
+            border-radius: 999px;
+            padding: 0.45rem 0.8rem;
+            font-size: 0.8rem;
+          }
+          .adm-nav__item .material-symbols-outlined { display: none; }
+          .adm-side__foot {
+            border-top: 0;
+            padding: 0;
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            flex: none;
+          }
+          .adm-who { display: none; }
+          .adm-signout { width: auto; padding: 0.45rem 0.7rem; }
+          .adm-signout span:not(.material-symbols-outlined) { display: none; }
+          .adm-body { padding: 0 1rem 2.5rem; }
+          .adm-top { padding: 1.1rem 0 0.9rem; }
+          .adm-top__title { font-size: 1.25rem; }
         }
       `}</style>
 

@@ -10,6 +10,15 @@ import { useLoading } from '../context/LoadingContext';
 import { processSyncQueue } from '../lib/syncQueue';
 import { hashPin, padPinForAuth } from '../utils/pinUtils';
 import { useDeviceType } from '../hooks/useDeviceType';
+import { isWeb } from '../utils/platform';
+import AdminLoginView from '../components/AdminLoginView';
+import {
+  clearFailedAttempts,
+  formatCountdown,
+  getLockState,
+  markActivity,
+  recordFailedAttempt,
+} from '../lib/adminSession';
 
 const Login: React.FC = () => {
   const deviceType = useDeviceType();
@@ -31,6 +40,23 @@ const Login: React.FC = () => {
   const [resendSuccess, setResendSuccess] = useState('');
 
   const [pinFocused, setPinFocused] = useState(false);
+
+  // Milliseconds left on the login lockout, 0 when unlocked. Ticks down so the
+  // admin can see when the form frees up instead of guessing.
+  const [lockMsLeft, setLockMsLeft] = useState(() =>
+    isWeb ? getLockState().msRemaining : 0
+  );
+
+  useEffect(() => {
+    if (!isWeb || lockMsLeft <= 0) return;
+    const id = window.setInterval(() => {
+      const { locked, msRemaining } = getLockState();
+      setLockMsLeft(locked ? msRemaining : 0);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [lockMsLeft]);
+
+  const isLocked = lockMsLeft > 0;
 
   // PIN Ref for focus management
   const pinInputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +98,7 @@ const Login: React.FC = () => {
       const { data: { session } } =
         await supabase.auth.getSession();
       if (session) {
-        navigate('/home', { replace: true });
+        navigate(isWeb ? '/admin' : '/home', { replace: true });
       }
     };
     checkSession();
@@ -107,6 +133,18 @@ const Login: React.FC = () => {
   };
 
   const handleLogin = async () => {
+    // ─── LOCKOUT ──────────────────────────
+    // Checked before anything else so a locked form cannot even reach Supabase.
+    if (isWeb) {
+      const lock = getLockState();
+      if (lock.locked) {
+        setErrorMessage(
+          `Too many failed attempts. Try again in ${formatCountdown(lock.msRemaining)}.`
+        );
+        return;
+      }
+    }
+
     // ─── VALIDATION ───────────────────────
     if (!email.trim()) {
       setErrorMessage("That doesn't look like a valid command. Check your email.");
@@ -162,6 +200,18 @@ const Login: React.FC = () => {
           msg.includes('no user') ||
           authError.status === 400
         ) {
+          // Only a genuinely wrong credential counts toward the lockout — a
+          // network blip or an unconfirmed email must never burn an attempt.
+          if (isWeb) {
+            const after = recordFailedAttempt();
+            setLockMsLeft(after.locked ? after.msRemaining : 0);
+            setErrorMessage(
+              after.locked
+                ? `Too many failed attempts. Locked for ${formatCountdown(after.msRemaining)}.`
+                : `Wrong code. ${after.attemptsRemaining} ${after.attemptsRemaining === 1 ? 'attempt' : 'attempts'} left.`
+            );
+            return;
+          }
           setErrorMessage("Wrong code. The 1% don't give up — try again.");
           return;
         }
@@ -198,9 +248,15 @@ const Login: React.FC = () => {
       markLoginComplete();
       startLoginAnimation();
 
-      // Navigate to home immediately
+      // A good password wipes the lockout counter.
+      clearFailedAttempts();
+      markActivity();
+
+      // On web the only signed-in destination is the admin console — there is
+      // no user app here any more. AdminRoute still re-checks admin rights, so
+      // a non-admin who reaches /login lands back on the marketing page.
       setIsLoading(false);
-      navigate('/home', { replace: true });
+      navigate(isWeb ? '/admin' : '/home', { replace: true });
 
       // PART 2: BACKGROUND SYNC (non-awaited async IIFE)
       (async () => {
@@ -301,6 +357,25 @@ const Login: React.FC = () => {
   };
 
   const isFormValid = email.length > 0 && pin.length === 4;
+
+  // The web build has no consumer product left, so it gets an admin door
+  // instead of the app's sign-in. Same state, same `handleLogin` — only the
+  // presentation differs, so there is still one auth path to reason about.
+  if (isWeb) {
+    return (
+      <AdminLoginView
+        email={email}
+        setEmail={setEmail}
+        pin={pin}
+        setPin={setPin}
+        onSubmit={() => void handleLogin()}
+        isLoading={isLoading}
+        error={errorMessage}
+        isLocked={isLocked}
+        lockMsLeft={lockMsLeft}
+      />
+    );
+  }
 
   return (
     <div
@@ -433,10 +508,14 @@ const Login: React.FC = () => {
         {/* PRIMARY ACTION BUTTON */}
         <button
           onClick={handleLogin}
-          disabled={isLoading || !isFormValid}
+          disabled={isLoading || !isFormValid || isLocked}
           className="w-full bg-[#00E676] text-black font-black uppercase h-14 rounded-2xl flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,230,118,0.4)] active:scale-95 transition-all duration-100 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Unlocking the Vault...' : "Let's Start"}
+          {isLocked
+            ? `Locked · ${formatCountdown(lockMsLeft)}`
+            : isLoading
+              ? 'Unlocking the Vault...'
+              : "Let's Start"}
           <svg width="20" height="20" viewBox="0 0 24 24" className="fill-none stroke-black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 12h14m-7-7l7 7-7 7" />
           </svg>
