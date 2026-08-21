@@ -1,5 +1,8 @@
-# Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+# Stated explicitly rather than left to CocoaPods' default. Without it every
+# `pod install` warns that it is "automatically assigning platform iOS 13.0",
+# and a silent default is a poor thing to depend on when a plugin raises its
+# own floor. 13.0 is what purchases_flutter 10.x and RevenueCat 5.x require.
+platform :ios, '13.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
