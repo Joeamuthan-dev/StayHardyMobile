@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StayHardy — Promo Reel</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  /* 9:16 canvas */
+  .canvas {
+    width: 405px;
+    height: 720px;
+    background: #000;
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    box-shadow: 0 0 60px rgba(0,230,118,0.15);
+  }
+
+  /* Aurora background */
+  .aurora {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 50% 10%, rgba(0,230,118,0.12) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 30% at 80% 80%, rgba(0,180,80,0.08) 0%, transparent 60%);
+    animation: auroraPulse 8s ease-in-out infinite;
+  }
+  @keyframes auroraPulse {
+    0%,100% { opacity: 0.7; }
+    50% { opacity: 1; }
+  }
+
+  /* Grid lines */
+  .grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0;
+    animation: fadeIn 0.5s 0.3s forwards;
+  }
+
+  /* ── SCENE 1: Branding (0–2.2s) ── */
+  .scene-brand {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    animation: sceneBrand 7.5s forwards;
+  }
+  @keyframes sceneBrand {
+    0%   { opacity: 0; }
+    5%   { opacity: 1; }
+    28%  { opacity: 1; }
+    35%  { opacity: 0; }
+    100% { opacity: 0; }
+  }
+
+  .logo-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #0a0a0a 0%, #111 100%);
+    border: 1.5px solid rgba(0,230,118,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 30px rgba(0,230,118,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+    animation: iconPop 7.5s forwards;
+  }
+  @keyframes iconPop {
+    0%   { transform: scale(0.6); opacity: 0; }
+    8%   { transform: scale(1.05); opacity: 1; }
+    12%  { transform: scale(1); }
+    28%  { transform: scale(1); opacity: 1; }
+    35%  { transform: scale(0.9); opacity: 0; }
+    100% { opacity: 0; }
+  }
+
+  .logo-icon svg { width: 44px; height: 44px; }
+
+  .brand-name {
+    font-size: 42px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    color: #fff;
+    text-align: center;
+    animation: brandSlide 7.5s forwards;
+  }
+  @keyframes brandSlide {
+    0%   { transform: translateY(20px); opacity: 0; }
+    10%  { transform: translateY(0); opacity: 1; }
+    28%  { transform: translateY(0); opacity: 1; }
+    35%  { transform: translateY(-10px); opacity: 0; }
+    100% { opacity: 0; }
+  }
+
+  .tagline {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    color: #00E676;
+    text-transform: uppercase;
+    animation: brandSlide 7.5s forwards;
+    animation-delay: 0.1s;
+  }
+
+  /* ── SCENE 2: Play Store badge (2.2–5s) ── */
+  .scene-play {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    animation: scenePlay 7.5s forwards;
+  }
+  @keyframes scenePlay {
+    0%   { opacity: 0; }
+    32%  { opacity: 0; }
+    40%  { opacity: 1; }
+    70%  { opacity: 1; }
+    78%  { opacity: 0; }
+    100% { opacity: 0; }
+  }
+
+  .verified-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,230,118,0.1);
+    border: 1px solid rgba(0,230,118,0.35);
+    border-radius: 100px;
+    padding: 8px 18px;
+    animation: pillBounce 7.5s forwards;
+  }
+  @keyframes pillBounce {
+    0%,31%  { transform: translateY(16px); opacity: 0; }
+    42%     { transform: translateY(-3px); opacity: 1; }
+    46%     { transform: translateY(0); }
+    70%     { opacity: 1; }
+    78%     { opacity: 0; }
+    100%    { opacity: 0; }
+  }
+  .verified-pill svg { width: 16px; height: 16px; }
+  .verified-pill span {
+    font-size: 12px;
+    font-weight: 700;
+    color: #00E676;
+    letter-spacing: 0.05em;
+  }
+
+  .play-headline {
+    font-size: 28px;
+    font-weight: 900;
+    color: #fff;
+    text-align: center;
+    line-height: 1.2;
+    padding: 0 32px;
+    animation: pillBounce 7.5s forwards;
+    animation-delay: 0.08s;
+  }
+  .play-headline em {
+    font-style: normal;
+    color: #00E676;
+  }
+
+  .play-sub {
+    font-size: 14px;
+    color: rgba(255,255,255,0.45);
+    text-align: center;
+    padding: 0 40px;
+    line-height: 1.5;
+    animation: pillBounce 7.5s forwards;
+    animation-delay: 0.15s;
+  }
+
+  /* Play store button */
+  .play-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff;
+    border-radius: 14px;
+    padding: 14px 22px;
+    animation: pillBounce 7.5s forwards;
+    animation-delay: 0.22s;
+  }
+  .play-btn svg { width: 28px; height: 28px; }
+  .play-btn-text { display: flex; flex-direction: column; }
+  .play-btn-text .small { font-size: 10px; color: #333; font-weight: 500; }
+  .play-btn-text .big { font-size: 18px; color: #000; font-weight: 800; line-height: 1.1; }
+
+  /* ── SCENE 3: URL CTA (5–7.5s) ── */
+  .scene-cta {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    animation: sceneCta 7.5s forwards;
+  }
+  @keyframes sceneCta {
+    0%   { opacity: 0; }
+    72%  { opacity: 0; }
+    80%  { opacity: 1; }
+    96%  { opacity: 1; }
+    100% { opacity: 0.85; }
+  }
+
+  .cta-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    animation: ctaUp 7.5s forwards;
+  }
+  @keyframes ctaUp {
+    0%,71% { transform: translateY(20px); opacity: 0; }
+    82%    { transform: translateY(0); opacity: 1; }
+    96%    { opacity: 1; }
+    100%   { opacity: 0.8; }
+  }
+
+  .cta-url {
+    font-size: 34px;
+    font-weight: 900;
+    color: #00E676;
+    letter-spacing: -0.5px;
+    text-shadow: 0 0 30px rgba(0,230,118,0.5);
+    animation: ctaUp 7.5s forwards;
+    animation-delay: 0.08s;
+  }
+
+  .cta-or {
+    font-size: 12px;
+    color: rgba(255,255,255,0.25);
+    animation: ctaUp 7.5s forwards;
+    animation-delay: 0.14s;
+  }
+
+  .cta-playstore {
+    font-size: 14px;
+    color: rgba(255,255,255,0.6);
+    text-align: center;
+    line-height: 1.5;
+    animation: ctaUp 7.5s forwards;
+    animation-delay: 0.2s;
+  }
+  .cta-playstore strong { color: #fff; }
+
+  /* search bar */
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 12px 18px;
+    width: 280px;
+    animation: ctaUp 7.5s forwards;
+    animation-delay: 0.26s;
+  }
+  .search-bar svg { width: 16px; height: 16px; opacity: 0.4; }
+  .search-bar span { font-size: 14px; color: rgba(255,255,255,0.5); }
+  .search-bar strong { color: #00E676; font-weight: 700; }
+
+  /* bottom bar */
+  .bottom-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 20px 24px 28px;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    animation: fadeIn 0.6s 0.5s forwards;
+    opacity: 0;
+  }
+  .bottom-logo { font-size: 15px; font-weight: 900; color: rgba(255,255,255,0.5); letter-spacing: 1px; }
+  .bottom-tag { font-size: 10px; color: rgba(255,255,255,0.25); }
+
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+
+  /* replay button */
+  .replay-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,230,118,0.15);
+    border: 1px solid rgba(0,230,118,0.4);
+    color: #00E676;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 24px;
+    border-radius: 100px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    z-index: 100;
+  }
+  .replay-btn:hover { background: rgba(0,230,118,0.25); }
+
+  /* tip */
+  .tip {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    color: rgba(255,255,255,0.5);
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 100px;
+    white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+</style>
+</head>
+<body>
+
+<div class="tip">Screen record this canvas at 9:16 • 7.5 seconds</div>
+
+<div class="canvas" id="canvas">
+  <div class="aurora"></div>
+  <div class="grid"></div>
+
+  <!-- Scene 1: Branding -->
+  <div class="scene-brand">
+    <div class="logo-icon">
+      <!-- SH bolt icon -->
+      <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M26 4L10 24H22L18 40L34 20H22L26 4Z" fill="#00E676" stroke="#00E676" stroke-width="1" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="brand-name">STAY HARDY</div>
+    <div class="tagline">The 1% starts here.</div>
+  </div>
+
+  <!-- Scene 2: Play Store -->
+  <div class="scene-play">
+    <div class="verified-pill">
+      <!-- checkmark -->
+      <svg viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke="#00E676" stroke-width="1.5"/>
+        <path d="M5 8l2 2 4-4" stroke="#00E676" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Verified on Google Play</span>
+    </div>
+
+    <div class="play-headline">Now <em>Publicly</em><br>Available</div>
+    <div class="play-sub">The elite productivity app is live.<br>Download it today.</div>
+
+    <!-- Play Store badge -->
+    <div class="play-btn">
+      <!-- Google Play triangle icon -->
+      <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 2.8L15.6 14 4 25.2V2.8Z" fill="#00C853"/>
+        <path d="M4 2.8L19.6 10.4 15.6 14 4 2.8Z" fill="#EA4335"/>
+        <path d="M4 25.2L15.6 14 19.6 17.6 4 25.2Z" fill="#FBBC04"/>
+        <path d="M19.6 10.4L24 12.8C25.2 13.4 25.2 14.6 24 15.2L19.6 17.6 15.6 14 19.6 10.4Z" fill="#4285F4"/>
+      </svg>
+      <div class="play-btn-text">
+        <span class="small">GET IT ON</span>
+        <span class="big">Google Play</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 3: URL CTA -->
+  <div class="scene-cta">
+    <div class="cta-eyebrow">Download Now</div>
+    <div class="cta-url">stayhardy.com</div>
+    <div class="cta-or">— or search on Play Store —</div>
+    <div class="search-bar">
+      <svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="white" stroke-width="1.5"/><path d="M11 11l3 3" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span>Search: <strong>StayHardy</strong></span>
+    </div>
+    <div class="cta-playstore">
+      Visit <strong>stayhardy.com</strong> to download<br>
+      or find it directly on <strong>Google Play</strong>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <span class="bottom-logo">STAYHARDY</span>
+    <span class="bottom-tag">stayhardy.com</span>
+  </div>
+</div>
+
+<button class="replay-btn" onclick="replay()">↺ Replay</button>
+
+<script>
+  function replay() {
+    const canvas = document.getElementById('canvas');
+    canvas.style.animation = 'none';
+    // Re-clone to restart all animations
+    const clone = canvas.cloneNode(true);
+    canvas.parentNode.replaceChild(clone, canvas);
+    clone.id = 'canvas';
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>StayHardy — Play Store Screenshots</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; gap: 16px; }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .controls button {
+    background: #10b981; color: #fff; border: none; padding: 10px 18px;
+    border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700;
+  }
+  .controls button.active { background: #BBFF00; color: #000; }
+  .slide-wrap { position: relative; }
+  .slide { display: none; }
+  .slide.active { display: block; }
+  canvas { display: block; border-radius: 12px; box-shadow: 0 0 60px rgba(16,185,129,0.3); }
+  .dl { margin-top: 8px; text-align: center; }
+  .dl a {
+    background: #10b981; color: #fff; padding: 10px 28px; border-radius: 8px;
+    text-decoration: none; font-weight: 700; font-size: 14px;
+  }
+  .note { color: #666; font-size: 12px; text-align: center; max-width: 600px; }
+</style>
+</head>
+<body>
+
+<div class="controls" id="btns"></div>
+<div id="slides"></div>
+<p class="note">1080 × 1920 px · Right-click canvas → Save image as PNG · Or use the Download button</p>
+
+<script>
+const W = 1080, H = 1920;
+const GREEN = '#10b981';
+const LIME  = '#BBFF00';
+const BLACK = '#000000';
+const WHITE = '#ffffff';
+const GRAY  = '#94a3b8';
+const DARK  = '#0f172a';
+const CARD  = '#1e293b';
+
+/* ── helpers ─────────────────────────────────────────────── */
+function px(n){ return n; } // identity — we draw at full 1080×1920
+
+function radialBurst(ctx, cx, cy, r, inner, outer){
+  // starburst rays
+  const rays = 24;
+  for(let i=0;i<rays;i++){
+    const a0 = (i/rays)*Math.PI*2;
+    const a1 = a0 + Math.PI/rays * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,a0,a1);
+    ctx.closePath();
+    ctx.fillStyle = inner;
+    ctx.fill();
+  }
+  // dark overlay
+  for(let i=0;i<rays;i++){
+    const a0 = (i/rays)*Math.PI*2 + Math.PI/rays*0.55;
+    const a1 = a0 + Math.PI/rays * 0.45;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,a0,a1);
+    ctx.closePath();
+    ctx.fillStyle = outer;
+    ctx.fill();
+  }
+}
+
+function bgGradient(ctx, color1, color2){
+  const g = ctx.createRadialGradient(W/2,H*0.3,80,W/2,H*0.3,H*0.9);
+  g.addColorStop(0, color1);
+  g.addColorStop(1, color2);
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+}
+
+function drawBG(ctx, accent){
+  // deep black base
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,W,H);
+  // radial burst
+  bgGradient(ctx, accent+'33', '#00000000');
+  // starburst rays using accent
+  ctx.save();
+  ctx.globalAlpha = 0.12;
+  radialBurst(ctx, W/2, H*0.28, H*0.95, accent, '#000');
+  ctx.restore();
+  // subtle top glow
+  const glow = ctx.createRadialGradient(W/2, H*0.22, 0, W/2, H*0.22, 420);
+  glow.addColorStop(0, accent+'55');
+  glow.addColorStop(1, 'transparent');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0,0,W,H);
+}
+
+function wrapText(ctx, text, x, y, maxW, lh){
+  const words = text.split(' ');
+  let line = '';
+  let yy = y;
+  for(let w of words){
+    const test = line + w + ' ';
+    if(ctx.measureText(test).width > maxW && line !== ''){
+      ctx.fillText(line.trim(), x, yy);
+      line = w + ' ';
+      yy += lh;
+    } else { line = test; }
+  }
+  ctx.fillText(line.trim(), x, yy);
+  return yy;
+}
+
+/* ── phone frame ─────────────────────────────────────────── */
+function drawPhone(ctx, x, y, pw, ph, screenFn){
+  const r = 60;
+  const border = 10;
+
+  // outer shadow
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 80;
+  ctx.shadowOffsetY = 30;
+
+  // white frame
+  ctx.beginPath();
+  roundRect(ctx, x-border, y-border, pw+border*2, ph+border*2, r+border);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.restore();
+
+  // screen clip
+  ctx.save();
+  ctx.beginPath();
+  roundRect(ctx, x, y, pw, ph, r);
+  ctx.clip();
+
+  // screen bg
+  ctx.fillStyle = '#000';
+  ctx.fillRect(x, y, pw, ph);
+
+  // draw the app screen
+  screenFn(ctx, x, y, pw, ph);
+
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+function statusBar(ctx, sx, sy, sw){
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(sx, sy, sw, 52);
+  ctx.fillStyle = WHITE;
+  ctx.font = 'bold 22px system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillText('9:41', sx+28, sy+34);
+  ctx.textAlign = 'right';
+  ctx.fillText('●●● WiFi 100%', sx+sw-28, sy+34);
+}
+
+function card(ctx, x, y, w, h, r=18, fill=CARD){
+  ctx.beginPath();
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+function pillBadge(ctx, x, y, text, color, textColor='#000'){
+  ctx.save();
+  ctx.font = 'bold 22px system-ui';
+  const tw = ctx.measureText(text).width + 24;
+  ctx.beginPath();
+  roundRect(ctx, x, y, tw, 36, 18);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'left';
+  ctx.fillText(text, x+12, y+25);
+  ctx.restore();
+}
+
+/* ── SLIDE DEFINITIONS ───────────────────────────────────── */
+const slides = [
+
+  /* 1 — Hero / Dashboard */
+  {
+    label: '1 · Hero',
+    accent: GREEN,
+    headline: ['STAY', 'DISCIPLINED.', 'STAY HARDY.'],
+    sub: 'Your all-in-one productivity companion',
+    screen(ctx, sx, sy, sw, sh){
+      // bg
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(sx, sy, sw, sh);
+      statusBar(ctx, sx, sy, sw);
+
+      // header
+      ctx.fillStyle = GREEN;
+      ctx.font = 'bold 38px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText('StayHardy', sx+40, sy+110);
+      ctx.fillStyle = WHITE+'99';
+      ctx.font = '26px system-ui';
+      ctx.fillText('Good morning, Joe 👋', sx+40, sy+148);
+
+      // momentum card
+      card(ctx, sx+30, sy+180, sw-60, 180, 20, '#0f2d20');
+      ctx.fillStyle = GREEN;
+      ctx.font = 'bold 28px system-ui';
+      ctx.fillText('MOMENTUM SCORE', sx+60, sy+222);
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 88px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('84', sx+sw/2, sy+340);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = LIME;
+      ctx.font = 'bold 26px system-ui';
+      ctx.fillText('⚡ LOCKED IN', sx+60, sy+360);
+
+      // progress bar
+      ctx.fillStyle = '#ffffff22';
+      roundRect(ctx, sx+60, sy+385, sw-120, 14, 7);
+      ctx.fill();
+      ctx.fillStyle = GREEN;
+      roundRect(ctx, sx+60, sy+385, (sw-120)*0.84, 14, 7);
+      ctx.fill();
+
+      // stat pills row
+      const stats = [['12','Tasks Done'],['5','Goals Active'],['🔥 9','Day Streak']];
+      stats.forEach(([val,lbl],i)=>{
+        const cx = sx + 40 + i*(sw-80)/3;
+        card(ctx, cx, sy+430, (sw-80)/3 - 14, 110, 16, CARD);
+        ctx.fillStyle = GREEN;
+        ctx.font = 'bold 36px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(val, cx+(sw-80)/3/2-7, sy+484);
+        ctx.fillStyle = GRAY;
+        ctx.font = '22px system-ui';
+        ctx.fillText(lbl, cx+(sw-80)/3/2-7, sy+512);
+        ctx.textAlign = 'left';
+      });
+
+      // today tasks
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 30px system-ui';
+      ctx.fillText("Today's Tasks", sx+40, sy+582);
+      const tasks = [
+        ['Morning Workout','HIGH',true],
+        ['Read 20 pages','MED',true],
+        ['Cold shower','LOW',false],
+        ['Review goals','HIGH',false],
+      ];
+      tasks.forEach(([t,pri,done],i)=>{
+        const ty = sy+610+i*72;
+        card(ctx, sx+30, ty, sw-60, 60, 14, done?'#0f2d20':CARD);
+        ctx.fillStyle = done ? GREEN : WHITE;
+        ctx.font = done ? '26px system-ui' : 'bold 26px system-ui';
+        if(done){ ctx.save(); ctx.globalAlpha=0.5; }
+        ctx.fillText((done?'✓ ':' ')+ t, sx+60, ty+36);
+        if(done) ctx.restore();
+        const pcol = pri==='HIGH'?'#ef4444':pri==='MED'?'#f59e0b':GRAY;
+        pillBadge(ctx, sx+sw-130, ty+12, pri, pcol+'33', pcol);
+      });
+    }
+  },
+
+  /* 2 — Tasks */
+  {
+    label: '2 · Tasks',
+    accent: GREEN,
+    headline: ['TRACK EVERY', 'TASK.', 'MISS NOTHING.'],
+    sub: 'Prioritize what matters. Crush it daily.',
+    screen(ctx, sx, sy, sw, sh){
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(sx, sy, sw, sh);
+      statusBar(ctx, sx, sy, sw);
+
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 42px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText('My Tasks', sx+40, sy+110);
+      ctx.fillStyle = GRAY;
+      ctx.font = '26px system-ui';
+      ctx.fillText('3 of 7 completed today', sx+40, sy+148);
+
+      // filter chips
+      ['All','Today','Upcoming','Done'].forEach((f,i)=>{
+        const fw = 120, fx = sx+30+i*130;
+        card(ctx, fx, sy+170, fw, 44, 22, i===0 ? GREEN : CARD);
+        ctx.fillStyle = i===0 ? BLACK : WHITE;
+        ctx.font = 'bold 22px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(f, fx+60, sy+198);
+        ctx.textAlign = 'left';
+      });
+
+      const items = [
+        ['Morning run 5km','HIGH','Done','#ef4444'],
+        ['Prepare project proposal','HIGH','Pending','#ef4444'],
+        ['Read investing chapter','MED','Pending','#f59e0b'],
+        ['Meditate 15 min','MED','Done','#f59e0b'],
+        ['Study Spanish vocab','LOW','Pending','#94a3b8'],
+        ['Call mentor','HIGH','Pending','#ef4444'],
+        ['Review weekly goals','MED','Pending','#f59e0b'],
+      ];
+      items.forEach(([t,pri,status,pcol],i)=>{
+        const ty = sy+240+i*80;
+        const done = status === 'Done';
+        card(ctx, sx+20, ty, sw-40, 68, 16, done ? '#0f2d20' : CARD);
+
+        // checkbox
+        ctx.beginPath();
+        roundRect(ctx, sx+48, ty+20, 30, 30, 8);
+        ctx.fillStyle = done ? GREEN : '#334155';
+        ctx.fill();
+        if(done){
+          ctx.fillStyle = WHITE;
+          ctx.font = 'bold 22px system-ui';
+          ctx.fillText('✓', sx+50, ty+42);
+        }
+
+        ctx.fillStyle = done ? WHITE+'66' : WHITE;
+        ctx.font = (done?'':' bold ')+'28px system-ui';
+        ctx.fillText(t, sx+96, ty+42);
+
+        // priority dot
+        ctx.beginPath();
+        ctx.arc(sx+sw-80, ty+34, 8, 0, Math.PI*2);
+        ctx.fillStyle = pcol;
+        ctx.fill();
+      });
+
+      // fab
+      ctx.beginPath();
+      ctx.arc(sx+sw-80, sy+sh-100, 44, 0, Math.PI*2);
+      ctx.fillStyle = GREEN;
+      ctx.fill();
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 44px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('+', sx+sw-80, sy+sh-84);
+    }
+  },
+
+  /* 3 — Goals */
+  {
+    label: '3 · Goals',
+    accent: '#f59e0b',
+    headline: ['SET GOALS.', 'CHASE THEM', 'RELENTLESSLY.'],
+    sub: 'Track every milestone on the way to greatness.',
+    screen(ctx, sx, sy, sw, sh){
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(sx, sy, sw, sh);
+      statusBar(ctx, sx, sy, sw);
+
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 42px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText('My Goals', sx+40, sy+110);
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = '26px system-ui';
+      ctx.fillText('5 active · 2 completed this month', sx+40, sy+148);
+
+      const goals = [
+        { name:'Run 100km this month', pct:68, cat:'Fitness', color:'#10b981' },
+        { name:'Read 12 books this year', pct:42, cat:'Learning', color:'#6366f1' },
+        { name:'Save ₹50,000', pct:81, cat:'Finance', color:'#f59e0b' },
+        { name:'Learn React Native', pct:55, cat:'Career', color:'#0ea5e9' },
+        { name:'Meditate 30 days straight', pct:30, cat:'Wellness', color:'#ec4899' },
+      ];
+
+      goals.forEach((g,i)=>{
+        const gy = sy+178+i*148;
+        card(ctx, sx+24, gy, sw-48, 130, 20, CARD);
+
+        // category badge
+        pillBadge(ctx, sx+48, gy+18, g.cat, g.color+'33', g.color);
+
+        ctx.fillStyle = WHITE;
+        ctx.font = 'bold 28px system-ui';
+        ctx.fillText(g.name, sx+48, gy+74);
+
+        // progress bar bg
+        ctx.beginPath();
+        roundRect(ctx, sx+48, gy+90, sw-96, 16, 8);
+        ctx.fillStyle = '#ffffff18';
+        ctx.fill();
+        // progress fill
+        ctx.beginPath();
+        roundRect(ctx, sx+48, gy+90, (sw-96)*(g.pct/100), 16, 8);
+        ctx.fillStyle = g.color;
+        ctx.fill();
+
+        // pct text
+        ctx.fillStyle = g.color;
+        ctx.font = 'bold 26px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(g.pct+'%', sx+sw-48, gy+108);
+        ctx.textAlign = 'left';
+      });
+    }
+  },
+
+  /* 4 — Stats */
+  {
+    label: '4 · Stats',
+    accent: '#6366f1',
+    headline: ['MEASURE YOUR', 'GRIND.', 'KNOW YOUR DATA.'],
+    sub: 'Up to 1 year of productivity insights at a glance.',
+    screen(ctx, sx, sy, sw, sh){
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(sx, sy, sw, sh);
+      statusBar(ctx, sx, sy, sw);
+
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 42px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText('Statistics', sx+40, sy+110);
+      ctx.fillStyle = '#6366f1';
+      ctx.font = '26px system-ui';
+      ctx.fillText('Last 30 days', sx+40, sy+148);
+
+      // summary row
+      [['247','Tasks Done'],['18','Goals Hit'],['92%','Consistency']].forEach(([v,l],i)=>{
+        const cx = sx + 30 + i*((sw-60)/3);
+        card(ctx, cx, sy+170, (sw-60)/3-10, 100, 16, '#1e1b4b');
+        ctx.fillStyle = '#6366f1';
+        ctx.font = 'bold 40px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(v, cx+(sw-60)/3/2-5, sy+228);
+        ctx.fillStyle = GRAY;
+        ctx.font = '22px system-ui';
+        ctx.fillText(l, cx+(sw-60)/3/2-5, sy+256);
+        ctx.textAlign = 'left';
+      });
+
+      // bar chart
+      card(ctx, sx+24, sy+292, sw-48, 320, 20, CARD);
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 28px system-ui';
+      ctx.fillText('Daily Completions', sx+52, sy+332);
+
+      const bars = [4,7,5,9,12,8,10,11,6,13,9,11,14,7];
+      const bw = (sw-96)/bars.length - 6;
+      const maxB = Math.max(...bars);
+      const chartH = 180;
+      const chartBase = sy+590;
+      bars.forEach((b,i)=>{
+        const bh = (b/maxB)*chartH;
+        const bx = sx+48 + i*(bw+6);
+        ctx.fillStyle = '#6366f133';
+        ctx.fillRect(bx, chartBase-chartH, bw, chartH);
+        const g = ctx.createLinearGradient(bx, chartBase-bh, bx, chartBase);
+        g.addColorStop(0,'#6366f1');
+        g.addColorStop(1,'#a855f7');
+        ctx.fillStyle = g;
+        ctx.fillRect(bx, chartBase-bh, bw, bh);
+      });
+
+      // category breakdown
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 30px system-ui';
+      ctx.fillText('By Category', sx+40, sy+660);
+      const cats = [['Fitness','#10b981',78],['Work','#6366f1',65],['Learning','#0ea5e9',52],['Personal','#f59e0b',41]];
+      cats.forEach(([c,col,pct],i)=>{
+        const cy = sy+690+i*84;
+        ctx.fillStyle = WHITE;
+        ctx.font = '26px system-ui';
+        ctx.fillText(c, sx+40, cy+26);
+        ctx.fillStyle = '#ffffff18';
+        roundRect(ctx, sx+40, cy+36, sw-100, 14, 7);
+        ctx.fill();
+        ctx.fillStyle = col;
+        roundRect(ctx, sx+40, cy+36, (sw-100)*(pct/100), 14, 7);
+        ctx.fill();
+        ctx.textAlign = 'right';
+        ctx.fillStyle = col;
+        ctx.font = 'bold 24px system-ui';
+        ctx.fillText(pct+'%', sx+sw-40, cy+50);
+        ctx.textAlign = 'left';
+      });
+    }
+  },
+
+  /* 5 — Routine / Streaks */
+  {
+    label: '5 · Routine',
+    accent: '#f97316',
+    headline: ['BUILD HABITS.', 'BREAK LIMITS.', 'EVERY. SINGLE. DAY.'],
+    sub: 'Your daily routine, tracked and optimized.',
+    screen(ctx, sx, sy, sw, sh){
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(sx, sy, sw, sh);
+      statusBar(ctx, sx, sy, sw);
+
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 42px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText('Daily Routine', sx+40, sy+110);
+      ctx.fillStyle = '#f97316';
+      ctx.font = 'bold 28px system-ui';
+      ctx.fillText('🔥 Current streak: 9 days', sx+40, sy+150);
+
+      // streak calendar
+      card(ctx, sx+24, sy+178, sw-48, 170, 20, CARD);
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 26px system-ui';
+      ctx.fillText('April 2026', sx+52, sy+214);
+      const days = ['M','T','W','T','F','S','S'];
+      days.forEach((d,i)=>{
+        ctx.fillStyle = GRAY;
+        ctx.font = '22px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(d, sx+64 + i*120 + 30, sy+245);
+      });
+      const week = [true,true,true,true,true,true,false];
+      week.forEach((done,i)=>{
+        const dx = sx+64+i*120;
+        ctx.beginPath();
+        ctx.arc(dx+30, sy+295, 28, 0, Math.PI*2);
+        ctx.fillStyle = done ? '#f97316' : '#334155';
+        ctx.fill();
+        if(done){
+          ctx.fillStyle = WHITE;
+          ctx.font = 'bold 26px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText('✓', dx+30, sy+303);
+        }
+      });
+      ctx.textAlign = 'left';
+
+      // habit list
+      const habits = [
+        ['Morning workout','🏋️','9/9 days','#10b981'],
+        ['Cold shower','🚿','8/9 days','#0ea5e9'],
+        ['Meditate','🧘','7/9 days','#6366f1'],
+        ['Read 20 pages','📖','6/9 days','#f59e0b'],
+        ['No junk food','🥗','9/9 days','#10b981'],
+        ['Sleep by 11pm','🌙','5/9 days','#94a3b8'],
+      ];
+      habits.forEach(([name,icon,progress,col],i)=>{
+        const hy = sy+372+i*90;
+        card(ctx, sx+24, hy, sw-48, 76, 16, CARD);
+
+        ctx.font = '36px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(icon, sx+72, hy+48);
+
+        ctx.fillStyle = WHITE;
+        ctx.font = 'bold 28px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(name, sx+110, hy+38);
+
+        ctx.fillStyle = col;
+        ctx.font = 'bold 24px system-ui';
+        ctx.fillText(progress, sx+110, hy+64);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = col;
+        ctx.font = 'bold 28px system-ui';
+        ctx.fillText('●', sx+sw-48, hy+44);
+        ctx.textAlign = 'left';
+      });
+    }
+  },
+
+  /* 6 — Leaderboard */
+  {
+    label: '6 · Leaderboard',
+    accent: '#f59e0b',
+    headline: ['COMPETE.', 'RISE.', 'LEAD THE PACK.'],
+    sub: 'Where discipline meets competition.',
+    screen(ctx, sx, sy, sw, sh){
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(sx, sy, sw, sh);
+      statusBar(ctx, sx, sy, sw);
+
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 42px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText('Leaderboard', sx+40, sy+110);
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = '26px system-ui';
+      ctx.fillText('Top performers this week', sx+40, sy+148);
+
+      // podium
+      const podium = [
+        { name:'Raj S.', score:96, medal:'🥇', col:'#f59e0b', h:170 },
+        { name:'Joe A.', score:91, medal:'🥈', col:'#94a3b8', h:130 },
+        { name:'Priya K.',score:87, medal:'🥉', col:'#cd7c3f', h:100 },
+      ];
+      const podW = (sw-80)/3;
+      // draw in order: 2nd, 1st, 3rd
+      [1,0,2].forEach(idx=>{
+        const p = podium[idx];
+        const px = sx+40 + idx*podW;
+        const pyBase = sy+380;
+        card(ctx, px+6, pyBase-p.h, podW-12, p.h+40, 16, p.col+'22');
+        ctx.fillStyle = p.col;
+        ctx.font = '44px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.medal, px+podW/2-6, pyBase-p.h+52);
+        ctx.fillStyle = WHITE;
+        ctx.font = 'bold 26px system-ui';
+        ctx.fillText(p.name, px+podW/2-6, pyBase-p.h+82);
+        ctx.fillStyle = p.col;
+        ctx.font = 'bold 32px system-ui';
+        ctx.fillText(p.score, px+podW/2-6, pyBase-p.h+118);
+        ctx.textAlign = 'left';
+      });
+
+      // list
+      const rest = [
+        ['4','Aisha M.','84','#6366f1'],
+        ['5','Kiran T.','81','#0ea5e9'],
+        ['6','Meera P.','79','#10b981'],
+        ['7','Sam B.','76','#f97316'],
+        ['8','Nina R.','74','#ec4899'],
+      ];
+      rest.forEach(([rank,name,score,col],i)=>{
+        const ry = sy+428+i*84;
+        card(ctx, sx+24, ry, sw-48, 72, 14, CARD);
+        ctx.fillStyle = GRAY;
+        ctx.font = 'bold 26px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('#'+rank, sx+68, ry+42);
+
+        // avatar circle
+        ctx.beginPath();
+        ctx.arc(sx+120, ry+36, 24, 0, Math.PI*2);
+        ctx.fillStyle = col+'44';
+        ctx.fill();
+        ctx.fillStyle = col;
+        ctx.font = 'bold 22px system-ui';
+        ctx.fillText(name[0], sx+120, ry+44);
+
+        ctx.fillStyle = WHITE;
+        ctx.font = 'bold 28px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(name, sx+156, ry+44);
+
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 30px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(score, sx+sw-48, ry+44);
+        ctx.textAlign = 'left';
+      });
+    }
+  },
+
+  /* 7 — Momentum / Godmode */
+  {
+    label: '7 · Godmode',
+    accent: LIME,
+    headline: ['GODMODE', 'ACTIVE.', 'ARE YOU READY?'],
+    sub: 'Hit your peak. The momentum system pushes you further.',
+    screen(ctx, sx, sy, sw, sh){
+      ctx.fillStyle = '#050505';
+      ctx.fillRect(sx, sy, sw, sh);
+      statusBar(ctx, sx, sy, sw);
+
+      // big glow behind score
+      const glow = ctx.createRadialGradient(sx+sw/2, sy+sh*0.4, 0, sx+sw/2, sy+sh*0.4, 280);
+      glow.addColorStop(0, LIME+'44');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.fillRect(sx, sy, sw, sh);
+
+      ctx.fillStyle = LIME;
+      ctx.font = 'bold 36px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('MOMENTUM SCORE', sx+sw/2, sy+138);
+
+      // big score circle
+      ctx.beginPath();
+      ctx.arc(sx+sw/2, sy+300, 170, 0, Math.PI*2);
+      ctx.strokeStyle = LIME;
+      ctx.lineWidth = 10;
+      ctx.stroke();
+      ctx.fillStyle = LIME+'11';
+      ctx.fill();
+
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 130px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('98', sx+sw/2, sy+340);
+
+      ctx.fillStyle = LIME;
+      ctx.font = 'bold 44px system-ui';
+      ctx.fillText('⚡ GODMODE ACTIVE', sx+sw/2, sy+480);
+
+      ctx.fillStyle = WHITE+'88';
+      ctx.font = '26px system-ui';
+      ctx.fillText("You're in the top 1% this week", sx+sw/2, sy+530);
+
+      ctx.textAlign = 'left';
+
+      // rank cards
+      const ranks = [
+        ['0–30','GHOST MODE','😴','#334155'],
+        ['31–59','WARMING UP','🔥','#f97316'],
+        ['60–79','LOCKED IN','⚡','#6366f1'],
+        ['80–94','PEAK MODE','🚀','#10b981'],
+        ['95–100','GODMODE','👑', LIME],
+      ];
+      ctx.fillStyle = WHITE;
+      ctx.font = 'bold 28px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText('Momentum Tiers', sx+40, sy+600);
+
+      ranks.forEach(([range,name,icon,col],i)=>{
+        const ry = sy+630+i*76;
+        const isActive = i === 4;
+        card(ctx, sx+24, ry, sw-48, 62, 14, isActive ? col+'22' : CARD);
+        if(isActive){
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          roundRect(ctx, sx+24, ry, sw-48, 62, 14);
+          ctx.stroke();
+        }
+        ctx.font = '30px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(icon, sx+68, ry+40);
+
+        ctx.fillStyle = isActive ? col : WHITE;
+        ctx.font = 'bold 28px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(name, sx+100, ry+32);
+        ctx.fillStyle = GRAY;
+        ctx.font = '22px system-ui';
+        ctx.fillText(range, sx+100, ry+54);
+
+        if(isActive){
+          ctx.textAlign = 'right';
+          ctx.fillStyle = col;
+          ctx.font = 'bold 24px system-ui';
+          ctx.fillText('YOU ARE HERE', sx+sw-48, ry+40);
+          ctx.textAlign = 'left';
+        }
+      });
+    }
+  },
+];
+
+/* ── RENDER ENGINE ───────────────────────────────────────── */
+const btnsEl = document.getElementById('btns');
+const slidesEl = document.getElementById('slides');
+
+slides.forEach((s, idx) => {
+  // button
+  const btn = document.createElement('button');
+  btn.textContent = s.label;
+  if(idx === 0) btn.classList.add('active');
+  btn.onclick = () => {
+    document.querySelectorAll('.controls button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.slide').forEach(el=>el.classList.remove('active'));
+    document.getElementById('slide-'+idx).classList.add('active');
+  };
+  btnsEl.appendChild(btn);
+
+  // slide wrapper
+  const div = document.createElement('div');
+  div.className = 'slide' + (idx===0?' active':'');
+  div.id = 'slide-'+idx;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  canvas.style.width = '360px';
+  canvas.style.height = '640px';
+
+  const ctx = canvas.getContext('2d');
+  drawSlide(ctx, s);
+
+  // download link
+  const dl = document.createElement('div');
+  dl.className = 'dl';
+  const a = document.createElement('a');
+  a.textContent = '⬇ Download PNG';
+  a.href = '#';
+  a.onclick = (e) => {
+    e.preventDefault();
+    const link = document.createElement('a');
+    link.download = `stayhardy-screenshot-${idx+1}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  };
+  dl.appendChild(a);
+
+  div.appendChild(canvas);
+  div.appendChild(dl);
+  slidesEl.appendChild(div);
+});
+
+function drawSlide(ctx, s){
+  const accent = s.accent;
+
+  /* background */
+  drawBG(ctx, accent);
+
+  /* headline block */
+  const topH = H * 0.36;
+  ctx.save();
+  ctx.textAlign = 'center';
+  const lines = s.headline;
+  const lhMap = [0.92, 0.85, 0.82];
+  const sizes = [190, 190, 170];
+
+  let ty = H * 0.055;
+  lines.forEach((line, li) => {
+    const fs = sizes[li] || 160;
+    ctx.font = `900 ${fs}px 'Arial Black', Arial, sans-serif`;
+    // outline/shadow
+    ctx.strokeStyle = '#000000aa';
+    ctx.lineWidth = 14;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(line, W/2, ty);
+    ctx.fillStyle = WHITE;
+    ctx.fillText(line, W/2, ty);
+    ty += fs * (lhMap[li] || 0.9);
+  });
+
+  // subtitle
+  ctx.font = `bold 44px system-ui`;
+  ctx.fillStyle = accent;
+  ctx.fillText(s.sub, W/2, ty + 28);
+  ctx.restore();
+
+  /* phone */
+  const phoneW = 640;
+  const phoneH = 1100;
+  const phoneX = (W - phoneW) / 2;
+  const phoneY = topH - 20;
+
+  drawPhone(ctx, phoneX, phoneY, phoneW, phoneH, s.screen);
+
+  /* bottom gradient fade */
+  const fade = ctx.createLinearGradient(0, H*0.9, 0, H);
+  fade.addColorStop(0, 'transparent');
+  fade.addColorStop(1, '#00000088');
+  ctx.fillStyle = fade;
+  ctx.fillRect(0, H*0.9, W, H*0.1);
+}
+</script>
+</body>
+</html>
