@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">StayHardy</string>
+    <!-- Widget strings are carried over verbatim; the provider XML references them. -->
+    <string name="widget_description">StayHardy productivity widget</string>
+    <string name="widget_description_small">StayHardy compact streak and tasks</string>
+    <string name="widget_stayhardy_label">StayHardy</string>
+    <string name="widget_medium_label">StayHardy (medium)</string>
+    <string name="widget_small_label">StayHardy (small)</string>
+    <string name="widget_open_app_prompt">Open StayHardy to get started</string>
+</resources>

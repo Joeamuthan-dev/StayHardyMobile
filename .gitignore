@@ -22,9 +22,14 @@ dist-ssr
 .env*.local
 **/.env.save
 
-# Capacitor native folders — not needed in git
+# Capacitor native folders — not needed in git.
+# These bare patterns match a directory of that name at ANY depth, so they also
+# caught the Flutter rebuild's native folders under mobile/. Those are hand-
+# configured (applicationId, signing, manifest, deep links) and must be tracked.
 android/
 ios/
+!mobile/android/
+!mobile/ios/
 
 # Editor directories and files
 .vscode/*
@@ -38,4 +43,9 @@ ios/
 *.sw?
 
 # Local files
-*.local.claude/
+*.local
+
+# Local tooling state — machine-specific, never project config
+.claude/
+**/.claude/
+.playwright-mcp/

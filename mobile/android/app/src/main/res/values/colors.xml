@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sampled from the icon artwork itself, so the adaptive background and
+         the foreground's own ground are one continuous surface. Doubles as
+         the splash colour: the brand is dark in light mode too. -->
+    <color name="ic_launcher_background">#08100D</color>
+    <color name="splash_background">#08100D</color>
+</resources>

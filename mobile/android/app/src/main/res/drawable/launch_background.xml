@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The boot moment: the grid on its own dark ground, centred. Dark in light
+     mode too — the splash is the brand, not a theme surface. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_background" />
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@mipmap/splash_icon" />
+    </item>
+</layer-list>

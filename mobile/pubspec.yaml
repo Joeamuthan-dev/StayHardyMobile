@@ -1,0 +1,97 @@
+name: stayhardy
+description: "StayHardy — discipline, habits, greatness."
+publish_to: 'none'
+
+# The Capacitor build shipped versionCode 25 (1.1.14, the storage bridge), so the
+# Flutter rebuild starts at 26. This must never go backwards or Play rejects it.
+version: 2.0.8+35
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State + routing
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+  go_router: ^14.6.2
+
+  # Local database — the source of truth
+  drift: ^2.23.1
+  sqlite3: ^2.4.0
+  sqlite3_flutter_libs: ^0.5.28
+  package_info_plus: ^8.1.2
+  path_provider: ^2.1.5
+  path: ^1.9.0
+
+  # Backend (auth + subscription + challenge only)
+  supabase_flutter: ^2.8.2
+  flutter_secure_storage: ^9.2.4
+
+  # Google Sign-In
+  google_sign_in: ^6.2.2
+
+  # Subscriptions
+  # 9.0.0 is the first release on Google Play Billing Library 8, which Play
+  # requires from 31 Aug 2026 — below that, every app update is rejected.
+  purchases_flutter: ^10.9.1
+
+  # Reminders
+  flutter_local_notifications: ^18.0.1
+  flutter_timezone: ^4.1.0
+  permission_handler: ^11.3.1
+
+  # Google Drive backup (REST, appDataFolder) and local export/import.
+  http: ^1.2.2
+  file_picker: ^8.1.7
+
+  # Share cards — the OS share sheet; the user picks the target and confirms.
+  url_launcher: ^6.3.1
+  in_app_review: ^2.0.10
+  in_app_update: ^4.2.3
+  flutter_displaymode: ^0.6.0
+  share_plus: ^10.1.4
+
+  # Utilities
+  # bcrypt: only for the legacy `users.pin` hash the Capacitor build writes at
+  # sign-up. Auth itself never uses it — the password is 'SH' + pin.
+  bcrypt: ^1.1.3
+  uuid: ^4.5.1
+  intl: ^0.19.0
+  timezone: ^0.10.0
+  collection: ^1.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.14
+  drift_dev: ^2.23.1
+  riverpod_generator: ^2.6.3
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/brand/
+
+  # Fonts are BUNDLED, never fetched at runtime. google_fonts would download on
+  # first launch, producing a fallback-text flash and failing entirely offline —
+  # unacceptable for an offline-first app.
+  #
+  # Inter is a VARIABLE font: one file covering the whole 100–900 range, so no
+  # per-weight `weight:` entries. Weight is selected at the call site via
+  # `fontVariations` (see aura_typography.dart) — `fontWeight` alone does not
+  # reliably pick an instance from a variable file.
+  #
+  # Fraunces (a display serif) was dropped with the Monolith redesign. It is the
+  # single strongest "printed journal" signal an interface can carry, and Aura
+  # gets its hierarchy from weight and tracking instead. The file is still in
+  # assets/fonts/ but is deliberately not bundled — 360KB of APK for a face
+  # nothing renders.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
