@@ -15,3 +15,31 @@ verify_jwt = false
 
 [functions.delete-user]
 verify_jwt = false
+
+# Called by Razorpay server-to-server, so there is no user JWT to verify.
+# Authenticity comes from the HMAC over the raw body (x-razorpay-signature),
+# which the function checks before parsing anything.
+[functions.razorpay-webhook]
+verify_jwt = false
+
+# Both re-authenticate internally with supabase.auth.getUser(), matching the
+# convention above, so they control their own error shapes rather than getting
+# an opaque gateway 401.
+[functions.challenge-join]
+verify_jwt = false
+
+[functions.challenge-checkin]
+verify_jwt = false
+
+# External cron, no user JWT — guarded by x-cron-secret, as send-daily-pushes is.
+[functions.challenge-finalize]
+verify_jwt = false
+
+[functions.notify-feedback]
+verify_jwt = false
+
+[functions.weekly-digest]
+verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false
